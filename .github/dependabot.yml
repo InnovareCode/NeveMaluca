@@ -1,0 +1,14 @@
+# Copiado do InnoFighters (S1/B12) e adaptado: atualizacoes semanais. As actions estao pinadas por SHA;
+# o Dependabot troca o SHA e o comentario da versao. So tem efeito quando houver repositorio remoto.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

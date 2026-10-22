@@ -1,0 +1,36 @@
+/*
+ * Fontes AUTO-HOSPEDADAS (licença OFL; arquivos e licenças em public/assets/fontes). Nada de Google Fonts/CDN: a CSP (vite.config.ts) só
+ * libera 'self'. Subset latino (inclui o português inteiro). Origem: src/fontes.css do InnoFighters.
+ * O canvas só desenha com a fonte DEPOIS de carregada: platform/fontes.ts a pede antes do 1º quadro (document.fonts.load).
+ * font-display: block, porque um quadro com a fonte de reserva piscaria no canvas.
+ * As URLs absolutas de public/ são reescritas pelo Vite com a base (`--base=/NeveMaluca/`).
+ */
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: italic;
+  font-weight: 800;
+  font-display: block;
+  src: url("/assets/fontes/barlow-condensed-800-italic-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url("/assets/fontes/barlow-600-latin.woff2") format("woff2");
+}
+
+/* Bangers: callouts e balões (caixa alta). Ainda não usada na cena de boot; declarada para a UI do M1. */
+@font-face {
+  font-family: "Bangers";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("/assets/fontes/bangers-latin-400-normal.woff2") format("woff2");
+}
+
+:root {
+  --fonte-corpo: Barlow, "Segoe UI", "Trebuchet MS", Arial, sans-serif;
+  --fonte-titulo: "Barlow Condensed", Impact, "Arial Narrow", sans-serif;
+}

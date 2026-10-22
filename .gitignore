@@ -1,0 +1,24 @@
+node_modules/
+dist/
+arte-fonte/
+sprites-gerados/
+relatorios/
+test-results/
+playwright-report/
+coverage/
+.missao-atual
+.missoes-quadro.json
+*.log
+*.tsbuildinfo
+.env*
+.claude/settings.local.json
+*.pem
+*.key
+
+# ferramentas e sistema (pos-QA do M0)
+.claude/
+dist-*/
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/

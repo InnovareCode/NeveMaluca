@@ -1,0 +1,70 @@
+# Origem: copiado do InnoFighters (.github/workflows/ci.yml) e adaptado em 2026-10-22.
+#
+# ESTADO: pronto, mas INERTE. O projeto ainda nao tem repositorio remoto (decisao D8: criar no M1). O arquivo vale
+# a partir do primeiro push. Nao ha deploy aqui: o site de teste (Pages, se D8 permitir) e o EasyPanel entram no M5.
+#
+# PORTAO: o job `portao` e o unico que deve ser marcado como "required" na protecao da branch main. Ele so passa se
+# os dois de baixo passarem, entao novos jobs de teste entram em `needs` sem mexer na protecao.
+# Nao existe lint no projeto (nem no InnoFighters): o gate estatico e o `tsc --noEmit` estrito.
+name: ci
+on:
+  push:
+  pull_request:
+
+# O GITHUB_TOKEN so le o repositorio; nenhum job aqui escreve em nada.
+permissions:
+  contents: read
+
+jobs:
+  qualidade:
+    name: typecheck, testes unitarios e build
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinadas por SHA de commit (a tag e movel). O Dependabot atualiza SHA + comentario.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    name: e2e (dev server e build com CSP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Chromium (projetos desktop e celular) + WebKit (projeto webkit-se, o motor do iPhone).
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e:build
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  portao:
+    name: portao (unico check obrigatorio)
+    if: always()
+    needs: [qualidade, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "qualidade=${{ needs.qualidade.result }} e2e=${{ needs.e2e.result }}"
+          test "${{ needs.qualidade.result }}" = "success" && test "${{ needs.e2e.result }}" = "success"

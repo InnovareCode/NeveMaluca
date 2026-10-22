@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#2a7de1" />
+    <!-- tela cheia no celular: o iPhone (Safari e Chrome) nao tem Fullscreen API; "Adicionar a Tela de Inicio" abre o jogo sem barras (standalone) com estas metas + manifest -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Neve Maluca" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icones/apple-touch-icon-180.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icones/favicon-32.png" />
+    <!-- site de TESTE: nao indexar. Remover ao entrar no dominio definitivo. -->
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Neve Maluca: jogo de snowboard com personagens comicos." />
+    <title>Neve Maluca</title>
+    <!-- Fontes do titulo e do corpo: SEM link de preload. Segundo o QA da Iris, no WebKit o preload nao casa com o pedido do @font-face, baixa a fonte de novo e emite warning (~46 KB a mais). Quem comeca o download antes do 1o quadro e src/platform/fontes.ts (carregarFontes, teto de 4 s); @font-face em src/platform/fontes.css. -->
+    <!-- Sem <style> nem style="..." aqui: a CSP do build e style-src 'self'. O CSS esta em src/estilo.css (importado por src/main.ts). -->
+  </head>
+  <body>
+    <canvas id="jogo" width="1920" height="1080" tabindex="0" aria-label="Neve Maluca"></canvas>
+    <!-- erro fatal de boot (src/main.ts preenche e mostra) -->
+    <pre id="err" hidden></pre>
+    <!-- aviso discreto e nao bloqueante (platform/aviso.ts) -->
+    <div id="aviso" role="status" aria-live="polite" hidden></div>
+    <!-- "vire o aparelho": so CSS (src/platform/plataforma.css); aparece quando a janela esta em retrato -->
+    <div id="rot" role="status">
+      <span class="rot-aparelho" aria-hidden="true"></span>
+      <p>Vire o aparelho para o modo paisagem</p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

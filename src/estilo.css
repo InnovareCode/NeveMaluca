@@ -1,0 +1,45 @@
+/* Origem: regras de html/body/canvas adaptadas do <style> do index.html do InnoFighters.
+   Aqui em arquivo (e nao inline) para a CSP do build poder ser style-src 'self'. */
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #0b1a33;
+  overflow: hidden;
+  /* o iPhone nao deve rolar, dar zoom nem puxar para atualizar durante o jogo (risco R6 do plano) */
+  overscroll-behavior: none;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+
+/* tamanho 16:9 antes do JS subir; platform/escala.ts (Lyra) refina em px inteiros depois */
+canvas {
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  display: block;
+  outline: none;
+  background: #000;
+  touch-action: none;
+}
+
+#err {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+  padding: 10px;
+  background: #300;
+  color: #fcc;
+  font: 13px monospace;
+  white-space: pre-wrap;
+  z-index: 9;
+}
+
+#err[hidden] {
+  display: none;
+}

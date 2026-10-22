@@ -1,0 +1,28 @@
+{
+  "name": "neve-maluca",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Neve Maluca - jogo de snowboard 2,5D lateral (Canvas 2D, TypeScript estrito)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:build": "playwright test -c playwright.build.config.ts",
+    "verificar": "npm run typecheck && npm test && npm run test:e2e:build && npm run test:e2e",
+    "icone:provisorio": "node ferramentas/icone/gerar-icone-provisorio.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

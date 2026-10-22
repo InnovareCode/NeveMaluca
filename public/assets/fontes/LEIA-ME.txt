@@ -1,0 +1,17 @@
+Fontes auto-hospedadas (copiadas do InnoFighters em 2026-10-22; nada de Google Fonts/CDN: a CSP so libera o proprio site e o jogo nao fala com terceiros).
+
+  barlow-condensed-800-italic-latin.woff2   Barlow Condensed ExtraBold Italic  -> numeros e rotulos do HUD; titulo PROVISORIO da cena de boot
+  barlow-600-latin.woff2                    Barlow SemiBold                    -> menus, dicas, botoes e cartoes em DOM
+  bangers-latin-400-normal.woff2            Bangers Regular                    -> callouts e baloes (direcao de arte, secao 4)
+
+Familia: Barlow / Barlow Condensed, de Jeremy Tribby (The Barlow Project Authors, https://github.com/jpt/barlow).
+Licenca: SIL Open Font License 1.1 (livre para uso, inclusive comercial, e para redistribuir junto do jogo; o texto esta em
+OFL-barlow.txt e OFL-barlow-condensed.txt, nesta mesma pasta, e deve acompanhar os arquivos).
+Bangers: The Bangers Project Authors (Vernon Adams), SIL Open Font License 1.1 (texto em OFL-bangers.txt, nesta pasta).
+Origem dos arquivos: pacotes npm @fontsource/barlow, @fontsource/barlow-condensed e @fontsource/bangers 5.3.0 (so o subset "latin" em woff2, ja subsetado:
+inclui o portugues inteiro - A com til, O com til, C cedilha, todos os acentos, aspas, travessoes, bullet).
+
+A fonte do TITULO do jogo (Lilita One, direcao de arte 1.4) NAO entra aqui: o logo vira desenho no M4 e a fonte nao e embarcada.
+
+Para trocar ou acrescentar um peso: copiar o woff2 do mesmo pacote, declarar em src/platform/fontes.css, listar em FACES_DO_JOGO
+(src/platform/fontes.ts). tests/unit/neve-plataforma-fontes.test.ts confere os arquivos, as licencas e as referencias.

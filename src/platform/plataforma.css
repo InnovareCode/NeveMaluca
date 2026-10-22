@@ -1,0 +1,238 @@
+/*
+ * CSS da plataforma: área segura, aviso "vire o aparelho", aviso discreto e botão/cartão de tela cheia.
+ * Tudo em arquivo (a CSP do build é style-src 'self': nada de <style> nem style="..." no HTML).
+ * Origem: #rot e #aviso adaptados de src/input/toque.css e src/platform/aviso.css do InnoFighters.
+ *
+ * Paleta (conferida por contraste): fundo marinho #0b1a33 com texto neve #f4f9ff (razão ~17:1); cartão neve com texto marinho (~17:1);
+ * foco visível em amarelo #ffd23f sobre marinho (~12:1).
+ */
+
+/* Área segura do aparelho (entalhe, ilha dinâmica, barra de início do iPhone em paisagem). Os testes simulam um entalhe definindo
+   --teste-topo/direita/base/esq no <html> por script (CSSOM é permitido pela CSP); sem isso valem os env() do navegador. */
+:root {
+  --seg-topo: var(--teste-topo, env(safe-area-inset-top, 0px));
+  --seg-direita: var(--teste-direita, env(safe-area-inset-right, 0px));
+  --seg-base: var(--teste-base, env(safe-area-inset-bottom, 0px));
+  --seg-esquerda: var(--teste-esq, env(safe-area-inset-left, 0px));
+}
+
+/* sonda lida por platform/escala.ts (lerMargensSeguras): o padding calculado volta em px */
+.sonda-seguranca {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: var(--seg-topo) var(--seg-direita) var(--seg-base) var(--seg-esquerda);
+}
+
+/* ---- aviso "vire o aparelho" (orientação): só CSS, funciona antes do JS subir ---- */
+#rot {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #0b1a33;
+  color: #f4f9ff;
+  font: 600 22px/1.3 var(--fonte-corpo, sans-serif);
+  text-align: center;
+}
+
+/* DEPOIS da regra base (lição do InnoFighters: a media query antes do display:none era anulada e o aviso nunca aparecia) */
+@media (orientation: portrait) {
+  #rot {
+    display: flex;
+  }
+}
+
+#rot p {
+  margin: 0;
+  max-width: 18em;
+}
+
+/* aparelho desenhado em CSS que gira para a horizontal */
+.rot-aparelho {
+  display: block;
+  width: 44px;
+  height: 76px;
+  box-sizing: border-box;
+  border: 4px solid #f4f9ff;
+  border-radius: 10px;
+  position: relative;
+}
+
+.rot-aparelho::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 14px;
+  height: 3px;
+  margin-left: -7px;
+  border-radius: 2px;
+  background: #f4f9ff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rot-aparelho {
+    animation: rot-gira 2.6s ease-in-out infinite;
+  }
+}
+
+@keyframes rot-gira {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  65%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+/* ---- aviso discreto (platform/aviso.ts) ---- */
+#aviso {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(8px, var(--seg-base));
+  /* max-content: com left:50% o encolher-para-caber só teria a metade direita da tela e a frase quebraria em 2 linhas */
+  width: max-content;
+  max-width: 90vw;
+  box-sizing: border-box;
+  padding: 6px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 210, 63, 0.7);
+  background: rgba(11, 26, 51, 0.92);
+  color: #ffe9a8;
+  font: 600 14px/1.3 var(--fonte-corpo, sans-serif);
+  text-align: center;
+  pointer-events: none;
+  z-index: 6;
+}
+
+#aviso[hidden] {
+  display: none;
+}
+
+/* ---- botão de tela cheia (platform/tela-cheia-ui.ts) ---- */
+#btn-tela-cheia {
+  position: fixed;
+  top: max(8px, var(--seg-topo));
+  right: max(8px, var(--seg-direita));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 2px solid #f4f9ff;
+  border-radius: 12px;
+  background: rgba(11, 26, 51, 0.78);
+  color: #f4f9ff;
+  font: 600 14px/1 var(--fonte-corpo, sans-serif);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#btn-tela-cheia[hidden] {
+  display: none;
+}
+
+#btn-tela-cheia svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#btn-tela-cheia .rotulo {
+  display: none;
+}
+
+#btn-tela-cheia.com-rotulo .rotulo {
+  display: inline;
+}
+
+#btn-tela-cheia:hover {
+  background: rgba(42, 125, 225, 0.85);
+}
+
+#btn-tela-cheia:focus-visible,
+.cartao button:focus-visible {
+  outline: 3px solid #ffd23f;
+  outline-offset: 2px;
+}
+
+/* ---- cartão de ajuda (COMO ATIVAR no iPhone, etc.) ---- */
+.cartao-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, var(--seg-topo)) max(12px, var(--seg-direita)) max(12px, var(--seg-base)) max(12px, var(--seg-esquerda));
+  box-sizing: border-box;
+  background: rgba(11, 26, 51, 0.7);
+}
+
+.cartao-fundo[hidden] {
+  display: none;
+}
+
+.cartao {
+  max-width: 560px;
+  max-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: #f4f9ff;
+  color: #0b1a33;
+  font: 600 16px/1.35 var(--fonte-corpo, sans-serif);
+}
+
+.cartao h2 {
+  margin: 0 0 8px;
+  font: italic 800 24px/1.1 var(--fonte-titulo, sans-serif);
+  letter-spacing: 0.02em;
+}
+
+.cartao p {
+  margin: 0 0 8px;
+}
+
+.cartao ol {
+  margin: 0 0 12px;
+  padding-left: 1.4em;
+}
+
+.cartao button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 12px;
+  background: #0b1a33;
+  color: #f4f9ff;
+  font: 600 16px/1 var(--fonte-corpo, sans-serif);
+  cursor: pointer;
+  touch-action: manipulation;
+}
