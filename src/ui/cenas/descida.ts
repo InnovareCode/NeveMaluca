@@ -1,12 +1,13 @@
 /**
- * Cena de descida (plano §7 M1a): junta entrada (toque/teclado), o motor de TESTE (`motor-teste.ts`, roteirizado
- * — a Vega ainda não entregou `src/descida/`) e o render (câmera, terreno, parallax, objetos, piloto, HUD).
+ * Cena de descida (plano §7 M1a): junta entrada (toque/teclado), o motor/pista REAIS da Vega
+ * (`src/descida/criarDescida` + `src/pista/exigirPistaValida` sobre `PISTA_MORRO_DO_PINHAO`, de `data/pistas`) e o
+ * render (câmera, terreno, parallax, objetos, piloto, HUD). Integrado por Atlas em cima do dublê original
+ * (`motor-teste.ts`/`pista-teste.ts`, que ficam em `ui/cenas/` sem uso em produção — ver README desta pasta).
  *
  * Contrato da cena (ver `ui/tipos.ts`): `atualizar()` por tick de passo fixo avança o motor; `desenhar()` por
  * quadro só LÊ o último estado (nunca tica o motor de novo — por isso a leitura inicial é feita na criação,
  * com um comando neutro, e não dentro de `desenhar`).
  */
-import { COMANDO_NEUTRO } from '../../core/comandos';
 import { rngDoCanal } from '../../core/rng';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
@@ -21,8 +22,9 @@ import { desenharPiloto } from '../../render/piloto';
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { desenharTerreno } from '../../render/terreno';
 import type { Cena } from '../tipos';
-import { criarMotorTeste, type MotorTeste } from './motor-teste';
-import { gerarPistaTeste } from './pista-teste';
+import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
+import { criarDescida, type MotorDescida } from '../../descida/index';
+import { exigirPistaValida } from '../../pista/index';
 
 export interface ResultadoDescida {
   readonly pontos: number;
@@ -38,15 +40,15 @@ export interface OpcoesCenaDescida {
 }
 
 export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
-  const pista = gerarPistaTeste();
-  const motor: MotorTeste = criarMotorTeste(pista);
+  const pista = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
+  const motor: MotorDescida = criarDescida(pista);
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
   const camera: Camera = criarCamera(0, 0);
   const parallax: Parallax = criarParallax(opcoes.documento ?? document);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
 
   // leitura inicial fora do `desenhar()`: a cena nunca tica o motor no quadro, só no tick (ver `ui/tipos.ts`)
-  let leitura = motor.tick(COMANDO_NEUTRO);
+  let leitura = motor.leitura();
   camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
   let terminou = false;
 
@@ -55,7 +57,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
     atualizar() {
       if (terminou) return;
       const cmd = entrada.obterComando();
-      leitura = motor.tick(cmd);
+      leitura = motor.processar(cmd);
       camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
       if (leitura.fase === 'chegou') {
         terminou = true;

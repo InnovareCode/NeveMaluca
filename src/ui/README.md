@@ -1,17 +1,18 @@
 # src/ui/
 
-**Dono:** Lyra. **Estado no M1a:** `tipos.ts` (interface `Cena`), `cenas/boot.ts` (M0) e `cenas/{descida,resultado,jogo}.ts`
-(M1a: descida jogável com motor/pista de TESTE, resultado, e a composta que liga as duas). `main.ts` (fora do
-alcance da Lyra) ainda monta só `criarCenaBoot`; plugar `criarCenaJogo` no lugar dela é a integração pendente
-(ver handoff da Lyra, M1a, "PARA O PRÓXIMO").
+**Dono:** Lyra. **Estado pós-integração do M1a:** `tipos.ts` (interface `Cena`), `cenas/boot.ts` (M0, sem uso em
+produção desde a integração — `main.ts` agora monta `criarCenaJogo`) e `cenas/{descida,resultado,jogo}.ts`
+(descida jogável com o motor/pista REAIS da Vega, resultado, e a composta que liga as duas). Atlas já plugou
+`criarCenaJogo` em `main.ts` no lugar de `criarCenaBoot`.
 
 **Responsabilidade (plano §3.1):** cenas (`ui/cenas/*`: título, descida, resultado), menus e a persistência de
 interface. É a camada que junta o resto.
 
-**`motor-teste.ts` e `pista-teste.ts` (M1a) são um DUBLÊ, não produção:** ficam em `ui/cenas/` (não em
-`src/descida/`/`src/pista/`, que são da Vega) exatamente para a Lyra poder desenvolver render/câmera/entrada em
-paralelo com o motor real. Quando `src/descida/` e `src/pista/` existirem, a integração troca o que
-`criarCenaDescida` usa por dentro — os dois arquivos de teste são descartados.
+**`motor-teste.ts` e `pista-teste.ts` são um DUBLÊ órfão (sem uso em produção):** serviram para a Lyra desenvolver
+render/câmera/entrada em paralelo com o motor real, antes da integração. `criarCenaDescida` não usa mais nenhum
+dos dois (troca feita por Atlas para `src/descida/criarDescida` + `src/pista/exigirPistaValida`); os dois arquivos
+continuam no repo só porque `tests/unit/ui-motor-teste.test.ts` ainda os exercita — considerar remover os três
+juntos numa limpeza futura, se não houver mais uso.
 
 **Importa de:** todas as camadas (`core`, `data`, `pista`, `descida`, `meta`, `render`, `audio`, `input`, `assets`, `platform`).
 

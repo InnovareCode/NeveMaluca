@@ -1,10 +1,11 @@
 /**
  * e2e do M1a (Lyra): render, câmera, entrada e cenas, medido NO NAVEGADOR (skill medir-antes-de-afirmar).
  *
- * `src/ui/cenas/jogo.ts` ainda não está plugado em `main.ts` (main.ts é NÃO-toque para a Lyra; a integração é a
- * próxima etapa, ver handoff). Por isso os testes aqui montam a cena por fora, via `import()` dinâmico contra o
- * servidor de desenvolvimento (Vite serve qualquer `/src/*.ts` pedido por módulo, não só os referenciados pelo
- * `index.html`) — sem precisar de HTML novo nem de tocar em `main.ts`/`index.html`.
+ * `src/main.ts` (Atlas, integração) já bota em `criarCenaJogo`, e `src/ui/cenas/descida.ts` já usa o motor/pista
+ * REAIS da Vega (`src/descida/`, `src/pista/`) — não mais o dublê `motor-teste.ts`/`pista-teste.ts`. Mesmo assim,
+ * os testes aqui montam as cenas por fora, via `import()` dinâmico contra o servidor de desenvolvimento (Vite
+ * serve qualquer `/src/*.ts` pedido por módulo, não só os referenciados pelo `index.html`): dá controle fino do
+ * número de ticks e acesso direto a `criarCenaDescida`/`criarCenaResultado` sem depender do laço real do `main.ts`.
  *
  * `carregar(caminho)`: um `import()` com argumento NÃO literal (parâmetro de função) faz o `tsc` devolver `any`
  * em vez de tentar resolver o módulo em tempo de compilação (o caminho só existe para o navegador, servido pelo
@@ -46,13 +47,18 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
     expect(cores).toBeGreaterThan(8);
   });
 
-  test('"de novo" em 1 toque: ao chegar, `aoTerminar` dispara; a cena de resultado reinicia ao tocar no canvas', async ({ page }) => {
+  test('"de novo" em 1 toque: ao chegar (motor REAL da Vega, pista morro-do-pinhao), `aoTerminar` dispara; a cena de resultado reinicia ao tocar no canvas', async ({ page }) => {
     await page.goto('/');
 
     const resultado = await page.evaluate(async () => {
       const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
       const { criarCenaDescida } = await carregar('/src/ui/cenas/descida.ts');
       const { criarCenaResultado } = await carregar('/src/ui/cenas/resultado.ts');
+      const { exigirPistaValida } = await carregar('/src/pista/index.ts');
+      const { criarDescida } = await carregar('/src/descida/index.ts');
+      const { criarBotCuidadoso } = await carregar('/src/descida/bot.ts');
+      const { PISTA_MORRO_DO_PINHAO } = await carregar('/src/data/pistas.ts');
+      const { derivarComando, INPUT_NEUTRO } = await carregar('/src/core/comandos.ts');
 
       const canvas = document.createElement('canvas');
       canvas.width = 960;
@@ -66,9 +72,43 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
           dadosFinais = r;
         },
       });
-      // sem nenhum comando, o motor-teste desliza morro abaixo e chega sozinho (mesma garantia do teste
-      // unitário de motor-teste.ts); 10_000 ticks é folga de sobra para a pista padrão.
-      for (let i = 0; i < 10_000 && dadosFinais === null; i += 1) cena.atualizar();
+
+      // `criarCenaDescida` usa o motor/pista REAIS por dentro e não expõe a `LeituraDescida` (ela só sai pelo
+      // `aoTerminar`, no fim). Para dirigir a descida de ponta a ponta sem inventar física própria, uma SOMBRA
+      // (mesma pista, mesmo motor determinístico) roda em lockstep só para alimentar o `criarBotCuidadoso` da
+      // Vega (`src/descida/bot.ts`, reflexo puro sobre `LeituraDescida`) — o comando decidido vira teclas REAIS
+      // (Espaço/←/→) despachadas na janela, que `criarCenaDescida` lê pelo `input/` de verdade. `derivarComando`
+      // é a mesma função pura que `input/index.ts` usa por dentro: aplicada aqui aos MESMOS estados de tecla que
+      // acabamos de despachar, dá exatamente o `ComandoDescida` que a cena vai produzir neste tick — por isso a
+      // sombra fica em lockstep exato com o motor de dentro da cena (ambos deterministas, mesma semente, mesmos
+      // comandos).
+      const pistaSombra = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
+      const motorSombra = criarDescida(pistaSombra);
+      const bot = criarBotCuidadoso(pistaSombra);
+      let leituraSombra = motorSombra.leitura();
+      let frameAnterior = INPUT_NEUTRO;
+      const teclaDoGiro: Record<number, string | null> = { [-1]: 'ArrowLeft', [0]: null, [1]: 'ArrowRight' };
+
+      // ~2340 ticks (plano: bot cuidadoso nesta pista, ~39 s); folga generosa.
+      const LIMITE_TICKS = 15_000;
+      for (let i = 0; i < LIMITE_TICKS && dadosFinais === null; i += 1) {
+        const cmdBot = bot(leituraSombra);
+        const frame = { pular: cmdBot.pulo, giro: cmdBot.giro, grab: cmdBot.grab, agachar: cmdBot.agachar };
+
+        if (frame.pular !== frameAnterior.pular) {
+          window.dispatchEvent(new KeyboardEvent(frame.pular ? 'keydown' : 'keyup', { code: 'Space' }));
+        }
+        if (frame.giro !== frameAnterior.giro) {
+          const teclaAntiga = teclaDoGiro[frameAnterior.giro];
+          const teclaNova = teclaDoGiro[frame.giro];
+          if (teclaAntiga) window.dispatchEvent(new KeyboardEvent('keyup', { code: teclaAntiga }));
+          if (teclaNova) window.dispatchEvent(new KeyboardEvent('keydown', { code: teclaNova }));
+        }
+
+        leituraSombra = motorSombra.processar(derivarComando(frameAnterior, frame));
+        cena.atualizar();
+        frameAnterior = frame;
+      }
       if (dadosFinais === null) return { chegou: false, reiniciou: false };
 
       let reiniciou = false;
@@ -134,14 +174,15 @@ test.describe('M1a: entrada (teclado e toque) muda o estado do piloto, de verdad
     expect(giro).toBe(1);
   });
 
-  test('pulo (teclado) muda de verdade o motor de teste: piloto vai ao chão -> ar', async ({ page }) => {
+  test('pulo (teclado) muda de verdade o motor REAL da Vega: piloto vai ao chão -> ar', async ({ page }) => {
     await page.goto('/');
 
     const modos = await page.evaluate(async () => {
       const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
       const { criarEntrada } = await carregar('/src/input/index.ts');
-      const { criarMotorTeste } = await carregar('/src/ui/cenas/motor-teste.ts');
-      const { gerarPistaTeste } = await carregar('/src/ui/cenas/pista-teste.ts');
+      const { criarDescida } = await carregar('/src/descida/index.ts');
+      const { exigirPistaValida } = await carregar('/src/pista/index.ts');
+      const { PISTA_MORRO_DO_PINHAO } = await carregar('/src/data/pistas.ts');
 
       const canvas = document.createElement('canvas');
       canvas.width = 960;
@@ -149,15 +190,15 @@ test.describe('M1a: entrada (teclado e toque) muda o estado do piloto, de verdad
       document.body.appendChild(canvas);
 
       const entrada = criarEntrada(canvas, window);
-      const motor = criarMotorTeste(gerarPistaTeste(200));
+      const motor = criarDescida(exigirPistaValida(PISTA_MORRO_DO_PINHAO));
       const historico: string[] = [];
       for (let i = 0; i < 65; i += 1) {
         const cmd = entrada.obterComando();
-        historico.push(motor.tick(cmd).piloto.modo);
+        historico.push(motor.processar(cmd).piloto.modo);
       }
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
       const cmdComPulo = entrada.obterComando();
-      const leituraComPulo = motor.tick(cmdComPulo);
+      const leituraComPulo = motor.processar(cmdComPulo);
       entrada.destruir();
       return { antes: historico[historico.length - 1], depoisDoEspaco: leituraComPulo.piloto.modo };
     });

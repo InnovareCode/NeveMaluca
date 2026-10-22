@@ -35,26 +35,33 @@ export function desenharTerreno(ctx: CanvasRenderingContext2D, pista: PistaGerad
   const xDir = Math.min(comprimentoM, camera.x + margemM);
   if (xDir <= xEsq) return;
 
-  ctx.beginPath();
-  let primeiro = true;
+  // pontos da SUPERFÍCIE (só a linha de cima): usados tanto no preenchimento quanto no contorno.
+  const superficie: { x: number; y: number }[] = [];
   for (let xm = xEsq; xm <= xDir; xm += pista.dx) {
-    const p = mundoParaTela(xm, alturaDoTerreno(pista, xm), camera, PX_POR_METRO);
-    if (primeiro) {
-      ctx.moveTo(p.x, p.y);
-      primeiro = false;
-    } else {
-      ctx.lineTo(p.x, p.y);
-    }
+    superficie.push(mundoParaTela(xm, alturaDoTerreno(pista, xm), camera, PX_POR_METRO));
   }
-  // desce bem além do fundo da tela (margem grande: sem furo mesmo com a câmera inclinada ou girada por tremida)
+
+  // Preenchimento: polígono fechado descendo bem além do fundo da tela (sem furo mesmo com a câmera inclinada ou
+  // girada por tremida). Bug real medido no WebKit do iPhone (e2e, 2026-10-22): ao fazer `ctx.stroke()` no MESMO
+  // caminho que inclui essas arestas de 4000 px, o WebKit rasteriza mal o traço e pinta uma faixa enorme da tela
+  // com a cor do contorno — o Chromium não tem esse problema. Por isso o PREENCHIMENTO e o CONTORNO usam dois
+  // `beginPath()` separados: o contorno some do caminho estendido e traça só a linha da superfície.
+  ctx.beginPath();
+  ctx.moveTo(superficie[0]!.x, superficie[0]!.y);
+  for (let i = 1; i < superficie.length; i += 1) ctx.lineTo(superficie[i]!.x, superficie[i]!.y);
   const FUNDO_PX = 4000;
-  const pBaseDir = mundoParaTela(xDir, alturaDoTerreno(pista, xDir), camera, PX_POR_METRO);
-  const pBaseEsq = mundoParaTela(xEsq, alturaDoTerreno(pista, xEsq), camera, PX_POR_METRO);
-  ctx.lineTo(pBaseDir.x, pBaseDir.y + FUNDO_PX);
-  ctx.lineTo(pBaseEsq.x, pBaseEsq.y + FUNDO_PX);
+  const ultimo = superficie[superficie.length - 1]!;
+  const primeiro = superficie[0]!;
+  ctx.lineTo(ultimo.x, ultimo.y + FUNDO_PX);
+  ctx.lineTo(primeiro.x, primeiro.y + FUNDO_PX);
   ctx.closePath();
   ctx.fillStyle = COR_NEVE;
   ctx.fill();
+
+  // Contorno: só a linha da superfície (caminho novo, sem as arestas estendidas).
+  ctx.beginPath();
+  ctx.moveTo(superficie[0]!.x, superficie[0]!.y);
+  for (let i = 1; i < superficie.length; i += 1) ctx.lineTo(superficie[i]!.x, superficie[i]!.y);
   ctx.lineWidth = 2;
   ctx.strokeStyle = COR_CONTORNO_NEVE;
   ctx.stroke();

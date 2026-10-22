@@ -51,7 +51,7 @@ const quemEstaEm = (page: Page, x: number, y: number): Promise<string> =>
   );
 
 test.describe('paisagem: desenha e anda', () => {
-  test('o canvas é desenhado (céu, neve, título), o laço roda a ~60 ticks por segundo e não há erro de console', async ({ page }) => {
+  test('o canvas é desenhado (céu, terreno), o laço roda a ~60 ticks por segundo e não há erro de console', async ({ page }) => {
     const erros = await abrir(page, 844, 390);
 
     // buffer fixo 1920x1080 (960x540 x 2)
@@ -59,7 +59,12 @@ test.describe('paisagem: desenha e anda', () => {
     await expect(canvas).toHaveAttribute('width', '1920');
     await expect(canvas).toHaveAttribute('height', '1080');
 
-    // pixels de verdade: céu azul no topo, neve clara embaixo, título (neve) e contorno marinho no meio
+    // pixels de verdade: céu azul no topo, terreno (neve) no centro-base. Desde a integração do M1a (Atlas), o
+    // boot monta `criarCenaJogo` (descida com o motor/pista REAIS da Vega), não mais a cena de título do M0 —
+    // por isso não há mais título/contorno marinho fixos para medir aqui (ver `descida-m1a.spec.ts` para a cena
+    // de descida em si). `baseMeio` (centro da base), e não a borda esquerda: medido que a borda esquerda do
+    // terreno some no 1º quadro quando a câmera ainda não alcançou aquele trecho do mundo (fica só o cenário de
+    // fundo ali) — o centro-base é coberto pelo terreno desde o 1º quadro.
     const amostra = await canvas.evaluate((el) => {
       const c = el as HTMLCanvasElement;
       const g = c.getContext('2d')!;
@@ -67,30 +72,25 @@ test.describe('paisagem: desenha e anda', () => {
       const cores = new Set<number>();
       const d = g.getImageData(0, 0, c.width, c.height).data;
       for (let i = 0; i < d.length; i += 4 * 499) cores.add((d[i]! << 16) | (d[i + 1]! << 8) | d[i + 2]!);
-      // procura o contorno marinho (#0b1a33) e o miolo neve (#f4f9ff) na faixa do título (y lógico 120..260)
-      let marinho = 0;
-      let neve = 0;
-      const faixa = g.getImageData(400, 240, 1120, 280).data;
-      for (let i = 0; i < faixa.length; i += 4) {
-        if (Math.abs(faixa[i]! - 11) < 6 && Math.abs(faixa[i + 1]! - 26) < 6 && Math.abs(faixa[i + 2]! - 51) < 6) marinho += 1;
-        if (faixa[i]! > 238 && faixa[i + 1]! > 244 && faixa[i + 2]! > 250) neve += 1;
-      }
-      return { topo: px(10, 4), baseEsquerda: px(10, 1070), cores: cores.size, marinho, neve };
+      return { topo: px(10, 4), baseMeio: px(960, 1070), cores: cores.size };
     });
     expect(amostra.topo[2]).toBeGreaterThan(amostra.topo[0]!); // céu: mais azul que vermelho
     expect(amostra.topo[0]).toBeLessThan(100);
-    expect(amostra.baseEsquerda.every((v) => v > 235)).toBe(true); // neve
-    expect(amostra.cores).toBeGreaterThan(4);
-    expect(amostra.marinho, 'contorno do título').toBeGreaterThan(2000);
-    expect(amostra.neve, 'miolo do título').toBeGreaterThan(2000);
+    expect(amostra.baseMeio.every((v) => v > 235)).toBe(true); // terreno cinza/neve (#eef3f8)
+    expect(amostra.cores).toBeGreaterThan(10); // céu em degradê + montanhas + neve + terreno + piloto + HUD
 
-    // laço: ~60 ticks/s (tolerante: máquina carregada). Mede um intervalo, não um instante.
+    // laço: ~60 ticks/s (tolerante: máquina carregada). Mede um intervalo em regime estável, não um instante —
+    // medido (e2e, 2026-10-22): no 1º segundo após o boot a cena de descida ainda está "aquecendo" (1ª criação
+    // das camadas de parallax fora da tela etc.), com rajada de ticks de catch-up bem acima de 60/s; a MÉDIA ao
+    // longo de alguns segundos já fica certa (~60-62/s). A pausa de 300 ms deixa esse aquecimento passar antes
+    // de abrir a janela de medição.
+    await page.waitForTimeout(300);
     const a = await lerLaco(page);
     await page.waitForTimeout(1000);
     const b = await lerLaco(page);
     expect(a.pausado).toBe(false);
     expect(b.ticks - a.ticks).toBeGreaterThan(35);
-    expect(b.ticks - a.ticks).toBeLessThan(75);
+    expect(b.ticks - a.ticks).toBeLessThan(80);
     expect(b.quadros).toBeGreaterThan(a.quadros);
 
     expect(erros).toEqual([]);
