@@ -43,7 +43,7 @@ Atualizado em 2026-10-22 (Nova; pós-QA do M0 por Vega; Atlas assumiu a sessão 
 - **D4** ranking: **só local** (o formato de replay C6 já prepara um online futuro).
 - **D6** idioma: **pt-BR** (textos já em tabela; inglês fica como possível M4+).
 - **D7** desafio do dia: **sim** (semente derivada da data UTC).
-- **D8** repositório remoto + site de teste: **no M1** — a criação efetiva do remoto será confirmada com o dono na hora (ação externa; nunca crio nem faço push sem OK).
+- **D8** repositório remoto + site de teste: **ATIVADO** (dono, 2026-10-22). `origin` = `https://github.com/InnovareCode/NeveMaluca.git`, baseline empurrado. **GitHub Pages pendente** (Vulcano: workflow de deploy + `base` do Vite; dono habilita Source "GitHub Actions" nas Settings).
 - **D9** logotipo: **tipográfico provisório até o M4**.
 - **D10** toque: **gestos por padrão, botões em Opções**; agachar por toque só se o M1a mostrar falta.
 
