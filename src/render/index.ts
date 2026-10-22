@@ -5,5 +5,6 @@ export * from './hud';
 export * from './mundo';
 export * from './objetos';
 export * from './parallax';
+export * from './particulas';
 export * from './piloto';
 export * from './terreno';

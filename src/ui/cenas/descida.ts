@@ -21,6 +21,7 @@ import { desenharHud } from '../../render/hud';
 import { desenharObjetos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
 import { criarParallax, type Parallax } from '../../render/parallax';
+import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
 import { desenharTerreno } from '../../render/terreno';
 import type { Cena } from '../tipos';
 import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
@@ -47,6 +48,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const camera: Camera = criarCamera(0, 0);
   const parallax: Parallax = criarParallax(opcoes.documento);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
+  const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
 
   let spritePiloto: SpritePersonagem | null = null;
   void carregarSpritePersonagem('capi')
@@ -69,6 +71,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       const cmd = entrada.obterComando();
       leitura = motor.processar(cmd);
       camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
+      particulas.atualizar(leitura.piloto, leitura.eventos);
       if (leitura.fase === 'chegou') {
         terminou = true;
         opcoes.aoTerminar?.({ pontos: leitura.pontos, ticks: leitura.tick });
@@ -79,7 +82,9 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       parallax.desenhar(ctx, camLeitura.x, leitura.tick);
       desenharTerreno(ctx, pista, camLeitura);
       desenharObjetos(ctx, pista, camLeitura);
+      particulas.desenharSpray(ctx, camLeitura);
       desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto);
+      particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.tick);
       desenharHud(ctx, { velocidadeMs: leitura.piloto.velocidade, pontos: leitura.pontos, fase: leitura.fase });
     },
     destruir() {

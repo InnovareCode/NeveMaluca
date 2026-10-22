@@ -59,8 +59,8 @@ Detalhes, opções e recomendação na seção 9 de `docs/plano-neve-maluca.md`.
 |---|---|---|
 | M0 | fundação e CI | pronto, commitado e empurrado no remoto |
 | M1a | protótipo de descida cinza (motor real + render + cenas + Pages) | concluído, commitado e empurrado |
-| Fase 1 (UI) | Apresentação (Splash animado), Menu Principal estilizado e Opções funcionais | concluído pela Lyra, 100% verificado (411 unit, 18 build, 109 e2e), testado visualmente |
-| M1b | 1 personagem (Capi Barbosa), arte integrada | sprites da Capi integrados na descida; próximos: cenários ricos e obstáculos estilo Pixar |
+| Fase 1 (UI) | Apresentação (Splash animado), Menu Principal estilizado e Opções funcionais | concluído pela Lyra, 100% verificado (411 unit, 18 build, 109 e2e), commitado |
+| Fase 2 (Cenários) | Morro do Pinhão estilo Pixar (araucárias, pinheiros, celeiro vermelho, montanhas facetadas, partículas de spray e neve volumosa) | implementado pela Lyra, provado visualmente no navegador |
 | M2 | manobras, combos, replay e fantasma | não iniciado |
 | M3 | 5 pistas e 4 personagens | não iniciado |
 | M4 | polimento mobile | não iniciado |
