@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:build": "playwright test -c playwright.build.config.ts",
     "verificar": "npm run typecheck && npm test && npm run test:e2e:build && npm run test:e2e",
-    "icone:provisorio": "node ferramentas/icone/gerar-icone-provisorio.mjs"
+    "icone:provisorio": "node ferramentas/icone/gerar-icone-provisorio.mjs",
+    "harness": "node ferramentas/harness/cli.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

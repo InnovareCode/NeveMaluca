@@ -1,2 +1,4 @@
-// Camada pista/: vazia no M0 (fundacao). Responsavel e regras no README.md desta pasta; plano em docs/plano-neve-maluca.md, secao 3.1.
-export {};
+// Camada pista/ (Vega, M1a): gerador puro da pista por semente (C5). Dono e regras no README.md desta pasta.
+export * from './catalogo';
+export * from './consulta';
+export * from './gerador';
