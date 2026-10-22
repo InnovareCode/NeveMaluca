@@ -143,18 +143,46 @@ descida + `main.ts`) e **Íris** (determinismo, e2e de toque, portão de fps), e
   ASSUNTO/slug de memória (nunca caminho de `agent-memory/`), e agrupe trabalho da mesma área num agente só.
 
 ## 9. Marcos
-M0 ✅ (fechado, commitado). **M1a → EM ANDAMENTO (próximo a disparar).** M1b (arte) após o portão do M1a.
+M0 ✅ (fechado, commitado). **M1a → Vega e Lyra ENTREGARAM; falta INTEGRAR (ver seção final) + verificar + Íris + portão do dono.** M1b (arte) após o portão do M1a.
 M2 manobras/combos/replay/fantasma. M3 5 pistas + 4 personagens. M4 polimento mobile. M5 segurança/deploy.
 
 ---
 
-## ATUALIZAÇÃO DO TURNO (2026-10-22) — onde este turno parou
-<!-- Atualizar esta seção ao fim do turno: o que foi feito do remoto/Pages e se o M1a já foi disparado. -->
-- Arquivo de contexto criado, commitado e empurrado.
-- **Remoto ATIVADO:** `origin` = `https://github.com/InnovareCode/NeveMaluca.git`; `git push -u origin main` feito
-  (commits `0ee905e` + `765a70f` no GitHub, `main` rastreando `origin/main`). Credencial via Git Credential Manager
-  (helper `manager`), já na máquina — não precisa de `gh`.
-- **GitHub Pages: PENDENTE (próximo passo do Vulcano).** Falta criar `.github/workflows/pages.yml` (build Vite →
-  `actions/deploy-pages`) e pôr `base: '/NeveMaluca/'` no Vite só no build. **O DONO precisa habilitar** em
-  Settings → Pages → Source: "GitHub Actions" (não dá por CLI sem `gh`/PAT exposto).
-- M1a: briefings prontos na seção 7; **lançar na conta nova** (ou quando o dono confirmar que não vai trocar agora).
+## ATUALIZAÇÃO DO TURNO (2026-10-22) — ESTADO NO MOMENTO DA TROCA DE CONTA
+
+> **Conta nova: comece AQUI.** Esta seção é a mais recente e manda sobre a seção 7 (que tinha os briefings de lançamento, já cumpridos).
+
+### Infra (feito)
+- **Remoto ATIVADO:** `origin` = `https://github.com/InnovareCode/NeveMaluca.git`; baseline empurrado (M0, 3 commits, `main` = `origin/main`). Credencial via Git Credential Manager (`manager`), já na máquina — `gh` NÃO está instalado; use `git push` direto (de PowerShell funcionou).
+- **GitHub Pages: PENDENTE (Vulcano):** criar `.github/workflows/pages.yml` (build Vite → `actions/deploy-pages`), pôr `base: '/NeveMaluca/'` no Vite só no build; **o DONO habilita** em Settings → Pages → Source "GitHub Actions".
+- `.claude/launch.json` criado (dev server "dev", porta 5273) → dá pra `preview_start name "dev"`.
+- Preferência do dono (também na memória do projeto): **mostrar o visual do jogo nos portões, proativamente** (preview 5273 + screenshot via SendUserFile; ele usa Remote Control). Já mostrei o 1º olhar do M1a (render da Lyra com motor-dublê).
+
+### M1a — Vega e Lyra ENTREGARAM (em paralelo); falta INTEGRAR. NADA commitado ainda (tudo WIP no disco).
+- **Lyra** (`src/render/`, `src/input/`, `src/ui/cenas/`): render cinza/azul (terreno, parallax, piloto-cápsula, câmera mola+zoom, HUD), entrada toque+teclado, cenas `descida.ts`/`resultado.ts`/`jogo.ts` (`criarCenaJogo`). Provou no navegador: 370 unit + 106 e2e verdes. Usou um DUBLÊ: `src/ui/cenas/motor-teste.ts` (`criarMotorTeste`, método `.tick(cmd)`) e `pista-teste.ts` (`gerarPistaTeste`).
+- **Vega** (`src/descida/`, `src/pista/`, `src/data/pistas.ts`, `ferramentas/harness/`): motor real (`criarDescida` → `MotorDescida.processar(cmd)`/`.leitura()`/`.hashEstado()`), gerador por semente (`exigirPistaValida`, `gerarPista`), bot, harness (`npm run harness`). 395 testes verdes, build ok (13,1 kB gzip), **bot 900/900 sementes, 0 tombos**. Pista inicial `PISTA_MORRO_DO_PINHAO` (900 m, `hashEsperado: '1c4d551601d3a6ae'`). Handoff detalhado em `docs/handoff-vega-m1a.md`. Determinismo provado (5400 ticks, mesmo hash).
+- **Painel:** missão M1a ABERTA, dona `atlas`, id `cmvju9fxm00gj01pd0cbrufbw` (`.missao-atual` aponta pra ela). Continue nela e **feche** quando o M1a passar no portão do dono.
+
+### INTEGRAÇÃO — faça isto (é o próximo passo, eu parei bem aqui):
+1. Em `src/ui/cenas/descida.ts`, troque o dublê pelo motor REAL da Vega:
+   - imports (use a forma `/index` nos barris de camada, senão a varredura de arquitetura dá falso positivo — ver `tests/support/varredura.ts`, `origemDe` trata caminho de 1 segmento como "raiz"):
+     `import { criarDescida } from '../../descida/index';`
+     `import { exigirPistaValida } from '../../pista/index';`
+     `import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';`
+     (remova os imports de `./motor-teste` e `./pista-teste`.)
+   - `const pista = exigirPistaValida(PISTA_MORRO_DO_PINHAO);` (confere o hash)
+   - `const motor = criarDescida(pista);`
+   - estado inicial (fora do `desenhar`): `let leitura = motor.leitura();` (NÃO `.tick(COMANDO_NEUTRO)`; `.leitura()` dá fase `'contagem'` sem avançar)
+   - no `atualizar()`: `leitura = motor.processar(cmd);` (era `motor.tick(cmd)`)
+   - `rngVisual = rngDoCanal(pista.semente, 'visual')` continua valendo (PistaGerada real tem `.semente`, `.alturas`, `.dx`, `.chegadaX`).
+2. Em `src/main.ts`, troque `criarCenaBoot(...)` por `criarCenaJogo({ canvas, janela: window, documento: document })` (de `./ui/cenas/jogo`) e **remova os imports/variáveis que ficarem sem uso** (`criarCenaBoot`, e `rotuloDaVersao`/`VERSAO` se só o boot os usava — tsconfig é estrito com não-usados). `ui` PODE importar tudo (PODE_IMPORTAR), `main` também.
+3. Os dublês `motor-teste.ts`/`pista-teste.ts` ainda são usados pelo teste `tests/unit/ui-motor-teste.test.ts` da Lyra — **não apague** sem ajustar/remover esse teste também.
+4. `npm run verificar` COMPLETO (agora sem conflito de porta — rode sozinho, portas 5273/4273). Conserte o que acender.
+5. **Íris** valida o M1a integrado (determinismo, e2e de toque, portão de fps; pode rodar `npm run harness -- --sementes 300`). Pode reprovar.
+6. Mostre ao DONO o visual integrado em movimento (preview 5273 + screenshot) e abra o portão: **"a sensação de descer está boa?"**.
+7. Com verificar verde + Íris ok, **commite** o M1a (identidade já é `InnovareCode Squad <dev@innovarecode.com.br>`) e empurre. Feche a missão do painel.
+
+### Pendências herdadas (não são bugs):
+- Duração da descida com bot ótimo ~39 s (< meta 60-90 s do plano §8) — afinar `comprimentoM`/pesos, confirmar com o dono no iPhone.
+- `src/data/pistas.ts` é temporário da Vega (exceção de dono documentada no cabeçalho) — Cronos revisa no M1 "de verdade".
+- `ferramentas/pista/` (PNG do perfil) não foi feito; R6 (deslize na borda no iPhone) tem mitigação no código mas só o dono fecha no aparelho; agachar no toque (D10) fora de propósito.
