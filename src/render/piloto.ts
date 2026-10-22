@@ -1,10 +1,9 @@
 /**
- * Piloto como CÁPSULA/forma geométrica (sem arte, plano §7 M1a): uma elipse (corpo) sobre um traço (prancha),
- * colorida por `modo`. A arte real (Apolo, M1b) troca isto pelo atlas C1 com `contato`/`pivo`.
- *
- * Conversão de ângulo: o contrato (`core/contratos.ts`) usa GRAUS, 0 = +x, ANTI-horário (convenção matemática,
- * mundo com y para cima). O canvas roda em RADIANOS, sentido horário, com y para baixo. Daí o sinal invertido.
+ * Render do Piloto (plano §3.6, M1b):
+ * Desenha o sprite real do personagem ancorado pelo ponto de contato (no chão) ou pivô (no ar),
+ * com rotação suave e compensação geométrica. Fallback para cápsula caso o sprite ainda não esteja em cache.
  */
+import type { QuadroCarregado, SpritePersonagem } from '../assets/index';
 import { PX_POR_METRO } from '../core/constantes';
 import type { PilotoLeitura } from '../core/contratos';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
@@ -19,15 +18,7 @@ export const COR_POR_MODO: Readonly<Record<PilotoLeitura['modo'], string>> = {
 const RAIO_CORPO_M = 0.35;
 const COMPRIMENTO_PRANCHA_M = 1.3;
 
-export function desenharPiloto(ctx: CanvasRenderingContext2D, piloto: PilotoLeitura, camera: EstadoCamera): void {
-  const centro = mundoParaTela(piloto.x, piloto.y, camera, PX_POR_METRO);
-  const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
-  const anguloCanvasRad = (-piloto.angulo * Math.PI) / 180;
-
-  ctx.save();
-  ctx.translate(centro.x, centro.y);
-  ctx.rotate(anguloCanvasRad);
-
+function desenharCapsulaFallback(ctx: CanvasRenderingContext2D, modo: PilotoLeitura['modo'], escala: number): void {
   ctx.strokeStyle = '#1b2733';
   ctx.lineWidth = Math.max(2, 0.08 * escala);
   ctx.beginPath();
@@ -37,11 +28,47 @@ export function desenharPiloto(ctx: CanvasRenderingContext2D, piloto: PilotoLeit
 
   ctx.beginPath();
   ctx.ellipse(0, -0.08 * escala, RAIO_CORPO_M * escala * 0.8, RAIO_CORPO_M * escala * 1.25, 0, 0, Math.PI * 2);
-  ctx.fillStyle = COR_POR_MODO[piloto.modo];
+  ctx.fillStyle = COR_POR_MODO[modo];
   ctx.fill();
   ctx.lineWidth = Math.max(1, 0.03 * escala);
   ctx.strokeStyle = '#1b2733';
   ctx.stroke();
+}
+
+export function desenharPiloto(
+  ctx: CanvasRenderingContext2D,
+  piloto: PilotoLeitura,
+  camera: EstadoCamera,
+  sprite?: SpritePersonagem | null
+): void {
+  const centro = mundoParaTela(piloto.x, piloto.y, camera, PX_POR_METRO);
+  const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
+  const anguloCanvasRad = (-piloto.angulo * Math.PI) / 180;
+
+  ctx.save();
+  ctx.translate(centro.x, centro.y);
+  ctx.rotate(anguloCanvasRad);
+
+  const quadro: QuadroCarregado | null = sprite ? sprite.obterQuadro(piloto.pose) : null;
+
+  if (quadro) {
+    const d = quadro.dados;
+    // Escala do sprite no mundo: a altura da Capi é ~1.15m (escala proporcional ao zoom e metros lógicos)
+    const ALTURA_ALVO_M = 1.2;
+    const escalaSprite = (ALTURA_ALVO_M * escala) / d.altura;
+
+    // Ponto de ancoragem: no chão usa o contato com a prancha; no ar usa o pivô do giro
+    const [ancoraX, ancoraY] = piloto.modo === 'chao' && d.contato ? d.contato : d.pivo;
+
+    const dx = -ancoraX * escalaSprite;
+    const dy = -ancoraY * escalaSprite;
+    const dw = d.largura * escalaSprite;
+    const dh = d.altura * escalaSprite;
+
+    ctx.drawImage(quadro.imagem, dx, dy, dw, dh);
+  } else {
+    desenharCapsulaFallback(ctx, piloto.modo, escala);
+  }
 
   ctx.restore();
 }

@@ -1,0 +1,305 @@
+{
+  "ride0": {
+    "arquivo": "capi-ride0.png",
+    "largura": 180,
+    "altura": 173,
+    "contato": [
+      88.4,
+      169.8
+    ],
+    "pivo": [
+      87.8,
+      93.4
+    ],
+    "tipo": "chao"
+  },
+  "tuck0": {
+    "arquivo": "capi-tuck0.png",
+    "largura": 180,
+    "altura": 138,
+    "contato": [
+      88.4,
+      135.1
+    ],
+    "pivo": [
+      94.5,
+      75.8
+    ],
+    "tipo": "chao"
+  },
+  "jload": {
+    "arquivo": "capi-jload.png",
+    "largura": 180,
+    "altura": 156,
+    "contato": [
+      88.3,
+      152.9
+    ],
+    "pivo": [
+      89.4,
+      85.0
+    ],
+    "tipo": "chao"
+  },
+  "takeoff": {
+    "arquivo": "capi-takeoff.png",
+    "largura": 177,
+    "altura": 181,
+    "contato": null,
+    "pivo": [
+      81.5,
+      89.8
+    ],
+    "tipo": "ar"
+  },
+  "air": {
+    "arquivo": "capi-air.png",
+    "largura": 175,
+    "altura": 178,
+    "contato": null,
+    "pivo": [
+      82.3,
+      91.8
+    ],
+    "tipo": "ar"
+  },
+  "flip0": {
+    "arquivo": "capi-flip0.png",
+    "largura": 129,
+    "altura": 152,
+    "contato": null,
+    "pivo": [
+      57.2,
+      79.3
+    ],
+    "tipo": "ar"
+  },
+  "land": {
+    "arquivo": "capi-land.png",
+    "largura": 180,
+    "altura": 159,
+    "contato": [
+      88.3,
+      155.8
+    ],
+    "pivo": [
+      89.7,
+      87.7
+    ],
+    "tipo": "chao"
+  },
+  "wobble": {
+    "arquivo": "capi-wobble.png",
+    "largura": 180,
+    "altura": 169,
+    "contato": [
+      85.6,
+      165.9
+    ],
+    "pivo": [
+      87.0,
+      89.8
+    ],
+    "tipo": "chao"
+  },
+  "fall0": {
+    "arquivo": "capi-fall0.png",
+    "largura": 193,
+    "altura": 151,
+    "contato": [
+      87.1,
+      148.0
+    ],
+    "pivo": [
+      104.3,
+      81.2
+    ],
+    "tipo": "chao"
+  },
+  "fall1": {
+    "arquivo": "capi-fall1.png",
+    "largura": 173,
+    "altura": 150,
+    "contato": null,
+    "pivo": [
+      96.1,
+      78.2
+    ],
+    "tipo": "ar"
+  },
+  "fall2": {
+    "arquivo": "capi-fall2.png",
+    "largura": 188,
+    "altura": 148,
+    "contato": [
+      71.6,
+      144.5
+    ],
+    "pivo": [
+      90.1,
+      101.5
+    ],
+    "tipo": "corpo"
+  },
+  "celeb": {
+    "arquivo": "capi-celeb.png",
+    "largura": 177,
+    "altura": 169,
+    "contato": [
+      86.4,
+      165.5
+    ],
+    "pivo": [
+      88.3,
+      88.3
+    ],
+    "tipo": "chao"
+  },
+  "grabUp": {
+    "arquivo": "capi-grabUp.png",
+    "largura": 168,
+    "altura": 183,
+    "contato": null,
+    "pivo": [
+      85.6,
+      82.8
+    ],
+    "tipo": "ar"
+  },
+  "grabDown": {
+    "arquivo": "capi-grabDown.png",
+    "largura": 140,
+    "altura": 167,
+    "contato": null,
+    "pivo": [
+      63.6,
+      87.0
+    ],
+    "tipo": "ar"
+  },
+  "grabFront": {
+    "arquivo": "capi-grabFront.png",
+    "largura": 178,
+    "altura": 190,
+    "contato": null,
+    "pivo": [
+      90.6,
+      94.0
+    ],
+    "tipo": "ar"
+  },
+  "grabBack": {
+    "arquivo": "capi-grabBack.png",
+    "largura": 174,
+    "altura": 185,
+    "contato": null,
+    "pivo": [
+      89.5,
+      90.9
+    ],
+    "tipo": "ar"
+  },
+  "rail": {
+    "arquivo": "capi-rail.png",
+    "largura": 182,
+    "altura": 168,
+    "contato": [
+      91.2,
+      164.8
+    ],
+    "pivo": [
+      90.8,
+      89.5
+    ],
+    "tipo": "chao"
+  },
+  "star": {
+    "arquivo": "capi-star.png",
+    "largura": 201,
+    "altura": 195,
+    "contato": null,
+    "pivo": [
+      100.2,
+      87.8
+    ],
+    "tipo": "ar"
+  },
+  "scared": {
+    "arquivo": "capi-scared.png",
+    "largura": 208,
+    "altura": 195,
+    "contato": null,
+    "pivo": [
+      99.4,
+      91.0
+    ],
+    "tipo": "ar"
+  },
+  "sig": {
+    "arquivo": "capi-sig.png",
+    "largura": 171,
+    "altura": 166,
+    "contato": null,
+    "pivo": [
+      84.9,
+      99.0
+    ],
+    "tipo": "ar"
+  },
+  "ride1": {
+    "arquivo": "capi-ride1.png",
+    "largura": 180,
+    "altura": 183,
+    "contato": [
+      89.8,
+      179.9
+    ],
+    "pivo": [
+      90.6,
+      99.8
+    ],
+    "tipo": "chao"
+  },
+  "tuck1": {
+    "arquivo": "capi-tuck1.png",
+    "largura": 181,
+    "altura": 153,
+    "contato": [
+      90.4,
+      149.8
+    ],
+    "pivo": [
+      96.4,
+      83.1
+    ],
+    "tipo": "chao"
+  },
+  "leanBack": {
+    "arquivo": "capi-leanBack.png",
+    "largura": 200,
+    "altura": 178,
+    "contato": [
+      92.8,
+      175.0
+    ],
+    "pivo": [
+      101.8,
+      95.3
+    ],
+    "tipo": "chao"
+  },
+  "leanFwd": {
+    "arquivo": "capi-leanFwd.png",
+    "largura": 181,
+    "altura": 165,
+    "contato": [
+      92.3,
+      161.7
+    ],
+    "pivo": [
+      99.3,
+      90.5
+    ],
+    "tipo": "chao"
+  }
+}

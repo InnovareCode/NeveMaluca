@@ -8,6 +8,7 @@
  * quadro só LÊ o último estado (nunca tica o motor de novo — por isso a leitura inicial é feita na criação,
  * com um comando neutro, e não dentro de `desenhar`).
  */
+import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import { rngDoCanal } from '../../core/rng';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
@@ -47,6 +48,15 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const parallax: Parallax = criarParallax(opcoes.documento ?? document);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
 
+  let spritePiloto: SpritePersonagem | null = null;
+  void carregarSpritePersonagem('capi')
+    .then((s) => {
+      spritePiloto = s;
+    })
+    .catch(() => {
+      // fallback silencioso para a cápsula se o sprite falhar
+    });
+
   // leitura inicial fora do `desenhar()`: a cena nunca tica o motor no quadro, só no tick (ver `ui/tipos.ts`)
   let leitura = motor.leitura();
   camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
@@ -69,7 +79,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       parallax.desenhar(ctx, camLeitura.x, leitura.tick);
       desenharTerreno(ctx, pista, camLeitura);
       desenharObjetos(ctx, pista, camLeitura);
-      desenharPiloto(ctx, leitura.piloto, camLeitura);
+      desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto);
       desenharHud(ctx, { velocidadeMs: leitura.piloto.velocidade, pontos: leitura.pontos, fase: leitura.fase });
     },
   };
