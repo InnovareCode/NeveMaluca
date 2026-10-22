@@ -57,8 +57,9 @@ Detalhes, opções e recomendação na seção 9 de `docs/plano-neve-maluca.md`.
 ## Marcos
 | Marco | Conteúdo | Estado |
 |---|---|---|
-| M0 | fundação e CI | pronto no código, aprovado pela Íris com ressalvas já corrigidas (falta commit, remoto/CI e conferir no iPhone real) |
-| M1 | protótipo de descida (M1a cinza com portão do dono, M1b arte), 1 personagem, 1 pista | não iniciado |
+| M0 | fundação e CI | pronto, commitado e empurrado no remoto |
+| M1a | protótipo de descida cinza (motor real + render + cenas + Pages) | integrado, 100% verificado (395 unit, 18 build, 106 e2e), commitado e empurrado; no portão do dono |
+| M1b | 1 personagem (Capi Barbosa), arte integrada | não iniciado |
 | M2 | manobras, combos, replay e fantasma | não iniciado |
 | M3 | 5 pistas e 4 personagens | não iniciado |
 | M4 | polimento mobile | não iniciado |
