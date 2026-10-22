@@ -48,17 +48,20 @@ export interface Parallax {
   desenhar(ctx: CanvasRenderingContext2D, cameraXm: number, tempoTicks: number): void;
 }
 
-export function criarParallax(doc: Document = document): Parallax {
+export function criarParallax(doc?: Document): Parallax {
+  const documento = doc ?? (typeof document !== 'undefined' ? document : undefined);
   const rng = criarRng(SEMENTE_VISUAL_FUNDO);
-  const camadas = CAMADAS_MONTANHA.map((c) => {
-    const tile = doc.createElement('canvas');
-    tile.width = LARGURA;
-    tile.height = ALTURA;
-    const ctxTile = tile.getContext('2d');
-    if (!ctxTile) throw new Error('Canvas 2D indisponível neste navegador');
-    desenharSilhueta(ctxTile, c.cor, c.alturaBaseFrac, rng);
-    return { ...c, tile };
-  });
+  const camadas = documento
+    ? CAMADAS_MONTANHA.map((c) => {
+        const tile = documento.createElement('canvas');
+        tile.width = LARGURA;
+        tile.height = ALTURA;
+        const ctxTile = tile.getContext('2d');
+        if (!ctxTile) throw new Error('Canvas 2D indisponível neste navegador');
+        desenharSilhueta(ctxTile, c.cor, c.alturaBaseFrac, rng);
+        return { ...c, tile };
+      })
+    : [];
 
   return {
     desenhar(ctx, cameraXm, tempoTicks) {

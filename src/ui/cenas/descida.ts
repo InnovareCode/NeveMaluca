@@ -45,7 +45,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const motor: MotorDescida = criarDescida(pista);
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
   const camera: Camera = criarCamera(0, 0);
-  const parallax: Parallax = criarParallax(opcoes.documento ?? document);
+  const parallax: Parallax = criarParallax(opcoes.documento);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
 
   let spritePiloto: SpritePersonagem | null = null;
@@ -81,6 +81,9 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       desenharObjetos(ctx, pista, camLeitura);
       desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto);
       desenharHud(ctx, { velocidadeMs: leitura.piloto.velocidade, pontos: leitura.pontos, fase: leitura.fase });
+    },
+    destruir() {
+      entrada.destruir();
     },
   };
 }

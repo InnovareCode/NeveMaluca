@@ -28,7 +28,7 @@ import { carregarFontes } from './platform/fontes';
 import { criarLaco } from './platform/laco';
 import { observarOrientacao } from './platform/orientacao';
 import { montarTelaCheia } from './platform/tela-cheia-ui';
-import { criarCenaJogo } from './ui/cenas/jogo';
+import { criarGerenciadorCenas } from './ui/cenas/gerenciador';
 
 /** Texto do aviso quando o save não pode ser gravado neste aparelho (modo privado, cota, build mais velho que o save). */
 const AVISO_SEM_SAVE = 'Progresso não salvo neste aparelho';
@@ -52,7 +52,13 @@ async function boot(): Promise<void> {
   // o canvas não espera a fonte: sem isto o título piscaria da fonte de reserva para a verdadeira (teto de 4 s, nunca prende a tela)
   await carregarFontes();
 
-  const cena = criarCenaJogo({ canvas, janela: window, documento: document });
+  const cena = criarGerenciadorCenas({
+    canvas,
+    janela: window,
+    documento: document,
+    save: save.dados,
+    armazenamento,
+  });
   const desenharQuadro = (alpha: number): void => {
     usarEspacoLogico(ctx);
     cena.desenhar(ctx, alpha);

@@ -53,12 +53,13 @@ export function desenharPiloto(
 
   if (quadro) {
     const d = quadro.dados;
-    // Escala do sprite no mundo: a altura da Capi é ~1.15m (escala proporcional ao zoom e metros lógicos)
-    const ALTURA_ALVO_M = 1.2;
+    // Escala do sprite no mundo: 1.85m no canvas dá destaque visual ao personagem no mobile sem perder a amplitude
+    const ALTURA_ALVO_M = 1.85;
     const escalaSprite = (ALTURA_ALVO_M * escala) / d.altura;
 
-    // Ponto de ancoragem: no chão usa o contato com a prancha; no ar usa o pivô do giro
-    const [ancoraX, ancoraY] = piloto.modo === 'chao' && d.contato ? d.contato : d.pivo;
+    // Ponto de ancoragem: no chão usa o contato exato da base da prancha; no ar usa o pivô de rotação
+    // Compensação sutil de 1.5px para apoiar perfeitamente sobre o contorno de 2px da neve
+    const [ancoraX, ancoraY] = piloto.modo === 'chao' && d.contato ? [d.contato[0], d.contato[1] - 1.5] : d.pivo;
 
     const dx = -ancoraX * escalaSprite;
     const dy = -ancoraY * escalaSprite;

@@ -1,8 +1,6 @@
 /**
- * Cena "jogo" do M1a: compõe descida -> resultado -> descida de novo (reinício em 1 toque, plano §1 pilar 4).
- * É o ponto de integração que falta plugar em `src/main.ts` no lugar de `criarCenaBoot` (main.ts é NÃO-toque
- * para a Lyra — ver handoff, "PARA O PRÓXIMO"). Hoje o motor por trás é o `motor-teste.ts` (roteirizado); quando
- * `src/descida/` e `src/pista/` da Vega existirem, troca-se só o que `criarCenaDescida` usa por dentro.
+ * Cena "jogo" do M1a/Fase 1: compõe descida -> resultado -> descida de novo (reinício em 1 toque, plano §1 pilar 4)
+ * ou resultado -> menu principal quando `aoMenu` é fornecido.
  */
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
@@ -15,18 +13,21 @@ export interface OpcoesCenaJogo {
   readonly janela?: AlvoTeclado | undefined;
   readonly documento?: Document | undefined;
   readonly aoPausar?: (() => void) | undefined;
+  readonly aoMenu?: (() => void) | undefined;
 }
 
 export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
-  let atual: Cena = montarDescida();
+  let atual: Cena | null = null;
 
   function montarDescida(): Cena {
+    atual?.destruir?.();
     return criarCenaDescida({
       canvas: opcoes.canvas,
       janela: opcoes.janela,
       documento: opcoes.documento,
       aoPausar: opcoes.aoPausar,
       aoTerminar: (resultado) => {
+        atual?.destruir?.();
         atual = criarCenaResultado({
           dados: resultado,
           canvas: opcoes.canvas,
@@ -34,18 +35,24 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
           aoReiniciar: () => {
             atual = montarDescida();
           },
+          aoMenu: opcoes.aoMenu,
         });
       },
     });
   }
 
+  atual = montarDescida();
+
   return {
     id: 'jogo',
     atualizar() {
-      atual.atualizar();
+      atual?.atualizar();
     },
     desenhar(ctx, alpha) {
-      atual.desenhar(ctx, alpha);
+      atual?.desenhar(ctx, alpha);
+    },
+    destruir() {
+      atual?.destruir?.();
     },
   };
 }

@@ -10,4 +10,6 @@ export interface Cena {
   atualizar(): void;
   /** Um quadro; `alpha` em [0, 1) = fração do próximo tick já decorrida (para interpolar). */
   desenhar(ctx: Ctx, alpha: number): void;
+  /** Liberação opcional de ouvintes de eventos da cena ao desmontar. */
+  destruir?(): void;
 }

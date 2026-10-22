@@ -1,11 +1,12 @@
 /**
  * Cena de resultado (plano §7 M1a, pilar 4 "de novo em 1 toque"): mostra pontos e tempo, e volta para uma nova
- * descida no primeiro toque ou tecla (Espaço/Enter). Sem persistência de recorde aqui: isso é C4 (Cronos), ainda
- * fora do M1a.
+ * descida no toque ou tecla (Espaço/Enter), ou Menu ao clicar no botão "MENU" ou apertar Escape/M.
  */
 import { ALTURA, LARGURA } from '../../core/constantes';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
+import { desenharBotao } from '../desenho';
+import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import type { Cena } from '../tipos';
 import type { ResultadoDescida } from './descida';
 
@@ -14,24 +15,59 @@ export interface OpcoesCenaResultado {
   readonly canvas: AlvoToque;
   readonly janela?: AlvoTeclado | undefined;
   readonly aoReiniciar?: (() => void) | undefined;
+  readonly aoMenu?: (() => void) | undefined;
 }
 
 const COR_FUNDO = '#0b1a33';
 const COR_TEXTO = '#f4f9ff';
 
+const BOTAO_MENU: BotaoRetangular = {
+  id: 'menu',
+  x: LARGURA / 2 - 90,
+  y: ALTURA * 0.72,
+  w: 180,
+  h: 46,
+};
+
 export function criarCenaResultado(opcoes: OpcoesCenaResultado): Cena {
-  const janela = opcoes.janela ?? window;
+  const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const reiniciar = (): void => opcoes.aoReiniciar?.();
+  const voltarMenu = (): void => {
+    if (opcoes.aoMenu) opcoes.aoMenu();
+    else reiniciar();
+  };
+
+  let hoverMenu = false;
+
+  const aoMover = (ev: Event): void => {
+    if (!opcoes.aoMenu) return;
+    const pt = eventoParaPontoLogico(ev as PointerEvent, opcoes.canvas);
+    hoverMenu = pontoDentroDoBotao(pt, BOTAO_MENU);
+  };
+
   const aoTecla = (ev: Event): void => {
     const e = ev as KeyboardEvent;
-    if (e.code === 'Space' || e.code === 'Enter') reiniciar();
+    if (e.code === 'Space' || e.code === 'Enter') {
+      reiniciar();
+    } else if (e.code === 'Escape' || e.code === 'KeyM') {
+      voltarMenu();
+    }
   };
-  const aoTocar = (): void => reiniciar();
-  janela.addEventListener('keydown', aoTecla);
+
+  const aoTocar = (ev: Event): void => {
+    if (opcoes.aoMenu) {
+      const pt = eventoParaPontoLogico(ev as PointerEvent, opcoes.canvas);
+      if (pontoDentroDoBotao(pt, BOTAO_MENU)) {
+        voltarMenu();
+        return;
+      }
+    }
+    reiniciar();
+  };
+
+  janela?.addEventListener('keydown', aoTecla);
+  opcoes.canvas.addEventListener('pointermove', aoMover);
   opcoes.canvas.addEventListener('pointerdown', aoTocar);
-  // Sem `destruir()` no contrato de `Cena` (ainda não há um diretor de cenas que troque a atual por outra e
-  // precise desligar listeners — ver handoff da Lyra, M1a, pendências): aceitável aqui porque esta cena só
-  // existe uma vez por corrida, dentro de `jogo.ts`.
 
   let ticks = 0;
   return {
@@ -55,7 +91,22 @@ export function criarCenaResultado(opcoes: OpcoesCenaResultado): Cena {
         ctx.font = '600 18px Barlow, sans-serif';
         ctx.fillText('toque ou aperte ESPAÇO para jogar de novo', LARGURA / 2, ALTURA * 0.35 + 140);
       }
+
+      if (opcoes.aoMenu) {
+        desenharBotao(ctx, {
+          ...BOTAO_MENU,
+          texto: 'MENU PRINCIPAL',
+          corTopo: hoverMenu ? '#4da2ff' : '#2a7de1',
+          corBase: hoverMenu ? '#1f6fd0' : '#144d8f',
+          aoVivo: hoverMenu,
+        });
+      }
       ctx.restore();
+    },
+    destruir() {
+      janela?.removeEventListener('keydown', aoTecla);
+      opcoes.canvas.removeEventListener('pointermove', aoMover);
+      opcoes.canvas.removeEventListener('pointerdown', aoTocar);
     },
   };
 }
