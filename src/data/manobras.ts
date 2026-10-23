@@ -1,7 +1,7 @@
 /**
  * Dados das manobras do M2 (plano §3.5). Só números e ids; a lógica de combo mora em `descida/combo.ts` e a
- * detecção no `descida/motor.ts`. Os NOMES CÔMICOS de exibição são do Apolo (`data/textos.pt-BR.ts`, ainda não
- * existe) — aqui fica só o `id` da manobra. Os números são PONTOS DE PARTIDA (plano §3.5): afinar no harness, por
+ * detecção no `descida/motor.ts`. Os NOMES CÔMICOS de exibição são do Apolo (`data/textos.pt-BR.ts`) — aqui fica
+ * só o `id` da manobra. Os números são PONTOS DE PARTIDA (plano §3.5): afinar no harness, por
  * isso vivem em dados, não embutidos no motor.
  */
 import { PASSO_S, TETO_PONTOS } from '../core/constantes';
