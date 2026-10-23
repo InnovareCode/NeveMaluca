@@ -15,7 +15,8 @@
 | `particulas.ts` | `criarSistemaParticulas`: flocos de neve em camadas de profundidade (fundo e frente) e spray de neve saindo da prancha no chão em pool circular pré-alocado |
 | `objetos.ts` | `desenharObjetos`: `ObjetoPista` apoiado no terreno |
 | `piloto.ts` | `desenharPiloto`: renderiza sprite com ancoragem de contato/pivô ou cápsula de fallback |
-| `hud.ts` | `desenharHud`: velocidade (km/h) e pontos; aviso "PREPARA..." na contagem |
+| `hud.ts` | `desenharHud`: velocidade (km/h), pontos e a barra de combo (xMULT + soma, janela de ligação como barra que esvazia); aviso "PREPARA..." na contagem |
+| `manobra.ts` | `criarSistemaPopupsManobra` (M2): popups de texto que sobem e somem a cada evento `manobra`/`combo-fechado`/`combo-perdido`, mesmo padrão de pool fixo do `particulas.ts`. Nomes de exibição são PROVISÓRIOS — ver TODO no arquivo (definitivos são do Apolo) |
 
 **Regras de desempenho (o portão é o iPhone):** camadas de montanha e floresta pré-desenhadas em canvas fora da tela (uma vez, não a cada quadro — lição do boot.ts); sem `shadowBlur` nem `filter`. Sistema de partículas em pool circular de 128 instâncias reutilizadas, zero alocação de objetos por quadro.
 

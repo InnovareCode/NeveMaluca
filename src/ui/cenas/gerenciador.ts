@@ -14,6 +14,7 @@
 import { REGRAS_SAVE } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
+import type { AudioDestravavel } from '../../audio/index';
 import type { ArmazenamentoLike, SaveV1 } from '../../meta/tipos';
 import { salvarSave } from '../../meta/storage';
 import type { Ctx } from '../../platform/canvas';
@@ -33,6 +34,8 @@ export interface OpcoesGerenciador {
   readonly documento?: Document | undefined;
   readonly save: SaveV1;
   readonly armazenamento?: ArmazenamentoLike | undefined;
+  /** Áudio destravável (de main.ts), repassado à cena de descida para o som das manobras. */
+  readonly audio?: AudioDestravavel | undefined;
   /** Alvo da tela cheia; separado para permitir testes em Node sem DOM. */
   readonly alvoTelaCheia?: AlvoTelaCheia | undefined;
   /** Ponto de entrada da cena de abertura; por padrão já começa na abertura. */
@@ -124,6 +127,8 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           janela,
           documento: doc,
           aoMenu: () => irPara('menu'),
+          audio: opcoes.audio,
+          save: opcoes.save,
         });
       default: {
         const nunca: never = id;

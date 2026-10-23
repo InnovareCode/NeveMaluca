@@ -18,6 +18,7 @@ import type { AlvoToque } from '../../input/toque';
 import { criarEntrada, type Entrada } from '../../input/index';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharHud } from '../../render/hud';
+import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
 import { criarParallax, type Parallax } from '../../render/parallax';
@@ -27,6 +28,9 @@ import type { Cena } from '../tipos';
 import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
 import { criarDescida, type MotorDescida } from '../../descida/index';
 import { exigirPistaValida } from '../../pista/index';
+import { criarSomManobras } from '../../audio/som-manobras';
+import type { AudioDestravavel } from '../../audio/index';
+import type { SaveV1 } from '../../meta/tipos';
 
 export interface ResultadoDescida {
   readonly pontos: number;
@@ -39,6 +43,10 @@ export interface OpcoesCenaDescida {
   readonly documento?: Document | undefined;
   readonly aoTerminar?: ((resultado: ResultadoDescida) => void) | undefined;
   readonly aoPausar?: (() => void) | undefined;
+  /** Instância de áudio já destravável (de main.ts); sem ela a cena roda muda (testes/preview sem som). */
+  readonly audio?: AudioDestravavel | undefined;
+  /** Save, só para ler o volume (`cfg.som`) ao vivo. */
+  readonly save?: SaveV1 | undefined;
 }
 
 export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
@@ -49,6 +57,10 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const parallax: Parallax = criarParallax(opcoes.documento);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
+  const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
+  const somManobras = opcoes.audio
+    ? criarSomManobras(opcoes.audio, rngDoCanal(pista.semente, 'audio'), { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 })
+    : null;
 
   let spritePiloto: SpritePersonagem | null = null;
   void carregarSpritePersonagem('capi')
@@ -72,6 +84,8 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       leitura = motor.processar(cmd);
       camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
       particulas.atualizar(leitura.piloto, leitura.eventos);
+      popupsManobra.atualizar(leitura.piloto, leitura.eventos, leitura.tick);
+      somManobras?.atualizar(leitura);
       if (leitura.fase === 'chegou') {
         terminou = true;
         opcoes.aoTerminar?.({ pontos: leitura.pontos, ticks: leitura.tick });
@@ -85,7 +99,13 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       particulas.desenharSpray(ctx, camLeitura);
       desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto);
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.tick);
-      desenharHud(ctx, { velocidadeMs: leitura.piloto.velocidade, pontos: leitura.pontos, fase: leitura.fase });
+      popupsManobra.desenhar(ctx, camLeitura);
+      desenharHud(ctx, {
+        velocidadeMs: leitura.piloto.velocidade,
+        pontos: leitura.pontos,
+        fase: leitura.fase,
+        combo: leitura.combo,
+      });
     },
     destruir() {
       entrada.destruir();

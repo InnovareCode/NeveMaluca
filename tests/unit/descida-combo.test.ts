@@ -146,4 +146,38 @@ describe('motor — pontuação real (integração M2)', () => {
     // Enquanto o combo está aberto, a soma vive no combo (não na pontuação) — ela só migra no fechamento.
     expect(viuComboAtivoComPontosZero).toBe(true);
   });
+
+  it('(regressão) o AÉREO pontua: um salto com bastante tempo de ar emite manobra id "ar"', () => {
+    // Bug achado pelo Apolo: `p.ticksNoAr = 0` rodava ANTES de `commitarVoo`, então o aéreo dava sempre 0.
+    // Ladeira -20° pra ganhar velocidade + um "penhasco" (queda de 50 m): o salto sobre a borda garante segundos de ar.
+    const incl = Math.tan((20 * Math.PI) / 180);
+    const n = 401; // 200 m
+    const alturas = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = i * 0.5;
+      alturas[i] = x <= 40 ? -x * incl : -40 * incl - 50 - (x - 40) * incl;
+    }
+    const pista: PistaGerada = {
+      id: 'penhasco',
+      semente: 1,
+      versaoGerador: 'teste',
+      dx: 0.5,
+      alturas,
+      objetos: [],
+      trilhos: [],
+      checkpoints: [0],
+      chegadaX: 150,
+      hash: 'teste',
+    };
+    const motor = criarDescida(pista);
+    let l = motor.leitura();
+    for (let i = 0; i < 3000 && l.piloto.x < 35; i++) l = motor.processar(CMD_NADA); // ganha velocidade
+    l = motor.processar(CMD_PULO); // salta perto da borda do penhasco
+    let arManobra = false;
+    for (let i = 0; i < 600 && l.fase !== 'chegou'; i++) {
+      l = motor.processar(CMD_NADA);
+      if (l.eventos.some((e) => e.tipo === 'manobra' && e.id === 'ar')) arManobra = true;
+    }
+    expect(arManobra).toBe(true);
+  });
 });

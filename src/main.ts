@@ -58,6 +58,7 @@ async function boot(): Promise<void> {
     documento: document,
     save: save.dados,
     armazenamento,
+    audio,
   });
   const desenharQuadro = (alpha: number): void => {
     usarEspacoLogico(ctx);

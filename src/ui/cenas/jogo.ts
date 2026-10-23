@@ -4,6 +4,8 @@
  */
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
+import type { AudioDestravavel } from '../../audio/index';
+import type { SaveV1 } from '../../meta/tipos';
 import type { Cena } from '../tipos';
 import { criarCenaDescida } from './descida';
 import { criarCenaResultado } from './resultado';
@@ -14,6 +16,8 @@ export interface OpcoesCenaJogo {
   readonly documento?: Document | undefined;
   readonly aoPausar?: (() => void) | undefined;
   readonly aoMenu?: (() => void) | undefined;
+  readonly audio?: AudioDestravavel | undefined;
+  readonly save?: SaveV1 | undefined;
 }
 
 export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
@@ -26,6 +30,8 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
       janela: opcoes.janela,
       documento: opcoes.documento,
       aoPausar: opcoes.aoPausar,
+      audio: opcoes.audio,
+      save: opcoes.save,
       aoTerminar: (resultado) => {
         atual?.destruir?.();
         atual = criarCenaResultado({

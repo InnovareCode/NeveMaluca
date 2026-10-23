@@ -397,9 +397,10 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.vy = p.v * seno(p.angulo);
           p.modo = 'trilho';
           p.trilhoAtual = trilhoAlvo;
+          // commitarVoo lê o estado do voo (ticksNoAr) ANTES de zerar — senão o aéreo pontua 0.
+          commitarVoo(eventos, false);
           p.ticksNoAr = 0;
           p.grab = null;
-          commitarVoo(eventos, false);
           estado.trilhoTicks = 0;
           eventos.push({ tipo: 'trilho', etapa: 'inicio' });
         } else if (diff > config.limiarTortoGraus) {
@@ -417,12 +418,13 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.vx = p.v * cosseno(p.angulo);
           p.vy = p.v * seno(p.angulo);
           p.modo = 'chao';
-          p.ticksNoAr = 0;
-          p.grab = null;
           estado.ultimaQualidadePouso = qualidade;
+          // commitarVoo lê p.ticksNoAr / estado.arTicksGrab do voo que ACABOU — tem que vir ANTES de zerar o ar.
           commitarVoo(eventos, qualidade === 'perfeito');
           if (qualidade === 'torto') fecharCombo(eventos);
           else if (estado.combo.ativo) abrirJanela(estado.combo);
+          p.ticksNoAr = 0;
+          p.grab = null;
           eventos.push({ tipo: 'pouso', qualidade, queda: vImpacto < 0 ? -vImpacto : vImpacto });
         }
       }
