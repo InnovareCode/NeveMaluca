@@ -6,7 +6,14 @@
 import { describe, expect, it } from 'vitest';
 import type { DefPista } from '../../src/core/contratos';
 import { FORMATO_HASH } from '../../src/core/hash';
-import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE, PISTA_VILA_CHOCOLATE, PISTA_VULCAO_PE_GELADO } from '../../src/data/pistas';
+import {
+  obterPistaDeDados,
+  PISTA_CUME_DA_VENTANIA,
+  PISTA_MORRO_DO_PINHAO,
+  PISTA_PICO_DO_PICOLE,
+  PISTA_VILA_CHOCOLATE,
+  PISTA_VULCAO_PE_GELADO,
+} from '../../src/data/pistas';
 import { TIPOS_PROIBIDOS_NA_ABERTURA, TIPOS_SEGUROS_PARA_CHECKPOINT } from '../../src/pista/catalogo';
 import { inclinacaoGrausEm } from '../../src/pista/consulta';
 import { exigirPistaValida, exigirPistasValidas, gerarPista } from '../../src/pista/gerador';
@@ -202,5 +209,39 @@ describe('pista publicada: vulcao-pe-gelado (M3 F3, plano §B.2)', () => {
     }
     expect(TIPOS_PROIBIDOS_NA_ABERTURA.has('basalto')).toBe(false);
     expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has('basalto')).toBe(true);
+  });
+});
+
+describe('pista publicada: cume-da-ventania (M3 F3, plano §B.2, última pista)', () => {
+  it('hashEsperado em src/data/pistas.ts bate com o gerador atual', () => {
+    expect(() => exigirPistaValida(PISTA_CUME_DA_VENTANIA)).not.toThrow();
+  });
+
+  it('usa só trechos elegíveis (base + assinatura do Cume), tangente casada e dentro da faixa [0, comprimentoM]', () => {
+    const pista = gerarPista(PISTA_CUME_DA_VENTANIA);
+    expect(pista.chegadaX).toBe(PISTA_CUME_DA_VENTANIA.comprimentoM);
+    expect(pista.checkpoints[0]).toBe(0);
+    for (const o of pista.objetos) expect(o.x).toBeLessThan(pista.chegadaX);
+  });
+
+  it('obterPistaDeDados("cume-da-ventania") encontra a pista', () => {
+    expect(obterPistaDeDados('cume-da-ventania')?.id).toBe('cume-da-ventania');
+  });
+
+  it('"fenda-corda" e "cornija" não podem abrir a pista nem virar checkpoint (mesma razão de vao/degrau); "teleferico" e "reta-avalanche" podem (chão plano, como trilho/reta)', () => {
+    for (const id of ['fenda-corda', 'cornija']) {
+      expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(true);
+      expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(false);
+    }
+    for (const id of ['teleferico', 'reta-avalanche']) {
+      expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(false);
+      expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(true);
+    }
+  });
+
+  it('a pista gera trilhos nas duas faixas de altura (< 1 m "corda" e >= 1 m "cabo de teleférico", ficha §4.3)', () => {
+    const pista = gerarPista(PISTA_CUME_DA_VENTANIA);
+    expect(pista.trilhos.some((t) => t.altura < 1)).toBe(true);
+    expect(pista.trilhos.some((t) => t.altura >= 1)).toBe(true);
   });
 });

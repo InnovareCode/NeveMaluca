@@ -83,7 +83,23 @@ export const TEMA_VULCAO: DefTema = {
   musica: 'milonga-vulcao',
 };
 
-export const TEMAS_DE_DADOS: readonly DefTema[] = [TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO];
+/** Cume da Ventania (`docs/direcao-arte-neve-maluca.md` §2.1, linha "Cume da Ventania"; clima e música §5 do plano). */
+export const TEMA_CUME: DefTema = {
+  id: 'cume',
+  cores: {
+    ceu: ['#0C1230', '#2C3E7A'],
+    montanhaDistante: '#3B4C86',
+    montanhaMedia: '#27325E',
+    silhueta: '#1A2040',
+    neveLuz: '#E8F1FF',
+    neveSombra: '#5D6FA8',
+    destaque: '#5CF2C2',
+  },
+  clima: 'vento-aurora',
+  musica: 'chimarrita-cume',
+};
+
+export const TEMAS_DE_DADOS: readonly DefTema[] = [TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO, TEMA_CUME];
 
 function problemasDeDefTema(def: DefTema): string[] {
   const p: string[] = [];

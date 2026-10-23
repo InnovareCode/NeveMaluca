@@ -7,9 +7,9 @@
  * guarda o DADO; `CondicaoObjetivo.campo` já é validado contra `CAMPOS_RESUMO_DESCIDA` (`core/contratos.ts`), então
  * quando `resumo.ts` nascer as duas listas não podem divergir.
  *
- * Pico do Picolé, Vila do Chocolate Quente e Vulcão Pé-Gelado (M3 F3) estão aqui por ora: o Morro do Pinhão não
- * tem `DefObjetivo` ainda (seus 3 ids em `data/pistas.ts` ficam sem catálogo, como já estava antes desta tarefa —
- * fora de escopo).
+ * Pico do Picolé, Vila do Chocolate Quente, Vulcão Pé-Gelado e Cume da Ventania (M3 F3) estão aqui por ora: o Morro
+ * do Pinhão não tem `DefObjetivo` ainda (seus 3 ids em `data/pistas.ts` ficam sem catálogo, como já estava antes
+ * desta tarefa — fora de escopo).
  */
 import { CAMPOS_RESUMO_DESCIDA } from '../core/contratos';
 import type { CondicaoObjetivo, DefObjetivo } from '../core/contratos';
@@ -23,6 +23,8 @@ const TICKS_3S = 3 * TICKS_POR_SEGUNDO;
 const TICKS_4S = 4 * TICKS_POR_SEGUNDO;
 // Vulcão Pé-Gelado (pista 4, um degrau acima da Vila): "grind de 5 s na ponte de basalto" -> 5 s em ticks.
 const TICKS_5S = 5 * TICKS_POR_SEGUNDO;
+// Cume da Ventania (pista 5, a última, um degrau acima do Vulcão): "grind de 6 s na corda" -> 6 s em ticks.
+const TICKS_6S = 6 * TICKS_POR_SEGUNDO;
 
 export const PICOLE_O1: DefObjetivo = {
   id: 'pico-do-picole-o1',
@@ -87,6 +89,27 @@ export const VULCAO_O3: DefObjetivo = {
   condicao: { tipo: 'minimo', campo: 'pontos', valor: 21_000 },
 };
 
+export const CUME_O1: DefObjetivo = {
+  id: 'cume-da-ventania-o1',
+  pista: 'cume-da-ventania',
+  texto: 'Grind de 6 s na corda',
+  condicao: { tipo: 'minimo', campo: 'maiorGrindTicks', valor: TICKS_6S },
+};
+
+export const CUME_O2: DefObjetivo = {
+  id: 'cume-da-ventania-o2',
+  pista: 'cume-da-ventania',
+  texto: 'Combo ×6',
+  condicao: { tipo: 'minimo', campo: 'maiorMult', valor: 6 },
+};
+
+export const CUME_O3: DefObjetivo = {
+  id: 'cume-da-ventania-o3',
+  pista: 'cume-da-ventania',
+  texto: '24.000 pontos numa descida',
+  condicao: { tipo: 'minimo', campo: 'pontos', valor: 24_000 },
+};
+
 export const OBJETIVOS_DE_DADOS: readonly DefObjetivo[] = [
   PICOLE_O1,
   PICOLE_O2,
@@ -97,6 +120,9 @@ export const OBJETIVOS_DE_DADOS: readonly DefObjetivo[] = [
   VULCAO_O1,
   VULCAO_O2,
   VULCAO_O3,
+  CUME_O1,
+  CUME_O2,
+  CUME_O3,
 ];
 
 const CAMPOS_VALIDOS: ReadonlySet<string> = new Set(CAMPOS_RESUMO_DESCIDA);

@@ -223,22 +223,30 @@ describe('textos proibidos: cada regra reprova nas camadas em que vale e só nel
     for (const i of inocentes) expect(analisarArquivo('descida/m.ts', i), i).toEqual([]);
   });
 
-  it('plantar o defeito num arquivo REAL de cada camada pura faz a varredura reprovar (e remover, passar)', () => {
-    const fontes = lerFontesDoDisco(RAIZ_SRC);
-    expect(formatarViolacoes(varrerFontes(fontes))).toBe('');
-    for (const alvo of ['core/rng.ts', 'core/trig.ts', 'core/hash.ts', 'core/laco.ts']) {
-      const original = fontes[alvo] as string;
-      for (const defeito of ['export const _x = Math.sin(1);', 'export const _x = Math.random();', 'export const _x = Date.now();', "import { x } from '../descida/index';"]) {
-        const mutante = { ...fontes, [alvo]: `${original}\n${defeito}\n` };
-        const v = varrerFontes(mutante);
-        expect(v.length, `${alvo} + ${defeito}`).toBeGreaterThan(0);
-        expect(v.every((x) => x.arquivo === alvo), `só ${alvo} deve ser acusado`).toBe(true);
+  it(
+    'plantar o defeito num arquivo REAL de cada camada pura faz a varredura reprovar (e remover, passar)',
+    () => {
+      const fontes = lerFontesDoDisco(RAIZ_SRC);
+      expect(formatarViolacoes(varrerFontes(fontes))).toBe('');
+      for (const alvo of ['core/rng.ts', 'core/trig.ts', 'core/hash.ts', 'core/laco.ts']) {
+        const original = fontes[alvo] as string;
+        for (const defeito of ['export const _x = Math.sin(1);', 'export const _x = Math.random();', 'export const _x = Date.now();', "import { x } from '../descida/index';"]) {
+          const mutante = { ...fontes, [alvo]: `${original}\n${defeito}\n` };
+          const v = varrerFontes(mutante);
+          expect(v.length, `${alvo} + ${defeito}`).toBeGreaterThan(0);
+          expect(v.every((x) => x.arquivo === alvo), `só ${alvo} deve ser acusado`).toBe(true);
+        }
       }
-    }
-    // crio uma camada nova com o defeito de importe: o plano proíbe core importar de qualquer outra
-    const v = varrerFontes({ ...fontes, 'core/novo.ts': "import { r } from '../render/index';" });
-    expect(regras(v)).toEqual(['camada']);
-  });
+      // crio uma camada nova com o defeito de importe: o plano proíbe core importar de qualquer outra
+      const v = varrerFontes({ ...fontes, 'core/novo.ts': "import { r } from '../render/index';" });
+      expect(regras(v)).toEqual(['camada']);
+    },
+    // `src/` só cresce (5 pistas no M3): esta varredura lê o disco e repete `varrerFontes` 16+ vezes sobre toda a
+    // árvore. O timeout default (5 s) já ficava no limite antes do Cume (M3 F3); sob carga do `npm test` inteiro
+    // (53 workers isolados concorrendo por CPU) ele passou a estourar de forma intermitente — não é lógica
+    // quebrada (isolado, roda em ~3-4 s sempre). Headroom generoso em vez de afinar no limite de novo a cada pista.
+    20_000,
+  );
 
   it('o número da linha acusada é o da linha do defeito', () => {
     const v = analisarArquivo('descida/m.ts', 'export const a = 1;\n\n// nada aqui\nexport const b = Math.sin(1);\n');

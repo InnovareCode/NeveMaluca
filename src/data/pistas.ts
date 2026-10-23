@@ -151,11 +151,50 @@ export const PISTA_VULCAO_PE_GELADO: DefPista = {
   desbloqueio: { tipo: 'objetivos', total: 6 },
 };
 
+/**
+ * Pista 5 (M3 F3, plano §B.2), a ÚLTIMA: o cume de madrugada da ficha `docs/temas-pistas-m3.md` §4, casa do Quequé
+ * e do Tio Beto. Trechos-assinatura de GEOMETRIA no FIM do catálogo (`pista/catalogo.ts`): `fenda-corda`,
+ * `teleferico`, `cornija`, `reta-avalanche` — a pele (corda, cabo de teleférico, cornija enrolada, avalanche
+ * cômica) é da Lyra, por cima do mesmo `TipoObjeto`/feição que já existe. `vao`/`degrau`/`trilho` originais ficam
+ * de fora dos pesos (trocados pelos irmãos temáticos, mesmo padrão do Picolé/Vila/Vulcão); `pedras`/`boneco`/
+ * `rampa` ficam (reskinados pela ficha, mesmo padrão de reúso do Vulcão com `rampa`). `hashEsperado` calculado por
+ * `ferramentas/harness/cli.mjs -- --pista cume-da-ventania` depois de o catálogo estar fechado.
+ */
+export const PISTA_CUME_DA_VENTANIA: DefPista = {
+  id: 'cume-da-ventania',
+  nome: 'Cume da Ventania',
+  tema: 'cume',
+  semente: 20261026,
+  comprimentoM: 1200,
+  dificuldade: [0.45, 0.9],
+  trechos: {
+    reta: 3.5,
+    ondulado: 3,
+    boneco: 1,
+    pedras: 1.2,
+    rampa: 0.6,
+    'fenda-corda': 1.2,
+    teleferico: 1,
+    cornija: 0.9,
+    'reta-avalanche': 0.8,
+  },
+  musica: 'chimarrita-cume',
+  objetivos: ['cume-da-ventania-o1', 'cume-da-ventania-o2', 'cume-da-ventania-o3'],
+  // Travado por `pista-gerador.test.ts` e por `exigirPistaValida`, igual às pistas anteriores: mudar o
+  // catálogo/algoritmo do gerador muda este hash de propósito (invalida recordes antigos, que vão para
+  // `recordesAntigos`, não somem).
+  hashEsperado: '4a0c74b127222cd9',
+  // Campos de PROGRESSÃO (plano M3 §B.3), ignorados pelo gerador: não entram no hash acima.
+  ordem: 5,
+  desbloqueio: { tipo: 'objetivos', total: 8 },
+};
+
 export const PISTAS_DE_DADOS: readonly DefPista[] = [
   PISTA_MORRO_DO_PINHAO,
   PISTA_PICO_DO_PICOLE,
   PISTA_VILA_CHOCOLATE,
   PISTA_VULCAO_PE_GELADO,
+  PISTA_CUME_DA_VENTANIA,
 ];
 
 /** Busca um `DefPista` do catálogo por id (ex.: seleção de pista na cena de descida). `undefined` se não existir. */

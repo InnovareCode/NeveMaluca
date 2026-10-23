@@ -55,7 +55,8 @@ export const TIPO_BONECO_DE_NEVE: TipoObjeto = 'boneco-de-neve';
  * Trechos cujo início é seguro para virar checkpoint (chão estável, sem risco de respawn no meio do ar/queda).
  * `palito-longo` entra pelo mesmo motivo que `trilho`: chão plano reto, sem lançamento nem queda. `varal` e
  * `chamine` (Vila) entram pela mesma razão: chão plano, sem lançamento nem queda. `basalto` (Vulcão) idem: chão
- * quase plano com obstáculos duros, sem lançamento nem queda — mesmo caso de `pedras`/`chamine`.
+ * quase plano com obstáculos duros, sem lançamento nem queda — mesmo caso de `pedras`/`chamine`. `teleferico` e
+ * `reta-avalanche` (Cume) idem: chão plano reto (trilho alto e longo / reta longa), sem lançamento nem queda.
  */
 export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
   'reta',
@@ -67,6 +68,8 @@ export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
   'varal',
   'chamine',
   'basalto',
+  'teleferico',
+  'reta-avalanche',
 ]);
 
 /**
@@ -87,6 +90,12 @@ export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
  * é um lançamento curto e íngreme, mesma família de `rampa`; `ponte-basalto` e `cratera` são vãos (lançamento +
  * queda), mesma família de `vao`/`vao-calda`/`telhados` — precisam do embalo de ANTES. `basalto` fica de fora
  * (chão quase plano com obstáculos, como `pedras`/`chamine`).
+ *
+ * Trechos-assinatura do Cume da Ventania (M3 §B.2, ficha `docs/temas-pistas-m3.md` §4, última pista) na mesma
+ * família: `fenda-corda` é um vão com trilho por cima (mesma família de `vao`/`ponte-basalto` — precisa do embalo
+ * de ANTES); `cornija` é o "degrau grande" (mesma família de `degrau`/`escadaria`, queda maior). `teleferico`
+ * (trilho alto e longo, chão plano) e `reta-avalanche` (reta longa, chão plano) ficam de fora, mesmo caso de
+ * `trilho`/`reta`.
  */
 export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set([
   'rampa',
@@ -100,6 +109,8 @@ export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set([
   'geiser',
   'ponte-basalto',
   'cratera',
+  'fenda-corda',
+  'cornija',
 ]);
 
 const TRECHOS: readonly DefTrecho[] = [
@@ -420,6 +431,77 @@ const TRECHOS: readonly DefTrecho[] = [
       { dx: 14, dy: -4.4, anguloGraus: -30 },
       { dx: 17, dy: -6.5, anguloGraus: 0 },
       { dx: 26, dy: -6.5, anguloGraus: -12 },
+    ],
+  },
+
+  // --- Trechos-assinatura do Cume da Ventania (M3 F3, plano §B.2/§B.3, ficha `docs/temas-pistas-m3.md` §4,
+  // última pista). SÓ GEOMETRIA: a pele (corda, cabo de teleférico, cornija enrolada com fenda de gelo, avalanche
+  // cômica) é do `PintorTema` da Lyra, a partir da ALTURA do `trilho` (< 1 m = corda, >= 1 m = cabo de teleférico,
+  // ficha §4.3) e da inclinação já detectada (§0.4). Nenhum `TipoObjeto` novo, nenhuma mudança no algoritmo do
+  // gerador. Regra do F0: entram SÓ NO FIM deste array, e nenhum trecho de cima (Morro, Picolé, Vila, Vulcão) foi
+  // tocado. `pedras`/`boneco`/`rampa` originais ficam nos pesos desta pista (reskinados: pedra -> rocha/bloco de
+  // gelo, tronco -> laje de cornija caída, boneco -> boneco de cachecol ao vento, rampa -> cornija enrolada
+  // genérica), mesmo padrão de reúso do Vulcão; `vao`/`degrau`/`trilho` originais ficam de fora (trocados pelos
+  // irmãos temáticos `fenda-corda`/`cornija`/`teleferico`, que juntos cobrem as duas faixas de altura do trilho).
+  {
+    id: 'fenda-corda',
+    comprimentoM: 20,
+    dificuldade: 0.75,
+    velMinEntradaMs: 8,
+    proibidoApos: ['fenda-corda', 'cornija'],
+    pontos: [
+      // Mesma família de forma do `vao`/`ponte-basalto` (sobe com a tangente de um lançamento anterior, vira no
+      // alto e desce numa queda): a fenda de gelo da ficha, com a ponte de corda atravessando por cima — o jogador
+      // escolhe grindar a corda ou cair e pousar no fundo da fenda.
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 3, dy: 1.4, anguloGraus: 0 },
+      { dx: 7, dy: 1.4, anguloGraus: -32 },
+      { dx: 12, dy: -4.2, anguloGraus: -32 },
+      { dx: 15, dy: -6.2, anguloGraus: 0 },
+      { dx: 20, dy: -6.2, anguloGraus: -12 },
+    ],
+    // Altura < 1 m => pele "corda" (ficha §4.3), não "cabo de teleférico".
+    trilho: { dx0: 5, dx1: 13, altura: 0.5 },
+  },
+  {
+    id: 'teleferico',
+    comprimentoM: 36,
+    dificuldade: 0.35,
+    velMinEntradaMs: 3,
+    pontos: [
+      // Chão plano e reto, como `trilho`/`varal`/`palito-longo`, só mais longo: o cabo de teleférico entre as duas
+      // torres de treliça, sem postes no meio (o vazio embaixo é a graça da ficha).
+      { dx: 0, dy: 0, anguloGraus: -8 },
+      { dx: 36, dy: -5.0, anguloGraus: -8 },
+    ],
+    // Altura >= 1 m => pele "cabo de teleférico" (ficha §4.3), não "corda".
+    trilho: { dx0: 2, dx1: 34, altura: 1.3 },
+  },
+  {
+    id: 'cornija',
+    comprimentoM: 16,
+    dificuldade: 0.85,
+    velMinEntradaMs: 8,
+    proibidoApos: ['fenda-corda', 'cornija'],
+    pontos: [
+      // Mesma família de forma do `degrau`/`escadaria`, só maior e mais íngreme: o "degrau grande" da ficha, com a
+      // onda de neve na borda de cima (SUBIDA -> cornija enrolada) e a fenda de gelo na queda de baixo.
+      { dx: 0, dy: 0, anguloGraus: -10 },
+      { dx: 7, dy: -1.0, anguloGraus: -10 },
+      { dx: 10, dy: -6.0, anguloGraus: -48 },
+      { dx: 16, dy: -7.6, anguloGraus: -12 },
+    ],
+  },
+  {
+    id: 'reta-avalanche',
+    comprimentoM: 40,
+    dificuldade: 0.25,
+    velMinEntradaMs: 0,
+    pontos: [
+      // Chão plano e reto, como `reta`/`ondulado`, só a mais longa do catálogo: a reta final da ficha, onde a
+      // avalanche cômica entra por trás (mecânica visual da F6, M3-D3; aqui é só a geometria da reta).
+      { dx: 0, dy: 0, anguloGraus: -9 },
+      { dx: 40, dy: -6.0, anguloGraus: -9 },
     ],
   },
 ];

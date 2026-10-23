@@ -4,8 +4,9 @@
  * travar o jogo" já usada para id de pista desconhecido (`ui/cenas/descida.ts`).
  */
 import type { DefTema, IdTema } from '../../core/contratos';
-import { TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO } from '../../data/temas';
+import { TEMA_CUME, TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO } from '../../data/temas';
 import { pintorBosque, TEMA_BOSQUE } from './bosque';
+import { pintorCume } from './cume';
 import { pintorParque } from './parque';
 import { pintorVila } from './vila';
 import { pintorVulcao } from './vulcao';
@@ -16,6 +17,7 @@ const PINTORES_POR_TEMA: Readonly<Record<string, PintorTema>> = {
   parque: pintorParque,
   vila: pintorVila,
   vulcao: pintorVulcao,
+  cume: pintorCume,
 };
 
 const DEFS_POR_TEMA: Readonly<Record<string, DefTema>> = {
@@ -23,6 +25,7 @@ const DEFS_POR_TEMA: Readonly<Record<string, DefTema>> = {
   parque: TEMA_PARQUE,
   vila: TEMA_VILA,
   vulcao: TEMA_VULCAO,
+  cume: TEMA_CUME,
 };
 
 /** `PintorTema` do tema da pista; id desconhecido cai no pintor do Morro. */

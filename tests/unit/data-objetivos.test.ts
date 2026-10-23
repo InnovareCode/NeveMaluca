@@ -6,6 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { CAMPOS_RESUMO_DESCIDA } from '../../src/core/contratos';
 import {
+  CUME_O1,
+  CUME_O2,
+  CUME_O3,
   OBJETIVOS_DE_DADOS,
   PICOLE_O1,
   PICOLE_O2,
@@ -25,7 +28,7 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(problemasDosObjetivosDeDados()).toEqual([]);
   });
 
-  it('os 3 objetivos do Picolé, os 3 da Vila e os 3 do Vulcão existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
+  it('os 3 objetivos do Picolé, os 3 da Vila, os 3 do Vulcão e os 3 do Cume existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
     expect(OBJETIVOS_DE_DADOS.map((d) => d.id)).toEqual([
       'pico-do-picole-o1',
       'pico-do-picole-o2',
@@ -36,6 +39,9 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
       'vulcao-pe-gelado-o1',
       'vulcao-pe-gelado-o2',
       'vulcao-pe-gelado-o3',
+      'cume-da-ventania-o1',
+      'cume-da-ventania-o2',
+      'cume-da-ventania-o3',
     ]);
     for (const def of OBJETIVOS_DE_DADOS) expect(REGRAS_SAVE.objetivos).toContain(def.id);
   });
@@ -50,6 +56,9 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(VULCAO_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
     expect(VULCAO_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 5 });
     expect(VULCAO_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 21_000 });
+    expect(CUME_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
+    expect(CUME_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 6 });
+    expect(CUME_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 24_000 });
   });
 
   it('todo CondicaoObjetivo.campo (inclusive dentro de "todos") está em CAMPOS_RESUMO_DESCIDA', () => {
