@@ -1,23 +1,19 @@
 # NEVE MALUCA — Progresso
 
-Atualizado em 2026-10-22 (Nova; pós-QA do M0 por Vega; Atlas assumiu a sessão dedicada, cadastrou o projeto no painel e resolveu D1–D10). Repositório git local; commit inicial local em preparação nesta sessão (gate: `npm run verificar` verde), sem remoto.
+Atualizado em 2026-10-23. Repositório git local + remoto `origin` (GitHub) + **Pages publicado e jogável**. M0, M1a e a primeira leva de arte/UI (Capi + splash/menu/cenários Pixar) concluídos, commitados e no ar.
 
-## Estado em 2026-10-22 — o mais novo
-- **M0 pronto no código** (fundação, core, plataforma, save e a costura das três partes). `npm run verificar` verde. Sem commit e sem remoto (Atlas decide).
-- **QA do M0: APROVADO pela Íris com ressalvas** (3 achados de baixo risco + sujeira); todas corrigidas pela Vega no pós-QA (2026-10-22): (1) `textoDoErro` agora monta
-  `Nome: mensagem` e anexa a pilha se ela não traz a mensagem (WebKit); (2) os 2 `<link rel=preload>` das fontes saíram do `index.html` (segundo a Íris, no WebKit não casam e baixam de novo;
-  `carregarFontes` segue pedindo as faces antes do 1º quadro); (3) o laço da platform passou a delegar a conta de ticks ao `core/laco.ts`; (4) 9 arquivos de CRLF para LF; (5) `.gitignore` ampliado.
-  `npm run verificar` verde (343 unit; 18 e2e do build; 91 e2e dev, 2 skipped que já existiam); bundle JS 12,3 KB gzip. Detalhes na seção "Pós-QA" de `docs/handoff-vega-m0-integracao.md`.
-- **Decisão do laço (vale para o M1):** `src/core/laco.ts` (`criarLaco().quadro(carimbo, passo)`, `reiniciar()` na retomada) é a **única fonte de ticks por quadro**; `platform/laco.ts` só
-  agenda o rAF, pausa por motivo e para no erro. Medido pela Íris antes da troca: 60 Hz exatos = platform 3599 ticks em 3600 quadros (quadros de 0 e de 2 ticks); quadros de 95 ms =
-  platform 3419 x core 3300; jitter 95,1,95,1 = 130 ticks de divergência; teto de 6 ticks por quadro igual nos dois.
-- **O que existe:** `src/core/` (Vega: RNG, trig tabelado, hash, contratos, replay, laço), `src/platform/` + cena de boot (Lyra), `src/meta/storage.ts` (Cronos, save
-  `neve-maluca-v1`), fundação, CI e CSP (Vulcano), `src/data/regras-save.ts` (ids provisórios), `src/audio/audio-destravavel.ts` (destrave do iPhone, sem sons).
-  O `main.ts` valida o núcleo no boot, lê o save, liga o destrave de áudio e roda a cena vazia. Bundle inicial: JS 12,3 KB gzip (meta <= 60 KB), CSS 1,5 KB.
-- **O que NÃO está provado (precisa do dono, no iPhone real):** safe-area/entalhe, COMO ATIVAR no Chrome do iOS, destrave de áudio no WebKit do iOS (o WebKit do
-  Playwright no Windows nem tem Web Audio), fps com CPU 4x em canvas por software (p95 33 ms, piso do ambiente), `localStorage` do Safari privado. O CI `ci.yml` nunca rodou (sem remoto).
-- **Próximo passo:** commit inicial (Atlas) e M1a (descida cinza, `pista/` + `descida/`, com portão do dono). Antes: ver "Decisões em aberto" abaixo e o handoff
-  `docs/handoff-vega-m0-integracao.md`.
+## Estado em 2026-10-23 — o mais novo
+- **AO VIVO e jogável:** https://innovarecode.github.io/NeveMaluca/ (GitHub Pages; deploy por `.github/workflows/pages.yml`). Fluxo: splash → menu (JOGAR/MODOS/OPÇÕES) → descida com a Capi → resultado.
+- **`npm run verificar` VERDE** no main (2026-10-23): **436 unit, 18 e2e de build, 109 e2e** (2 skipped).
+- **Concluído, commitado e no remoto:**
+  - **M0** — fundação, core, save, CI, CSP.
+  - **M1a** — descida com o **motor real da Vega** (física/pista/bot) ligado ao render da Lyra. `src/ui/cenas/gerenciador.ts` é o diretor de cenas (com `destruir()` pra limpar eventos); `main.ts` boota nele, não mais na cena vazia.
+  - **M1b (1º personagem)** — **Capi Barbosa** no piloto (11 recortes de sprite; poses `ride/tuck/air/flip/land/fall/rail/celeb`).
+  - **UI (Fase 1)** — splash, menu principal, opções (controles/áudio/tela cheia gravados no save, um ponto de escrita no gerenciador).
+  - **Arte (Fases 2 e 3)** — Morro do Pinhão estilo Pixar (araucárias, pinheiros, celeiro, montanhas facetadas, spray/neve) e obstáculos/trilhos/rampas/coletáveis estilizados.
+- **Decisão do laço (ainda vale):** `src/core/laco.ts` é a **única fonte de ticks por quadro**; `platform/laco.ts` só agenda o rAF, pausa por motivo e para no erro.
+- **O que NÃO está provado (precisa do dono, no iPhone real):** o **portão de "feel" do M1a** (*"a sensação de descer está boa?"*) nunca foi dado formalmente — agora dá, pela URL; safe-area/entalhe; destrave de áudio no WebKit do iOS; fps real no aparelho; tela cheia "Adicionar à Tela de Início".
+- **Próximo passo:** **M2** — manobras, combos, replay e pontuação (hoje o placar fica `000000`). É o que falta pro jogo ser *divertido*, não só bonito. Detalhes do M0 original em `docs/handoff-vega-m0-integracao.md`.
 
 ### Decisões da integração do M0 (Vega, 2026-10-22)
 - `platform/constantes.ts` é só re-export de `core/constantes` (uma fonte de verdade). Os dois laços ficam: `platform/laco.ts` (rAF, pausa por motivo) e `core/laco.ts` (puro).
