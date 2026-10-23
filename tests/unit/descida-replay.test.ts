@@ -8,7 +8,7 @@ import type { ComandoDescida, ReplayV1 } from '../../src/core/contratos';
 import { codificarComandos, decodificarComandos, validarReplayV1 } from '../../src/core/replay';
 import { PISTA_MORRO_DO_PINHAO } from '../../src/data/pistas';
 import { criarBotCuidadoso } from '../../src/descida/bot';
-import { VERSAO_MOTOR } from '../../src/descida/constantes';
+import { CONFIG_PADRAO, VERSAO_MOTOR } from '../../src/descida/constantes';
 import { criarDescida } from '../../src/descida/motor';
 import { criarReprodutorFantasma } from '../../src/descida/replay';
 import { exigirPistaValida } from '../../src/pista/gerador';
@@ -127,7 +127,7 @@ describe('criarReprodutorFantasma (driver de playback do fantasma)', () => {
     // Pista gerada de NOVO (nova instância, mesma semente): prova que o fantasma não depende de reaproveitar
     // o objeto da pista original, só da semente/hash gravados no replay.
     const pistaNova = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
-    const r = criarReprodutorFantasma(replay, pistaNova);
+    const r = criarReprodutorFantasma(replay, pistaNova, CONFIG_PADRAO);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
@@ -156,8 +156,29 @@ describe('criarReprodutorFantasma (driver de playback do fantasma)', () => {
       resultado: { pontos: 0, ticks: 0, hashFinal: '0'.repeat(16) },
     };
 
-    expect(criarReprodutorFantasma({ ...base, pista: 'outra-pista' }, pista).ok).toBe(false);
-    expect(criarReprodutorFantasma({ ...base, hashPista: '1'.repeat(16) }, pista).ok).toBe(false);
+    expect(criarReprodutorFantasma({ ...base, pista: 'outra-pista' }, pista, CONFIG_PADRAO).ok).toBe(false);
+    expect(criarReprodutorFantasma({ ...base, hashPista: '1'.repeat(16) }, pista, CONFIG_PADRAO).ok).toBe(false);
+  });
+
+  it('rejeita (sem lançar) um replay com versaoMotor incompatível, a menos que seja v1 da capi', () => {
+    const pista = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
+    const base: ReplayV1 = {
+      v: 1,
+      pista: pista.id,
+      hashPista: pista.hash,
+      semente: pista.semente,
+      personagem: 'capi',
+      versaoMotor: VERSAO_MOTOR,
+      comandos: codificarComandos([]),
+      resultado: { pontos: 0, ticks: 0, hashFinal: '0'.repeat(16) },
+    };
+
+    // v1 de outro personagem: a física dele pode ter mudado entre v1 e v2 (M3 §A.3) -> rejeita.
+    expect(criarReprodutorFantasma({ ...base, versaoMotor: '1', personagem: 'beto' }, pista, CONFIG_PADRAO).ok).toBe(false);
+    // v1 da própria capi: a física dela não mudou -> aceita.
+    expect(criarReprodutorFantasma({ ...base, versaoMotor: '1', personagem: 'capi' }, pista, CONFIG_PADRAO).ok).toBe(true);
+    // versão desconhecida, de qualquer personagem: rejeita.
+    expect(criarReprodutorFantasma({ ...base, versaoMotor: '0' }, pista, CONFIG_PADRAO).ok).toBe(false);
   });
 
   it('rejeita (sem lançar) comandos ilegíveis', () => {
@@ -172,6 +193,6 @@ describe('criarReprodutorFantasma (driver de playback do fantasma)', () => {
       comandos: '!!!nao-e-base64!!!',
       resultado: { pontos: 0, ticks: 0, hashFinal: '0'.repeat(16) },
     };
-    expect(criarReprodutorFantasma(replayRuim, pista).ok).toBe(false);
+    expect(criarReprodutorFantasma(replayRuim, pista, CONFIG_PADRAO).ok).toBe(false);
   });
 });

@@ -120,6 +120,34 @@ export interface LeituraDescida {
   readonly eventos: readonly EventoDescida[];
 }
 
+// --- M3: personagem (atributos, elenco) ---
+
+/** As 5 pistas do atributo (plano M3 §4): soma sempre 500, inteiros 90..110. `aceleracao` não reusa `atrito` (não
+ *  cabe no termo linear: ver achado 1 do plano M3 §0) — ganha campo próprio no motor, `ConfigDescida.fatorEmbalo`. */
+export const ATRIBUTOS = ['velocidade', 'aceleracao', 'giro', 'equilibrio', 'pulo'] as const;
+export type Atributo = (typeof ATRIBUTOS)[number];
+
+/** Requisito para um personagem (ou pista, C5) aparecer liberado no save (plano M3 §B.5). */
+export type RequisitoDesbloqueio =
+  | { readonly tipo: 'inicial' }
+  | { readonly tipo: 'concluir'; readonly pista: IdPista }
+  | { readonly tipo: 'objetivos'; readonly total: number };
+
+/** Ficha de personagem (plano M3 §A.3). `configDoPersonagem` (`descida/atributos.ts`) converte `atributos` num
+ *  `ConfigDescida` RELATIVO à Capi (`PERSONAGEM_REFERENCIA`): por isso este contrato não carrega física nenhuma. */
+export interface DefPersonagem {
+  /** Um dos ids JÁ gravados em `REGRAS_SAVE.personagens` (`data/regras-save.ts`) — não renomear com save gravado. */
+  readonly id: IdPersonagem;
+  readonly nome: string;
+  readonly bordao: string;
+  /** Nome de manobra/pose do personagem (ex.: "Cauda-Vela"). É só nome e pose: NUNCA concede bônus de pontos. */
+  readonly nomeAssinatura: string;
+  /** Inteiros 90..110, soma 500 (validado em `data/personagens.ts`, fora deste contrato). */
+  readonly atributos: Readonly<Record<Atributo, number>>;
+  readonly casa: IdPista;
+  readonly desbloqueio: RequisitoDesbloqueio;
+}
+
 // --- C5: pista ---
 
 /** Tipos de objeto da pista (lista da folha de objetos do plano §6.5). O gerador (M1) pode estendê-la. */
@@ -170,6 +198,10 @@ export interface DefPista {
   readonly objetivos: readonly IdObjetivo[];
   /** Hash fixo da pista gerada (16 hex, ver `hash.ts`). Mudou o gerador = mudou este hash = teste falha. */
   readonly hashEsperado: string;
+  /** Ordem no mapa/seleção de pista (1..5, plano M3 §B.3). Campo de PROGRESSÃO: o gerador o ignora, não entra no hash. */
+  readonly ordem: number;
+  /** Campo de PROGRESSÃO (plano M3 §B.3): o gerador o ignora, não entra no hash. */
+  readonly desbloqueio: RequisitoDesbloqueio;
 }
 
 export interface PistaGerada {
@@ -184,6 +216,43 @@ export interface PistaGerada {
   readonly checkpoints: readonly number[];
   readonly chegadaX: number;
   readonly hash: string;
+}
+
+// --- M3: objetivos ---
+
+/**
+ * Nomes dos campos numéricos de `ResumoDescida` (plano M3 §B.4, `descida/resumo.ts`, ainda não escrito na F0).
+ * Vive aqui (e não como `Exclude<keyof ResumoDescida, 'concluiu'>`) porque `core/` não pode importar de `descida/`
+ * (plano §3.1, sem ciclo entre camadas). Quando `descida/resumo.ts` nascer na F5, `ResumoDescida` precisa ter
+ * exatamente estes campos numéricos — e só eles — para as duas listas não divergirem.
+ */
+export const CAMPOS_RESUMO_DESCIDA = [
+  'pontos',
+  'ticks',
+  'tombos',
+  'maiorVoltasNumSalto',
+  'maiorTicksNoAr',
+  'maiorGrindTicks',
+  'pousosPerfeitos',
+  'maiorMult',
+  'maiorComboManobras',
+  'bonecos',
+] as const;
+export type CampoResumoDescida = (typeof CAMPOS_RESUMO_DESCIDA)[number];
+
+/** Condição de objetivo (plano M3 §B.4), avaliada sobre um `ResumoDescida` (redutor puro, ainda sem F5). */
+export type CondicaoObjetivo =
+  | { readonly tipo: 'concluir' }
+  | { readonly tipo: 'minimo'; readonly campo: CampoResumoDescida; readonly valor: number }
+  | { readonly tipo: 'maximo'; readonly campo: CampoResumoDescida; readonly valor: number }
+  | { readonly tipo: 'todos'; readonly condicoes: readonly CondicaoObjetivo[] };
+
+/** 3 por pista (plano §1), id `<pista>-o1..o3` (já reservados em `REGRAS_SAVE.objetivos`). */
+export interface DefObjetivo {
+  readonly id: IdObjetivo;
+  readonly pista: IdPista;
+  readonly texto: string;
+  readonly condicao: CondicaoObjetivo;
 }
 
 // --- C6: replay ---

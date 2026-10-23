@@ -36,6 +36,9 @@ export const PISTA_MORRO_DO_PINHAO: DefPista = {
   // Travado por `gerador.test.ts` e por `exigirPistaValida` (plano §3.4): mudar o catálogo/algoritmo do gerador
   // muda este hash; é proposital (invalida recordes antigos da pista, que vão para `recordesAntigos`, não somem).
   hashEsperado: '1c4d551601d3a6ae',
+  // Campos de PROGRESSÃO (plano M3 §B.3), ignorados pelo gerador: não entram no hash acima.
+  ordem: 1,
+  desbloqueio: { tipo: 'inicial' },
 };
 
 export const PISTAS_DE_DADOS: readonly DefPista[] = [PISTA_MORRO_DO_PINHAO];

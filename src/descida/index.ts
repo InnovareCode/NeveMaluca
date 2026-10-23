@@ -3,3 +3,4 @@ export * from './constantes';
 export * from './motor';
 export * from './bot';
 export * from './replay';
+export * from './atributos';

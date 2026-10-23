@@ -2,3 +2,4 @@
 // Responsavel e regras no README.md desta pasta; plano em docs/plano-neve-maluca.md, secao 3.1.
 export * from './regras-save';
 export * from './pistas';
+export * from './personagens';

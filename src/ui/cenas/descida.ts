@@ -28,7 +28,7 @@ import { criarSistemaParticulas, type SistemaParticulas } from '../../render/par
 import { desenharTerreno } from '../../render/terreno';
 import type { Cena } from '../tipos';
 import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
-import { criarDescida, criarReprodutorFantasma, VERSAO_MOTOR, type MotorDescida, type ReprodutorFantasma } from '../../descida/index';
+import { configDoPersonagem, criarDescida, criarReprodutorFantasma, VERSAO_MOTOR, type MotorDescida, type ReprodutorFantasma } from '../../descida/index';
 import { exigirPistaValida } from '../../pista/index';
 import { criarSomManobras } from '../../audio/som-manobras';
 import { criarMusicaAdaptativa } from '../../audio/musica-adaptativa';
@@ -67,7 +67,9 @@ export interface OpcoesCenaDescida {
 
 export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const pista = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
-  const motor: MotorDescida = criarDescida(pista);
+  // Física do personagem ESCOLHIDO (plano M3 §A.3): `configDoPersonagem('capi')` devolve `CONFIG_PADRAO` bit a
+  // bit, então nenhuma descida da Capi muda de comportamento com esta troca (golden `m3-congelamento-capi.test.ts`).
+  const motor: MotorDescida = criarDescida(pista, configDoPersonagem(opcoes.personagem ?? 'capi'));
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
   const camera: Camera = criarCamera(0, 0);
   const parallax: Parallax = criarParallax(opcoes.documento);
@@ -97,7 +99,9 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   let spriteFantasma: SpritePersonagem | null = null;
   let leituraFantasma: PilotoLeitura | null = null;
   if (opcoes.fantasma) {
-    const r = criarReprodutorFantasma(opcoes.fantasma, pista);
+    // Física de QUEM GRAVOU o replay (plano M3 §A.3): sem isso o fantasma de outro personagem rodaria com a
+    // física da Capi e sairia da pista (achado 2 do plano §0).
+    const r = criarReprodutorFantasma(opcoes.fantasma, pista, configDoPersonagem(opcoes.fantasma.personagem));
     if (r.ok) {
       reprodutorFantasma = r.valor;
       void carregarSpritePersonagem(opcoes.fantasma.personagem)

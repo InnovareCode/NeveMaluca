@@ -21,6 +21,8 @@ const DEF_BASE: DefPista = {
   musica: 'teste',
   objetivos: [],
   hashEsperado: '0000000000000000',
+  ordem: 1,
+  desbloqueio: { tipo: 'inicial' },
 };
 
 describe('gerarPista: determinismo', () => {

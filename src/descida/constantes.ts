@@ -50,6 +50,13 @@ export interface ConfigDescida {
    * deixa andar de ré). Esse piso garante que a descida sempre termina (plano §1: "nunca pune demais").
    */
   readonly velocidadeMinimaChaoMs: number;
+  /**
+   * Multiplica só a componente da gravidade NO CHÃO (plano M3 §A.2): `aceleracao = -gravidadeMs2 * fatorEmbalo *
+   * seno(angulo) - atrito*v - arrasto*v²`. Com 1 (padrão), `(-g * 1) * s` é EXATAMENTE `-g * s` em IEEE 754 — a Capi
+   * (`CONFIG_PADRAO`) não muda nem um bit. É o campo de "aceleração" por personagem (M3 F1): o atrito de hoje é
+   * imperceptível nessa escala (plano §0, achado 1), então aceleração ganha este campo próprio em vez de reusá-lo.
+   */
+  readonly fatorEmbalo: number;
 }
 
 export const CONFIG_PADRAO: ConfigDescida = {
@@ -73,6 +80,7 @@ export const CONFIG_PADRAO: ConfigDescida = {
   velocidadeRespawnMs: 4,
   fatorBonecoDeNeve: 0.85,
   velocidadeMinimaChaoMs: 1.5,
+  fatorEmbalo: 1,
 };
 
 /** Velocidade (m/s) abaixo da qual o piloto é considerado "parado" para fins de pose/HUD. */
@@ -84,5 +92,10 @@ export const VELOCIDADE_PARADO_MS = 0.3;
  * deve bumpar este texto — um fantasma gravado por uma versão antiga ainda decodifica (`ReplayV1` não trava nisso),
  * mas passa a rodar com a física NOVA: pode dessincronizar visualmente do que o jogador viu na hora (cosmético, sem
  * risco de segurança). Texto livre de 1 a 32 caracteres (ver `VERSAO_MOTOR_MAX` em `core/replay.ts`).
+ *
+ * Bump para '2' na F0 do M3 (física por personagem, plano §A.3): a partir daqui o motor lê `ConfigDescida` por
+ * personagem, não só `CONFIG_PADRAO`. Replay `v1` só decodifica com a física de `v2` SEM dessincronizar quando é
+ * da Capi (a física dela não mudou — `configDoPersonagem(capi) === CONFIG_PADRAO` campo a campo); de qualquer
+ * outro personagem, `criarReprodutorFantasma` rejeita e a descida roda sem fantasma (`descida/replay.ts`).
  */
-export const VERSAO_MOTOR = '1';
+export const VERSAO_MOTOR = '2';

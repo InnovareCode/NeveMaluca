@@ -334,7 +334,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
         eventos.push({ tipo: 'pulo', forca: impulso });
       } else {
         const atrito = p.agachado ? config.atritoAgachado : config.atrito;
-        const aceleracao = -config.gravidadeMs2 * seno(p.angulo) - atrito * p.v - config.arrasto * p.v * p.v;
+        const aceleracao = -config.gravidadeMs2 * config.fatorEmbalo * seno(p.angulo) - atrito * p.v - config.arrasto * p.v * p.v;
         p.v = p.v + aceleracao * PASSO_S;
         if (p.v < config.velocidadeMinimaChaoMs) p.v = config.velocidadeMinimaChaoMs;
         if (p.v > config.velocidadeMaxMs) p.v = config.velocidadeMaxMs;

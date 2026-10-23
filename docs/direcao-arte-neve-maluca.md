@@ -184,10 +184,13 @@ da Nova (bosque, parque de manobras, noite com lanternas, cidade de neve, avalan
 | # | Pista | Tema do plano | Hora / clima | Dificuldade | Casa de |
 |---|---|---|---|---|---|
 | 1 | **Morro do Pinhão** | bosque | manhã, sol limpo, neve fofa | círculo verde | a capivara |
-| 2 | **Pico do Picolé** | parque de manobras | meio-dia, sol forte, neve em camadas coloridas | quadrado azul | Bia Bolota |
+| 2 | **Pico do Picolé** | parque de manobras | meio-dia, sol forte, neve em camadas coloridas | quadrado azul | Bia Pipoca |
 | 3 | **Vila do Chocolate Quente** | noite com lanternas + cidade de neve | fim de tarde virando noite | quadrado azul | a avó |
 | 4 | **Vulcão Pé-Gelado** | (novo) | crepúsculo, vapor, gelo azul e magma | losango preto | Prof. Bandeira |
-| 5 | **Cume da Ventania** | avalanche cômica | madrugada com aurora, vento forte | dois losangos | Quequé e Brunão |
+| 5 | **Cume da Ventania** | avalanche cômica | madrugada com aurora, vento forte | dois losangos | Quequé e Tio Beto |
+
+**Fichas de tema das pistas 2 a 5 (M3, cenário em código):** `docs/temas-pistas-m3.md`. Paletas completas, camadas,
+pele de cada objeto de jogo por tema e as regras de leitura (contorno = física; magma e calda nunca são chão de pouso).
 
 ### 2.1 Camadas de parallax (desenhadas em código pela Lyra, sem gasto de geração)
 
