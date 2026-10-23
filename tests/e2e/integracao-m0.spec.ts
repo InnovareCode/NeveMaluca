@@ -36,8 +36,17 @@ test.describe('boot integrado', () => {
     await page.addInitScript(() => {
       const w = window as unknown as { __ac: { criados: number; resumes: number } };
       w.__ac = { criados: 0, resumes: 0 };
+      // Nó mudo mínimo: só o suficiente para `tom`/`ruido` (src/audio/sintese.ts) não lançarem. A trilha adaptativa
+      // (src/audio/musica-adaptativa.ts) toca em background assim que a descida começa (não só reativa a evento
+      // como o som de manobras), então mesmo este teste de boot/gesto — que só quer contar `criados`/`resumes` —
+      // pode chegar a entrar na cena de descida e acionar a síntese de verdade.
+      const parametroMudo = { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} };
+      const noMudo = { connect() {} };
       class ACFalso {
         state = 'suspended';
+        currentTime = 0;
+        sampleRate = 48000;
+        destination = noMudo;
         constructor() {
           w.__ac.criados += 1;
         }
@@ -45,6 +54,22 @@ test.describe('boot integrado', () => {
           w.__ac.resumes += 1;
           this.state = 'running';
           return Promise.resolve();
+        }
+        createOscillator() {
+          return { type: 'sine', frequency: parametroMudo, detune: parametroMudo, connect() {}, start() {}, stop() {} };
+        }
+        createGain() {
+          return { gain: parametroMudo, connect() {} };
+        }
+        createBiquadFilter() {
+          return { type: 'lowpass', frequency: parametroMudo, Q: parametroMudo, connect() {} };
+        }
+        createBuffer(_canais: number, tamanho: number) {
+          const dados = new Float32Array(tamanho);
+          return { getChannelData: () => dados };
+        }
+        createBufferSource() {
+          return { buffer: null, connect() {}, start() {}, stop() {} };
         }
       }
       (window as unknown as { AudioContext: unknown }).AudioContext = ACFalso;

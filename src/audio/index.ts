@@ -3,3 +3,4 @@
 export * from './audio-destravavel';
 export * from './sintese';
 export * from './som-manobras';
+export * from './musica-adaptativa';

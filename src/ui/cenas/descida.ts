@@ -31,6 +31,7 @@ import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
 import { criarDescida, criarReprodutorFantasma, VERSAO_MOTOR, type MotorDescida, type ReprodutorFantasma } from '../../descida/index';
 import { exigirPistaValida } from '../../pista/index';
 import { criarSomManobras } from '../../audio/som-manobras';
+import { criarMusicaAdaptativa } from '../../audio/musica-adaptativa';
 import type { AudioDestravavel } from '../../audio/index';
 import type { SaveV1 } from '../../meta/tipos';
 
@@ -73,9 +74,12 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
-  const somManobras = opcoes.audio
-    ? criarSomManobras(opcoes.audio, rngDoCanal(pista.semente, 'audio'), { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 })
-    : null;
+  // Um gerador só para o canal `audio`, compartilhado entre som de manobras e música adaptativa (mesmo padrão de
+  // `rngVisual`, compartilhado por câmera e partículas): consumido em ordem fixa (som antes de música) a cada tick.
+  const rngAudio = opcoes.audio ? rngDoCanal(pista.semente, 'audio') : null;
+  const somManobras = opcoes.audio && rngAudio ? criarSomManobras(opcoes.audio, rngAudio, { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 }) : null;
+  const musicaAdaptativa =
+    opcoes.audio && rngAudio ? criarMusicaAdaptativa(opcoes.audio, rngAudio, { obterVolumeMusica: () => opcoes.save?.cfg.musica ?? 1 }) : null;
 
   let spritePiloto: SpritePersonagem | null = null;
   void carregarSpritePersonagem(opcoes.personagem ?? 'capi')
@@ -126,6 +130,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       particulas.atualizar(leitura.piloto, leitura.eventos);
       popupsManobra.atualizar(leitura.piloto, leitura.eventos, leitura.tick);
       somManobras?.atualizar(leitura);
+      musicaAdaptativa?.atualizar(leitura);
       if (leitura.fase === 'chegou') {
         terminou = true;
         const replay: ReplayV1 = {
