@@ -9,7 +9,6 @@
  * ângulo (nunca `Math.sin/cos/atan2/pow`). Hash do estado (`hashEstado`) é o que prova determinismo entre rodadas.
  */
 import type {
-  ComboLeitura,
   EventoDescida,
   FaseDescida,
   Grab,
@@ -27,6 +26,32 @@ import { hashDeValor } from '../core/hash';
 import { cosseno, normalizarGraus, seno } from '../core/trig';
 import { alturaEfetivaEm, alturaEm, bonecoDeNeveEm, inclinacaoGrausEm, obstaculoDuroEm, trilhoEm } from '../pista/consulta';
 import { CONFIG_PADRAO, type ConfigDescida } from './constantes';
+import {
+  abrirJanela,
+  adicionarManobra,
+  comboInicial,
+  deveFechar,
+  fechar,
+  leituraCombo,
+  perder,
+  tiqueJanela,
+  type EstadoCombo,
+  type ManobraFeita,
+} from './combo';
+import {
+  AR_LIMIAR_TICKS,
+  AR_PASSO_TICKS,
+  AR_PONTOS_POR_PASSO,
+  BONUS_ESTILO_PERFEITO,
+  GRAB_BASE,
+  GRAB_PASSO_TICKS,
+  GRAB_PONTOS_POR_PASSO,
+  MORTAL_PONTOS_POR_VOLTAS,
+  MORTAL_VOLTAS_MAX,
+  TETO_PONTOS,
+  TRILHO_PASSO_TICKS,
+  TRILHO_PONTOS_POR_PASSO,
+} from '../data/manobras';
 
 interface EstadoPiloto {
   x: number;
@@ -59,6 +84,14 @@ interface EstadoDescida {
   ticksLandCelebra: number;
   bonecosAtingidos: ReadonlySet<number>;
   ultimaQualidadePouso: 'perfeito' | 'bom' | 'torto' | null;
+  // M2 — manobras, combo e pontuação
+  pontos: number;
+  combo: EstadoCombo;
+  /** Ticks com grab segurado no voo atual (reset no pulo). */
+  arTicksGrab: number;
+  arGrab: Grab | null;
+  /** Ticks deslizando no trilho atual (reset ao entrar no trilho). */
+  trilhoTicks: number;
 }
 
 export interface MotorDescida {
@@ -71,7 +104,20 @@ export interface MotorDescida {
   readonly config: ConfigDescida;
 }
 
-const COMBO_VAZIO: ComboLeitura = Object.freeze({ ativo: false, manobras: Object.freeze([]), soma: 0, mult: 1, janela: 0 });
+/** Pontos de tempo de ar (plano §3.5: 10 a cada 0,1 s acima de 0,5 s). */
+function pontosAr(ticksNoAr: number): number {
+  if (ticksNoAr <= AR_LIMIAR_TICKS) return 0;
+  return Math.floor((ticksNoAr - AR_LIMIAR_TICKS) / AR_PASSO_TICKS) * AR_PONTOS_POR_PASSO;
+}
+/** Pontos de grab (150 + 50 a cada 0,25 s segurando). */
+function pontosGrab(ticksGrab: number): number {
+  if (ticksGrab <= 0) return 0;
+  return GRAB_BASE + Math.floor(ticksGrab / GRAB_PASSO_TICKS) * GRAB_PONTOS_POR_PASSO;
+}
+/** Pontos de trilho (20 a cada 0,1 s deslizando). */
+function pontosTrilho(ticks: number): number {
+  return Math.floor(ticks / TRILHO_PASSO_TICKS) * TRILHO_PONTOS_POR_PASSO;
+}
 
 function anguloEntreTangentes(a: number, b: number): number {
   const d = normalizarGraus(a - b);
@@ -112,8 +158,8 @@ function leituraDe(estado: EstadoDescida, eventos: readonly EventoDescida[]): Le
     tick: estado.tick,
     fase: estado.fase,
     piloto,
-    combo: COMBO_VAZIO,
-    pontos: 0,
+    combo: leituraCombo(estado.combo),
+    pontos: estado.pontos,
     distancia: estado.distancia,
     distanciaTotal: 0,
     coletados: 0,
@@ -155,6 +201,11 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     ticksLandCelebra: 0,
     bonecosAtingidos: new Set<number>(),
     ultimaQualidadePouso: null,
+    pontos: 0,
+    combo: comboInicial(),
+    arTicksGrab: 0,
+    arGrab: null,
+    trilhoTicks: 0,
   };
 
   function respawn(est: EstadoDescida): void {
@@ -172,6 +223,9 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     est.piloto.ticksNoAr = 0;
     est.piloto.ticksGirando = 0;
     est.piloto.trilhoAtual = null;
+    est.arTicksGrab = 0;
+    est.arGrab = null;
+    est.trilhoTicks = 0;
     est.fase = 'descendo';
   }
 
@@ -191,6 +245,47 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     else if (p.velAngular > alvo) p.velAngular = Math.max(alvo, p.velAngular - config.giroAcelGrausPorTick2);
   }
 
+  /** Commita as manobras do voo (ar, mortal, grab) no combo e emite os eventos. `perfeito` aplica o bônus de estilo. */
+  function commitarVoo(eventos: EventoDescida[], perfeito: boolean): void {
+    const p = estado.piloto;
+    const bonus = perfeito ? 1 + BONUS_ESTILO_PERFEITO : 1;
+    const feitas: ManobraFeita[] = [];
+    const voltas = Math.floor((p.anguloAcumulado < 0 ? -p.anguloAcumulado : p.anguloAcumulado) / 360);
+    if (voltas >= 1) {
+      const base = MORTAL_PONTOS_POR_VOLTAS[voltas > MORTAL_VOLTAS_MAX ? MORTAL_VOLTAS_MAX : voltas] as number;
+      feitas.push({ id: 'mortal', familia: 'mortal', pontos: Math.round(base * bonus) });
+    }
+    const ar = pontosAr(p.ticksNoAr);
+    if (ar > 0) feitas.push({ id: 'ar', familia: 'ar', pontos: Math.round(ar * bonus) });
+    const grab = pontosGrab(estado.arTicksGrab);
+    if (grab > 0) feitas.push({ id: 'grab', familia: 'grab', pontos: Math.round(grab * bonus) });
+    for (const m of feitas) eventos.push({ tipo: 'manobra', id: m.id, pontos: adicionarManobra(estado.combo, m) });
+    estado.arTicksGrab = 0;
+    estado.arGrab = null;
+  }
+
+  /** Commita a manobra de trilho (por tempo) no combo e emite o evento. */
+  function commitarTrilho(eventos: EventoDescida[]): void {
+    const pts = pontosTrilho(estado.trilhoTicks);
+    estado.trilhoTicks = 0;
+    if (pts > 0) eventos.push({ tipo: 'manobra', id: 'trilho', pontos: adicionarManobra(estado.combo, { id: 'trilho', familia: 'trilho', pontos: pts }) });
+  }
+
+  /** Fecha o combo (janela esgotou / torto / chegada): soma `soma * mult` à pontuação. */
+  function fecharCombo(eventos: EventoDescida[]): void {
+    if (!estado.combo.ativo) return;
+    const r = fechar(estado.combo);
+    estado.pontos += r.total;
+    if (estado.pontos > TETO_PONTOS) estado.pontos = TETO_PONTOS;
+    eventos.push({ tipo: 'combo-fechado', soma: r.soma, mult: r.mult, total: r.total });
+  }
+
+  /** Perde o combo (tombo): nada soma. */
+  function perderCombo(eventos: EventoDescida[]): void {
+    if (!estado.combo.ativo) return;
+    eventos.push({ tipo: 'combo-perdido', soma: perder(estado.combo).soma });
+  }
+
   function processarTick(cmd: ComandoDescida): readonly EventoDescida[] {
     const eventos: EventoDescida[] = [];
     const p = estado.piloto;
@@ -203,8 +298,14 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     }
     if (estado.fase === 'chegou') return eventos;
 
+    const modoInicial = p.modo;
     p.agachado = cmd.agachar;
     p.grab = p.modo === 'ar' ? cmd.grab : null;
+    if (p.modo === 'trilho') estado.trilhoTicks++;
+    if (p.modo === 'ar' && p.grab !== null) {
+      estado.arTicksGrab++;
+      estado.arGrab = p.grab;
+    }
 
     if (p.modo === 'chao' || p.modo === 'trilho') {
       p.angulo = inclinacaoGrausEm(pista, p.x);
@@ -224,7 +325,12 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
         p.modo = 'ar';
         p.ticksNoAr = 0;
         p.trilhoAtual = null;
-        if (foiTrilho) eventos.push({ tipo: 'trilho', etapa: 'fim' });
+        estado.arTicksGrab = 0;
+        estado.arGrab = null;
+        if (foiTrilho) {
+          eventos.push({ tipo: 'trilho', etapa: 'fim' });
+          commitarTrilho(eventos);
+        }
         eventos.push({ tipo: 'pulo', forca: impulso });
       } else {
         const atrito = p.agachado ? config.atritoAgachado : config.atrito;
@@ -238,6 +344,8 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.modo = 'chao';
           p.trilhoAtual = null;
           eventos.push({ tipo: 'trilho', etapa: 'fim' });
+          commitarTrilho(eventos);
+          if (estado.combo.ativo) abrirJanela(estado.combo);
         }
 
         p.x = novoX;
@@ -252,6 +360,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
             estado.fase = 'tombo';
             estado.ticksTomboRestantes = config.ticksTombo;
             estado.tombosOcorridos++;
+            perderCombo(eventos);
             eventos.push({ tipo: 'tombo', causa: 'obstaculo' });
           } else {
             const boneco = bonecoDeNeveEm(pista, p.x);
@@ -290,11 +399,14 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.trilhoAtual = trilhoAlvo;
           p.ticksNoAr = 0;
           p.grab = null;
+          commitarVoo(eventos, false);
+          estado.trilhoTicks = 0;
           eventos.push({ tipo: 'trilho', etapa: 'inicio' });
         } else if (diff > config.limiarTortoGraus) {
           estado.fase = 'tombo';
           estado.ticksTomboRestantes = config.ticksTombo;
           estado.tombosOcorridos++;
+          perderCombo(eventos);
           eventos.push({ tipo: 'tombo', causa: 'angulo' });
         } else {
           const qualidade = diff <= config.limiarPerfeitoGraus ? 'perfeito' : diff <= config.limiarBomGraus ? 'bom' : 'torto';
@@ -308,9 +420,18 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.ticksNoAr = 0;
           p.grab = null;
           estado.ultimaQualidadePouso = qualidade;
+          commitarVoo(eventos, qualidade === 'perfeito');
+          if (qualidade === 'torto') fecharCombo(eventos);
+          else if (estado.combo.ativo) abrirJanela(estado.combo);
           eventos.push({ tipo: 'pouso', qualidade, queda: vImpacto < 0 ? -vImpacto : vImpacto });
         }
       }
+    }
+
+    // Combo: num tick de chão "puro" (não pulou nem acabou de pousar), consome a janela de ligação e fecha quando ela esgota.
+    if (estado.fase === 'descendo' && modoInicial === 'chao' && p.modo === 'chao' && !cmd.pulo) {
+      tiqueJanela(estado.combo);
+      if (deveFechar(estado.combo)) fecharCombo(eventos);
     }
 
     // Checkpoints (só avança: nunca retrocede o índice).
@@ -325,7 +446,8 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     // Chegada.
     if (estado.fase === 'descendo' && p.x >= pista.chegadaX) {
       estado.fase = 'chegou';
-      eventos.push({ tipo: 'chegada', pontos: 0, ticks: estado.tick + 1 });
+      fecharCombo(eventos);
+      eventos.push({ tipo: 'chegada', pontos: estado.pontos, ticks: estado.tick + 1 });
     }
 
     return eventos;
@@ -364,6 +486,14 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
         ultimoCheckpointX: estado.ultimoCheckpointX,
         ticksTomboRestantes: estado.ticksTomboRestantes,
         tombosOcorridos: estado.tombosOcorridos,
+        pontos: estado.pontos,
+        comboAtivo: estado.combo.ativo,
+        comboSoma: estado.combo.soma,
+        comboJanela: estado.combo.janela,
+        comboManobras: estado.combo.manobras,
+        comboFamilias: estado.combo.familias,
+        arTicksGrab: estado.arTicksGrab,
+        trilhoTicks: estado.trilhoTicks,
       });
     },
   };
