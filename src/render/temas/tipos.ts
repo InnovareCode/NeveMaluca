@@ -15,4 +15,17 @@ export interface PintorTema {
   desenharObjeto(ctx: CanvasRenderingContext2D, objeto: ObjetoPista, xTela: number, yTela: number, escala: number): void;
   /** Desenha um segmento de grind (`pista.trilhos`), amostrando o terreno entre `trilho.x0` e `trilho.x1`. */
   desenharTrilho(ctx: CanvasRenderingContext2D, trilho: Trilho, pista: PistaGerada, camera: EstadoCamera): void;
+  /**
+   * Opcional: pele do CORPO do terreno (manta + corpo + faixas), por cima do contorno genérico de `render/terreno.ts`.
+   * `superficie` já vem calculada (pontos de tela da superfície visível) para não duplicar a conta de câmera/zoom;
+   * `espessuraMantaPx` é a espessura já escalada da manta de neve. Sem implementação: `terreno.ts` desenha a pele
+   * genérica do Morro (compat; é o que mantém `bosque` pixel-idêntico).
+   */
+  desenharTerreno?(
+    ctx: CanvasRenderingContext2D,
+    pista: PistaGerada,
+    camera: EstadoCamera,
+    superficie: readonly { x: number; y: number }[],
+    espessuraMantaPx: number
+  ): void;
 }

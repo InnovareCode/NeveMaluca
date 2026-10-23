@@ -8,6 +8,7 @@ import { PX_POR_METRO } from '../core/constantes';
 import type { PistaGerada } from '../core/contratos';
 import type { EstadoCamera } from './mundo';
 import { larguraVisivelM, mundoParaTela, pxPorMetro } from './mundo';
+import type { PintorTema } from './temas/tipos';
 
 // Tokens de cor oficiais da direção de arte §2.1:
 export const COR_NEVE_LUZ = '#F7FBFF';
@@ -36,8 +37,12 @@ export function alturaDoTerreno(pista: PistaGerada, xM: number): number {
   return a0 + (a1 - a0) * f;
 }
 
-/** Desenha o terreno visível (corpo sombreado + manta volumosa de neve iluminada + contorno limpo). */
-export function desenharTerreno(ctx: CanvasRenderingContext2D, pista: PistaGerada, camera: EstadoCamera): void {
+/**
+ * Desenha o terreno visível (corpo sombreado + manta volumosa de neve iluminada + contorno limpo).
+ * `pintor?.desenharTerreno`, se existir, assume a PELE (manta/corpo/faixas) do tema por cima da forma calculada
+ * aqui (docs/temas-pistas-m3.md §0.4); sem ele, cai na pele genérica do Morro (compat, pixel-idêntico ao que já era).
+ */
+export function desenharTerreno(ctx: CanvasRenderingContext2D, pista: PistaGerada, camera: EstadoCamera, pintor?: PintorTema): void {
   const comprimentoM = comprimentoDaPistaM(pista);
   const margemM = larguraVisivelM(camera, PX_POR_METRO) * 0.6;
   const xEsq = Math.max(0, camera.x - margemM);
@@ -50,6 +55,14 @@ export function desenharTerreno(ctx: CanvasRenderingContext2D, pista: PistaGerad
     superficie.push(mundoParaTela(xm, alturaDoTerreno(pista, xm), camera, PX_POR_METRO));
   }
   if (superficie.length < 2) return;
+
+  const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
+  const espessuraPx = Math.max(10, Math.round(ESPESSURA_MANTA_NEVE_PX * (escala / PX_POR_METRO)));
+
+  if (pintor?.desenharTerreno) {
+    pintor.desenharTerreno(ctx, pista, camera, superficie, espessuraPx);
+    return;
+  }
 
   const FUNDO_PX = 4000;
   const ultimo = superficie[superficie.length - 1]!;
@@ -68,9 +81,6 @@ export function desenharTerreno(ctx: CanvasRenderingContext2D, pista: PistaGerad
 
   // 3. MANTA VOLUMOSA DE NEVE EM LUZ (#F7FBFF):
   // Cria uma camada fofa de neve no topo com espessura real e profundidade 3D
-  const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
-  const espessuraPx = Math.max(10, Math.round(ESPESSURA_MANTA_NEVE_PX * (escala / PX_POR_METRO)));
-
   ctx.beginPath();
   ctx.moveTo(primeiro.x, primeiro.y);
   for (let i = 1; i < superficie.length; i += 1) ctx.lineTo(superficie[i]!.x, superficie[i]!.y);

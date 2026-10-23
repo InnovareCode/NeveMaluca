@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import type { DefPista } from '../../src/core/contratos';
 import { FORMATO_HASH } from '../../src/core/hash';
-import { PISTA_MORRO_DO_PINHAO } from '../../src/data/pistas';
+import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE } from '../../src/data/pistas';
+import { TIPOS_PROIBIDOS_NA_ABERTURA, TIPOS_SEGUROS_PARA_CHECKPOINT } from '../../src/pista/catalogo';
 import { inclinacaoGrausEm } from '../../src/pista/consulta';
 import { exigirPistaValida, exigirPistasValidas, gerarPista } from '../../src/pista/gerador';
 
@@ -113,5 +114,39 @@ describe('exigirPistaValida / exigirPistasValidas (boot)', () => {
 describe('pista publicada: morro-do-pinhao (o que o jogo usa de verdade)', () => {
   it('hashEsperado em src/data/pistas.ts bate com o gerador atual (hash fixo do plano §3.4)', () => {
     expect(() => exigirPistaValida(PISTA_MORRO_DO_PINHAO)).not.toThrow();
+  });
+
+  it('CONGELAMENTO (M3 F0): hash do Morro não muda com os trechos-assinatura do Picolé acrescentados ao catálogo', () => {
+    expect(PISTA_MORRO_DO_PINHAO.hashEsperado).toBe('1c4d551601d3a6ae');
+  });
+});
+
+describe('pista publicada: pico-do-picole (M3 F3, plano §B.2)', () => {
+  it('hashEsperado em src/data/pistas.ts bate com o gerador atual', () => {
+    expect(() => exigirPistaValida(PISTA_PICO_DO_PICOLE)).not.toThrow();
+  });
+
+  it('usa só trechos elegíveis (base + assinatura do Picolé), tangente casada e dentro da faixa [0, comprimentoM]', () => {
+    const pista = gerarPista(PISTA_PICO_DO_PICOLE);
+    expect(pista.chegadaX).toBe(PISTA_PICO_DO_PICOLE.comprimentoM);
+    expect(pista.checkpoints[0]).toBe(0);
+    for (const o of pista.objetos) expect(o.x).toBeLessThan(pista.chegadaX);
+  });
+
+  it('obterPistaDeDados("pico-do-picole") encontra a pista; id desconhecido devolve undefined', () => {
+    expect(obterPistaDeDados('pico-do-picole')?.id).toBe('pico-do-picole');
+    expect(obterPistaDeDados('pista-que-nao-existe')).toBeUndefined();
+  });
+
+  it('nenhum dos 4 trechos-assinatura do Picolé pode abrir a pista nem virar checkpoint (mesma razão de rampa/vao/degrau)', () => {
+    for (const id of ['kicker-duplo', 'palito-longo', 'vao-calda', 'carrinhos']) {
+      if (id === 'palito-longo') {
+        expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(false); // chão plano, como `trilho`
+        expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(true);
+      } else {
+        expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(true);
+        expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(false);
+      }
+    }
   });
 });

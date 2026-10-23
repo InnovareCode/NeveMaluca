@@ -41,7 +41,48 @@ export const PISTA_MORRO_DO_PINHAO: DefPista = {
   desbloqueio: { tipo: 'inicial' },
 };
 
-export const PISTAS_DE_DADOS: readonly DefPista[] = [PISTA_MORRO_DO_PINHAO];
+/**
+ * Pista 2 (M3 F3, plano §B.2): parque de manobras da Bia Pipoca. Trechos-assinatura de GEOMETRIA no FIM do
+ * catálogo (`pista/catalogo.ts`): `kicker-duplo`, `palito-longo`, `vao-calda`, `carrinhos` — a pele (casquinha,
+ * calda, palito) é da Lyra, por cima do mesmo `TipoObjeto`/feição que já existe (plano §B.3, "visual sem contrato
+ * novo"). `hashEsperado` calculado por `ferramentas/harness/cli.mjs -- --pista pico-do-picole` depois de o catálogo
+ * estar fechado (mesma trava de recordes que o Morro já tem).
+ */
+export const PISTA_PICO_DO_PICOLE: DefPista = {
+  id: 'pico-do-picole',
+  nome: 'Pico do Picolé',
+  tema: 'parque',
+  semente: 20261023,
+  comprimentoM: 1000,
+  dificuldade: [0.15, 0.55],
+  trechos: {
+    reta: 5,
+    ondulado: 3,
+    boneco: 2,
+    pedras: 1.5,
+    trilho: 1,
+    rampa: 0.8,
+    'kicker-duplo': 0.6,
+    'palito-longo': 1.2,
+    'vao-calda': 0.3,
+    carrinhos: 0.4,
+  },
+  musica: 'pop-picole',
+  objetivos: ['pico-do-picole-o1', 'pico-do-picole-o2', 'pico-do-picole-o3'],
+  // Travado por `pista-gerador.test.ts` e por `exigirPistaValida`, igual ao Morro: mudar o catálogo/algoritmo do
+  // gerador muda este hash de propósito (invalida recordes antigos, que vão para `recordesAntigos`, não somem).
+  hashEsperado: '50f697e4c01623c4',
+  // Campos de PROGRESSÃO (plano M3 §B.3), ignorados pelo gerador: não entram no hash acima.
+  ordem: 2,
+  desbloqueio: { tipo: 'objetivos', total: 2 },
+};
+
+export const PISTAS_DE_DADOS: readonly DefPista[] = [PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE];
+
+/** Busca um `DefPista` do catálogo por id (ex.: seleção de pista na cena de descida). `undefined` se não existir. */
+export function obterPistaDeDados(id: string, defs: readonly DefPista[] = PISTAS_DE_DADOS): DefPista | undefined {
+  return defs.find((d) => d.id === id);
+}
 
 function problemasDeDefPista(def: DefPista): string[] {
   const p: string[] = [];

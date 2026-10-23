@@ -1,8 +1,12 @@
 /**
  * Cena de descida (plano §7 M1a): junta entrada (toque/teclado), o motor/pista REAIS da Vega
- * (`src/descida/criarDescida` + `src/pista/exigirPistaValida` sobre `PISTA_MORRO_DO_PINHAO`, de `data/pistas`) e o
+ * (`src/descida/criarDescida` + `src/pista/exigirPistaValida` sobre um `DefPista` de `data/pistas`) e o
  * render (câmera, terreno, parallax, objetos, piloto, HUD). Integrado por Atlas em cima do dublê original
  * (`motor-teste.ts`/`pista-teste.ts`, que ficam em `ui/cenas/` sem uso em produção — ver README desta pasta).
+ *
+ * Qual pista roda é `OpcoesCenaDescida.pista` (id; padrão `morro-do-pinhao`), resolvido por `obterPistaDeDados`
+ * (M3 F3: destrava `pico-do-picole` para teste/e2e antes da tela de seleção de pista existir, que é F5). Id
+ * desconhecido cai no Morro, mesma filosofia de "nunca é motivo para travar o jogo" do fantasma incompatível.
  *
  * Contrato da cena (ver `ui/tipos.ts`): `atualizar()` por tick de passo fixo avança o motor; `desenhar()` por
  * quadro só LÊ o último estado (nunca tica o motor de novo — por isso a leitura inicial é feita na criação,
@@ -26,8 +30,10 @@ import { desenharPiloto } from '../../render/piloto';
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
 import { desenharTerreno } from '../../render/terreno';
+import { pintorDoTema, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import type { PintorTema } from '../../render/temas/tipos';
 import type { Cena } from '../tipos';
-import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
+import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
 import { configDoPersonagem, criarDescida, criarReprodutorFantasma, VERSAO_MOTOR, type MotorDescida, type ReprodutorFantasma } from '../../descida/index';
 import { exigirPistaValida } from '../../pista/index';
 import { criarSomManobras } from '../../audio/som-manobras';
@@ -57,6 +63,8 @@ export interface OpcoesCenaDescida {
   readonly save?: SaveV1 | undefined;
   /** Id do personagem escolhido (seleção de personagem, UI); sem ele, a cápsula/sprite padrão é a `capi`. */
   readonly personagem?: string | undefined;
+  /** Id da pista a carregar (`data/pistas.ts`). Sem ele, ou id desconhecido, cai no `morro-do-pinhao`. */
+  readonly pista?: string | undefined;
   /**
    * Fantasma (replay C6) a correr junto, translúcido — tipicamente o #1 salvo desta pista (`SaveV1.fantasmas`).
    * Se a pista/`hashPista` não bater (versão do gerador mudou) ou os comandos não decodificarem, é ignorado em
@@ -66,13 +74,16 @@ export interface OpcoesCenaDescida {
 }
 
 export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
-  const pista = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
+  const defPista = (opcoes.pista !== undefined && obterPistaDeDados(opcoes.pista)) || PISTA_MORRO_DO_PINHAO;
+  const pista = exigirPistaValida(defPista);
   // Física do personagem ESCOLHIDO (plano M3 §A.3): `configDoPersonagem('capi')` devolve `CONFIG_PADRAO` bit a
   // bit, então nenhuma descida da Capi muda de comportamento com esta troca (golden `m3-congelamento-capi.test.ts`).
   const motor: MotorDescida = criarDescida(pista, configDoPersonagem(opcoes.personagem ?? 'capi'));
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
   const camera: Camera = criarCamera(0, 0);
-  const parallax: Parallax = criarParallax(opcoes.documento);
+  // Pele do tema da pista (M3 F3/F4): `defPista.tema` decide o `PintorTema`/`DefTema` (`render/temas/catalogo.ts`).
+  const pintorTema: PintorTema = pintorDoTema(defPista.tema);
+  const parallax: Parallax = criarParallax(opcoes.documento, pintorTema, temaDeRenderDoTema(defPista.tema));
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
@@ -153,9 +164,9 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
     desenhar(ctx) {
       const camLeitura = camera.leitura();
       parallax.desenhar(ctx, camLeitura.x, leitura.tick);
-      desenharTerreno(ctx, pista, camLeitura);
-      desenharTrilhos(ctx, pista, camLeitura);
-      desenharObjetos(ctx, pista, camLeitura);
+      desenharTerreno(ctx, pista, camLeitura, pintorTema);
+      desenharTrilhos(ctx, pista, camLeitura, pintorTema);
+      desenharObjetos(ctx, pista, camLeitura, pintorTema);
       particulas.desenharSpray(ctx, camLeitura);
       if (leituraFantasma) {
         // translúcido e ANTES do piloto real: nunca deve confundir qual é o jogador de verdade

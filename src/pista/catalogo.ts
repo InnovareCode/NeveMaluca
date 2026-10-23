@@ -51,16 +51,23 @@ export const TIPOS_OBSTACULO_DURO: ReadonlySet<TipoObjeto> = new Set(['pedra', '
 /** Tipo que é "atravessável, vira piada" (plano §3.3): perde um pouco de velocidade, nunca tombo. */
 export const TIPO_BONECO_DE_NEVE: TipoObjeto = 'boneco-de-neve';
 
-/** Trechos cujo início é seguro para virar checkpoint (chão estável, sem risco de respawn no meio do ar/queda). */
-export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set(['reta', 'ondulado', 'trilho', 'pedras', 'boneco']);
+/**
+ * Trechos cujo início é seguro para virar checkpoint (chão estável, sem risco de respawn no meio do ar/queda).
+ * `palito-longo` entra pelo mesmo motivo que `trilho`: chão plano reto, sem lançamento nem queda.
+ */
+export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set(['reta', 'ondulado', 'trilho', 'pedras', 'boneco', 'palito-longo']);
 
 /**
  * Trechos que nunca podem ABRIR a pista. `rampa`/`vao`/`degrau` têm a forma desenhada para encadear com o que vem
  * ANTES (um `vao` sobe porque antes dele veio o lançamento de uma `rampa`; um `degrau` parte de uma velocidade que
  * só existe depois de uma descida). Sem trecho anterior, o próprio formato do trecho fica fisicamente sem sentido
  * (ex.: subida no meio do ar sem embalo nenhum) e pode até deixar o piloto sem força líquida pra se mover.
+ *
+ * Trechos-assinatura do Picolé (M3 §B.2) que herdam a MESMA restrição, pela mesma razão: `kicker-duplo` e
+ * `vao-calda` são formas de lançamento/vão (precisam de embalo de ANTES); `carrinhos` é uma série de degraus baixos
+ * (mesmo caso de `degrau`). `palito-longo` fica de fora (é chão plano com trilho longo, como `trilho` já é hoje).
  */
-export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set(['rampa', 'vao', 'degrau']);
+export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set(['rampa', 'vao', 'degrau', 'kicker-duplo', 'vao-calda', 'carrinhos']);
 
 const TRECHOS: readonly DefTrecho[] = [
   {
@@ -165,9 +172,87 @@ const TRECHOS: readonly DefTrecho[] = [
     ],
     objetos: [{ tipo: 'boneco-de-neve', dx: 9, largura: 1.4, altura: 1.6, variante: 0 }],
   },
+
+  // --- Trechos-assinatura do Pico do Picolé (M3 F3, plano §B.2/§B.3). SÓ GEOMETRIA (forma do terreno): a pele
+  // (casquinha, calda, palito, carrinho) é desenhada pelo `PintorTema` da Lyra a partir da inclinação (plano
+  // §0.4 de `docs/temas-pistas-m3.md`) e dos tipos de objeto já existentes — nenhum `TipoObjeto` novo, nenhuma
+  // mudança no algoritmo do gerador. Regra do F0: entram SÓ NO FIM deste array, e nenhum trecho de cima foi tocado.
+  {
+    id: 'kicker-duplo',
+    comprimentoM: 37,
+    dificuldade: 0.5,
+    velMinEntradaMs: 6,
+    proibidoApos: ['vao-calda', 'carrinhos'],
+    pontos: [
+      // Dois lançamentos em sequência (duas "casquinhas"), cada um com a MESMA forma de `rampa` (sobe e lança a
+      // 22°), ligados por uma queda-e-recupera curta (mesmo desenho de `vao`, encurtado: sobe um pouco com a
+      // tangente do 1º lançamento, vira e desce, flat para o 2º lançamento).
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 9, dy: -2.2, anguloGraus: -14 },
+      { dx: 14, dy: -1, anguloGraus: 22 }, // 1º lançamento
+      { dx: 17, dy: 0.1, anguloGraus: 0 },
+      { dx: 19, dy: 0.1, anguloGraus: -32 },
+      { dx: 23, dy: -2.9, anguloGraus: -14 },
+      { dx: 32, dy: -5.1, anguloGraus: -14 },
+      { dx: 37, dy: -3.9, anguloGraus: 22 }, // 2º lançamento
+    ],
+  },
+  {
+    id: 'palito-longo',
+    comprimentoM: 32,
+    dificuldade: 0.3,
+    velMinEntradaMs: 3,
+    pontos: [
+      // Chão plano e reto, como `trilho`, só mais longo (mesma inclinação média): o trilho de palitos emendados.
+      { dx: 0, dy: 0, anguloGraus: -8 },
+      { dx: 32, dy: -4.5, anguloGraus: -8 },
+    ],
+    trilho: { dx0: 2, dx1: 30, altura: 0.4 },
+  },
+  {
+    id: 'vao-calda',
+    comprimentoM: 18,
+    dificuldade: 0.65,
+    velMinEntradaMs: 7,
+    proibidoApos: ['vao-calda', 'carrinhos'],
+    pontos: [
+      // Mesma família de forma do `vao` (sobe com a tangente de um lançamento anterior, vira no alto e desce numa
+      // queda), só um pouco mais largo. A pele de calda de chocolate congelada entra pela QUEDA detectada na
+      // inclinação (plano §0.4), não por um tipo de objeto novo.
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 3, dy: 1.2, anguloGraus: 0 },
+      { dx: 6, dy: 1.2, anguloGraus: -30 },
+      { dx: 10, dy: -3.4, anguloGraus: -30 },
+      { dx: 12, dy: -5, anguloGraus: 0 },
+      { dx: 18, dy: -5, anguloGraus: -12 },
+    ],
+  },
+  {
+    id: 'carrinhos',
+    comprimentoM: 22,
+    dificuldade: 0.5,
+    velMinEntradaMs: 4,
+    proibidoApos: ['vao-calda', 'carrinhos'],
+    pontos: [
+      // Degraus baixos em série (dois, mais suaves que o `degrau` sozinho): cada queda vira um carrinho de
+      // sorvete de decoração atrás da borda (decor sem física, plano §0.5), não um objeto físico novo.
+      { dx: 0, dy: 0, anguloGraus: -10 },
+      { dx: 5, dy: -0.6, anguloGraus: -10 },
+      { dx: 7, dy: -2, anguloGraus: -30 },
+      { dx: 11, dy: -2.6, anguloGraus: -10 },
+      { dx: 16, dy: -3.2, anguloGraus: -10 },
+      { dx: 18, dy: -4.4, anguloGraus: -30 },
+      { dx: 22, dy: -5, anguloGraus: -12 },
+    ],
+  },
 ];
 
-/** Catálogo oficial (8 trechos, plano §3.4). Mapa por id para o gerador consultar por peso de `DefPista.trechos`. */
+/**
+ * Catálogo oficial: 8 trechos base (plano §3.4) + trechos-assinatura por pista do M3 (§B.2), acrescentados ao FIM
+ * nesta mesma lista, nesta ordem, para nunca mudar a sequência de RNG das pistas já publicadas (regra do F0 —
+ * `CATALOGO_TRECHOS` só cresce, nunca reordena nem edita um trecho existente). Mapa por id para o gerador
+ * consultar por peso de `DefPista.trechos`.
+ */
 export const CATALOGO_TRECHOS: ReadonlyMap<IdTrecho, DefTrecho> = new Map(TRECHOS.map((t) => [t.id, t]));
 
 export type { ObjetoPista, Trilho };

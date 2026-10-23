@@ -21,6 +21,8 @@ export interface OpcoesCenaJogo {
   readonly save?: SaveV1 | undefined;
   /** Id do personagem escolhido (seleção de personagem, UI); repassado direto à cena de descida. */
   readonly personagem?: string | undefined;
+  /** Id da pista a carregar; repassado direto a `OpcoesCenaDescida.pista` (padrão `morro-do-pinhao`). */
+  readonly pista?: string | undefined;
   /** Fantasma a correr junto na descida; repassado direto a `OpcoesCenaDescida.fantasma`. */
   readonly fantasma?: ReplayV1 | undefined;
   /** Chamado a cada chegada, ANTES de montar a tela de resultado (quem persiste recorde/fantasma, ver `gerenciador.ts`). */
@@ -40,6 +42,7 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
       audio: opcoes.audio,
       save: opcoes.save,
       personagem: opcoes.personagem,
+      pista: opcoes.pista,
       fantasma: opcoes.fantasma,
       aoTerminar: (resultado) => {
         opcoes.aoResultado?.(resultado);
