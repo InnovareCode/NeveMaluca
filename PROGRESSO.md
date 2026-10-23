@@ -39,16 +39,13 @@ Atualizado em 2026-10-23. Repositório git local + remoto `origin` (GitHub) + **
 - **D4** ranking: **só local** (o formato de replay C6 já prepara um online futuro).
 - **D6** idioma: **pt-BR** (textos já em tabela; inglês fica como possível M4+).
 - **D7** desafio do dia: **sim** (semente derivada da data UTC).
-- **D8** repositório remoto + site de teste: **ATIVADO** (dono, 2026-10-22). `origin` = `https://github.com/InnovareCode/NeveMaluca.git`, baseline empurrado. **GitHub Pages pendente** (Vulcano: workflow de deploy + `base` do Vite; dono habilita Source "GitHub Actions" nas Settings).
+- **D8** repositório remoto + site de teste: **ATIVADO e NO AR** (dono, 2026-10-22/23). `origin` no GitHub; **GitHub Pages publicado e jogável** em https://innovarecode.github.io/NeveMaluca/ (`.github/workflows/pages.yml`, deploy automático a cada push).
 - **D9** logotipo: **tipográfico provisório até o M4**.
 - **D10** toque: **gestos por padrão, botões em Opções**; agachar por toque só se o M1a mostrar falta.
+- **D5 (orçamento de arte) — DECIDIDO: cota GRATUITA, em etapas** (dono, 2026-10-23). Gerar os 5 personagens restantes + objetos por tema em LOTES, dentro dos ~404 créditos + 500/mês da Runway Free (Nano Banana 2K = 6 créd/img; M3 estimado em ~150-200 créd → cabe). Custo R$0. Fallback: Standard 1 mês (~$12-15, 625 créd) se bater o teto mensal num pico de refação.
 
 ## Decisões em aberto
-Detalhes, opções e recomendação na seção 9 de `docs/plano-neve-maluca.md`.
-
-- **D5 (orçamento de arte)** — com 6 personagens decididos, o custo da Runway passa da cota gratuita (plano §6.4).
-  Decidir ao **fim do M2**, com a qualidade das folhas na mão: plano pago, ou gerar o elenco em etapas ao longo dos
-  marcos. As gerações gratuitas cobrem o M1 e o M2.
+Nenhuma formal no momento. Pontos menores a fechar na hora de gerar: os nomes finais dos 5 personagens (o plano §6.2 e os handoffs divergem) e a confirmação do mascote (recomendação do plano: KAKÁ, a capivara).
 
 ## Marcos
 | Marco | Conteúdo | Estado |
