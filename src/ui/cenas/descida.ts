@@ -21,7 +21,7 @@ import { criarEntrada, type Entrada } from '../../input/index';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharHud } from '../../render/hud';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
-import { desenharObjetos } from '../../render/objetos';
+import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
@@ -154,6 +154,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       const camLeitura = camera.leitura();
       parallax.desenhar(ctx, camLeitura.x, leitura.tick);
       desenharTerreno(ctx, pista, camLeitura);
+      desenharTrilhos(ctx, pista, camLeitura);
       desenharObjetos(ctx, pista, camLeitura);
       particulas.desenharSpray(ctx, camLeitura);
       if (leituraFantasma) {

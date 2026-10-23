@@ -218,6 +218,26 @@ export interface PistaGerada {
   readonly hash: string;
 }
 
+// --- M3: temas visuais (plano §B.3) ---
+// Dado visual de um tema: a tabela de cores da direção de arte (§2.1) + clima (partículas) + música. O resto da
+// "pele" (silhuetas, objetos, feições) fica como constante do pintor em `render/temas/<tema>.ts` (Lyra) — não entra
+// aqui. EXCEÇÃO DE DONO (Atlas, M3-F4): este tipo nasceu por instrução do Atlas porque `render/` precisava dele
+// antes do catálogo `data/temas.ts` do Cronos existir; quando ele chegar, confirmar que bate com esta forma.
+export interface DefTema {
+  readonly id: IdTema;
+  readonly cores: {
+    readonly ceu: readonly [topo: string, horizonte: string];
+    readonly montanhaDistante: string;
+    readonly montanhaMedia: string;
+    readonly silhueta: string;
+    readonly neveLuz: string;
+    readonly neveSombra: string;
+    readonly destaque: string;
+  };
+  readonly clima: 'neve-fofa' | 'confeito' | 'neve-noturna' | 'vapor' | 'vento-aurora';
+  readonly musica: IdMusica;
+}
+
 // --- M3: objetivos ---
 
 /**

@@ -13,7 +13,9 @@
 | `terreno.ts` | `desenharTerreno`/`alturaDoTerreno`: neve volumosa com manta superior iluminada (#F7FBFF) e corpo em sombra (#BFD9EE), acabamento limpo sem artefatos de stroke no WebKit |
 | `parallax.ts` | `criarParallax`: céu degradê (#4FA8F0 -> #BFE6FF) com sol alto à esquerda, montanhas distantes e médias facetadas, floresta com araucárias e pinheiros nevados (#2E6B3A + branco) e celeiro alpino vermelho (#B83A2B) |
 | `particulas.ts` | `criarSistemaParticulas`: flocos de neve em camadas de profundidade (fundo e frente) e spray de neve saindo da prancha no chão em pool circular pré-alocado |
-| `objetos.ts` | `desenharObjetos`: `ObjetoPista` apoiado no terreno |
+| `objetos.ts` | `desenharObjetos`/`desenharTrilhos`: `ObjetoPista` e `Trilho` (grind) apoiados no terreno, pela pele do tema (`PintorTema`, default bosque) |
+| `temas/tipos.ts` | `PintorTema` (plano M3 §B.3): contrato do DESENHO de um tema — `construirCamadas`/`desenharObjeto`/`desenharTrilho` |
+| `temas/bosque.ts` | Pele do Morro do Pinhão (tema `bosque`), extraída de `parallax.ts`/`objetos.ts` sem mudar pixel (M3-F4). `TEMA_BOSQUE` (`DefTema`) + `pintorBosque` (`PintorTema`). Novos temas do M3 (parque/vila/vulcao/cume) entram aqui do lado, um arquivo por tema |
 | `piloto.ts` | `desenharPiloto`: renderiza sprite com ancoragem de contato/pivô ou cápsula de fallback |
 | `hud.ts` | `desenharHud`: velocidade (km/h), pontos e a barra de combo (xMULT + soma, janela de ligação como barra que esvazia); aviso "PREPARA..." na contagem |
 | `manobra.ts` | `criarSistemaPopupsManobra` (M2): popups de texto que sobem e somem a cada evento `manobra`/`combo-fechado`/`combo-perdido`, mesmo padrão de pool fixo do `particulas.ts`. Nomes de exibição são PROVISÓRIOS — ver TODO no arquivo (definitivos são do Apolo) |
