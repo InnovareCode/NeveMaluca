@@ -130,7 +130,7 @@ describe('laço da platform x laço do core com relógio sintético', () => {
 
 describe('data/regras-save (catálogo provisório de ids)', () => {
   it('traz os ids pedidos: 6 personagens, 5 pistas, 3 objetivos por pista, inicial capi e morro-do-pinhao', () => {
-    expect([...PERSONAGENS_PROVISORIOS]).toEqual(['capi', 'bandeira', 'cidinha', 'brunao', 'queque', 'bia']);
+    expect([...PERSONAGENS_PROVISORIOS]).toEqual(['capi', 'bandeira', 'cidinha', 'beto', 'queque', 'bia']);
     expect([...PISTAS_PROVISORIAS]).toEqual(['morro-do-pinhao', 'pico-do-picole', 'vila-chocolate', 'vulcao-pe-gelado', 'cume-da-ventania']);
     expect(OBJETIVOS_PROVISORIOS).toHaveLength(15);
     expect([...PERSONAGENS_INICIAIS]).toEqual(['capi']);

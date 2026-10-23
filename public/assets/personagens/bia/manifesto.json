@@ -1,0 +1,305 @@
+{
+  "ride0": {
+    "arquivo": "bia-ride0.png",
+    "largura": 170,
+    "altura": 188,
+    "contato": [
+      84.9,
+      184.4
+    ],
+    "pivo": [
+      82.2,
+      104.0
+    ],
+    "tipo": "chao"
+  },
+  "tuck0": {
+    "arquivo": "bia-tuck0.png",
+    "largura": 170,
+    "altura": 138,
+    "contato": [
+      85.0,
+      135.1
+    ],
+    "pivo": [
+      87.8,
+      78.6
+    ],
+    "tipo": "chao"
+  },
+  "jload": {
+    "arquivo": "bia-jload.png",
+    "largura": 170,
+    "altura": 160,
+    "contato": [
+      84.8,
+      156.8
+    ],
+    "pivo": [
+      81.5,
+      88.9
+    ],
+    "tipo": "chao"
+  },
+  "takeoff": {
+    "arquivo": "bia-takeoff.png",
+    "largura": 167,
+    "altura": 193,
+    "contato": null,
+    "pivo": [
+      77.4,
+      97.5
+    ],
+    "tipo": "ar"
+  },
+  "air": {
+    "arquivo": "bia-air.png",
+    "largura": 149,
+    "altura": 186,
+    "contato": null,
+    "pivo": [
+      73.3,
+      94.4
+    ],
+    "tipo": "ar"
+  },
+  "flip0": {
+    "arquivo": "bia-flip0.png",
+    "largura": 96,
+    "altura": 136,
+    "contato": null,
+    "pivo": [
+      46.5,
+      75.7
+    ],
+    "tipo": "ar"
+  },
+  "land": {
+    "arquivo": "bia-land.png",
+    "largura": 172,
+    "altura": 173,
+    "contato": [
+      86.6,
+      170.1
+    ],
+    "pivo": [
+      82.3,
+      96.8
+    ],
+    "tipo": "chao"
+  },
+  "wobble": {
+    "arquivo": "bia-wobble.png",
+    "largura": 181,
+    "altura": 183,
+    "contato": [
+      95.0,
+      179.5
+    ],
+    "pivo": [
+      82.2,
+      99.7
+    ],
+    "tipo": "chao"
+  },
+  "fall0": {
+    "arquivo": "bia-fall0.png",
+    "largura": 200,
+    "altura": 166,
+    "contato": [
+      84.5,
+      162.8
+    ],
+    "pivo": [
+      107.7,
+      90.6
+    ],
+    "tipo": "chao"
+  },
+  "fall1": {
+    "arquivo": "bia-fall1.png",
+    "largura": 157,
+    "altura": 146,
+    "contato": null,
+    "pivo": [
+      77.5,
+      76.8
+    ],
+    "tipo": "ar"
+  },
+  "fall2": {
+    "arquivo": "bia-fall2.png",
+    "largura": 205,
+    "altura": 136,
+    "contato": [
+      141.9,
+      132.7
+    ],
+    "pivo": [
+      111.0,
+      93.0
+    ],
+    "tipo": "corpo"
+  },
+  "celeb": {
+    "arquivo": "bia-celeb.png",
+    "largura": 170,
+    "altura": 188,
+    "contato": [
+      82.5,
+      184.8
+    ],
+    "pivo": [
+      85.2,
+      99.5
+    ],
+    "tipo": "chao"
+  },
+  "grabUp": {
+    "arquivo": "bia-grabUp.png",
+    "largura": 146,
+    "altura": 170,
+    "contato": null,
+    "pivo": [
+      75.0,
+      81.1
+    ],
+    "tipo": "ar"
+  },
+  "grabDown": {
+    "arquivo": "bia-grabDown.png",
+    "largura": 170,
+    "altura": 176,
+    "contato": null,
+    "pivo": [
+      80.4,
+      95.8
+    ],
+    "tipo": "ar"
+  },
+  "grabFront": {
+    "arquivo": "bia-grabFront.png",
+    "largura": 170,
+    "altura": 184,
+    "contato": null,
+    "pivo": [
+      89.0,
+      90.4
+    ],
+    "tipo": "ar"
+  },
+  "grabBack": {
+    "arquivo": "bia-grabBack.png",
+    "largura": 170,
+    "altura": 182,
+    "contato": null,
+    "pivo": [
+      87.9,
+      90.8
+    ],
+    "tipo": "ar"
+  },
+  "rail": {
+    "arquivo": "bia-rail.png",
+    "largura": 206,
+    "altura": 188,
+    "contato": [
+      100.6,
+      178.1
+    ],
+    "pivo": [
+      101.8,
+      97.2
+    ],
+    "tipo": "chao"
+  },
+  "star": {
+    "arquivo": "bia-star.png",
+    "largura": 167,
+    "altura": 177,
+    "contato": null,
+    "pivo": [
+      84.1,
+      88.9
+    ],
+    "tipo": "ar"
+  },
+  "scared": {
+    "arquivo": "bia-scared.png",
+    "largura": 163,
+    "altura": 196,
+    "contato": null,
+    "pivo": [
+      82.7,
+      98.6
+    ],
+    "tipo": "ar"
+  },
+  "sig": {
+    "arquivo": "bia-sig.png",
+    "largura": 173,
+    "altura": 175,
+    "contato": null,
+    "pivo": [
+      85.1,
+      92.8
+    ],
+    "tipo": "ar"
+  },
+  "ride1": {
+    "arquivo": "bia-ride1.png",
+    "largura": 162,
+    "altura": 185,
+    "contato": [
+      83.3,
+      182.0
+    ],
+    "pivo": [
+      77.4,
+      101.8
+    ],
+    "tipo": "chao"
+  },
+  "tuck1": {
+    "arquivo": "bia-tuck1.png",
+    "largura": 162,
+    "altura": 142,
+    "contato": [
+      88.4,
+      138.9
+    ],
+    "pivo": [
+      87.2,
+      74.8
+    ],
+    "tipo": "chao"
+  },
+  "leanBack": {
+    "arquivo": "bia-leanBack.png",
+    "largura": 180,
+    "altura": 183,
+    "contato": [
+      106.8,
+      179.9
+    ],
+    "pivo": [
+      83.9,
+      99.7
+    ],
+    "tipo": "chao"
+  },
+  "leanFwd": {
+    "arquivo": "bia-leanFwd.png",
+    "largura": 166,
+    "altura": 170,
+    "contato": [
+      88.9,
+      166.9
+    ],
+    "pivo": [
+      94.4,
+      92.5
+    ],
+    "tipo": "chao"
+  }
+}

@@ -1,0 +1,305 @@
+{
+  "ride0": {
+    "arquivo": "queque-ride0.png",
+    "largura": 165,
+    "altura": 187,
+    "contato": [
+      81.3,
+      184.1
+    ],
+    "pivo": [
+      82.2,
+      107.9
+    ],
+    "tipo": "chao"
+  },
+  "tuck0": {
+    "arquivo": "queque-tuck0.png",
+    "largura": 165,
+    "altura": 141,
+    "contato": [
+      80.9,
+      137.9
+    ],
+    "pivo": [
+      86.9,
+      86.5
+    ],
+    "tipo": "chao"
+  },
+  "jload": {
+    "arquivo": "queque-jload.png",
+    "largura": 165,
+    "altura": 170,
+    "contato": [
+      81.7,
+      166.6
+    ],
+    "pivo": [
+      83.1,
+      98.5
+    ],
+    "tipo": "chao"
+  },
+  "takeoff": {
+    "arquivo": "queque-takeoff.png",
+    "largura": 156,
+    "altura": 196,
+    "contato": null,
+    "pivo": [
+      80.1,
+      98.9
+    ],
+    "tipo": "ar"
+  },
+  "air": {
+    "arquivo": "queque-air.png",
+    "largura": 166,
+    "altura": 189,
+    "contato": null,
+    "pivo": [
+      85.2,
+      107.2
+    ],
+    "tipo": "ar"
+  },
+  "flip0": {
+    "arquivo": "queque-flip0.png",
+    "largura": 109,
+    "altura": 160,
+    "contato": null,
+    "pivo": [
+      52.8,
+      91.0
+    ],
+    "tipo": "ar"
+  },
+  "land": {
+    "arquivo": "queque-land.png",
+    "largura": 165,
+    "altura": 164,
+    "contato": [
+      80.1,
+      161.3
+    ],
+    "pivo": [
+      82.0,
+      98.4
+    ],
+    "tipo": "chao"
+  },
+  "wobble": {
+    "arquivo": "queque-wobble.png",
+    "largura": 200,
+    "altura": 176,
+    "contato": [
+      111.9,
+      173.2
+    ],
+    "pivo": [
+      87.4,
+      96.5
+    ],
+    "tipo": "chao"
+  },
+  "fall0": {
+    "arquivo": "queque-fall0.png",
+    "largura": 187,
+    "altura": 171,
+    "contato": [
+      80.4,
+      167.6
+    ],
+    "pivo": [
+      103.4,
+      97.6
+    ],
+    "tipo": "chao"
+  },
+  "fall1": {
+    "arquivo": "queque-fall1.png",
+    "largura": 143,
+    "altura": 121,
+    "contato": null,
+    "pivo": [
+      76.1,
+      57.4
+    ],
+    "tipo": "ar"
+  },
+  "fall2": {
+    "arquivo": "queque-fall2.png",
+    "largura": 203,
+    "altura": 108,
+    "contato": [
+      100.0,
+      105.0
+    ],
+    "pivo": [
+      104.5,
+      78.5
+    ],
+    "tipo": "corpo"
+  },
+  "celeb": {
+    "arquivo": "queque-celeb.png",
+    "largura": 167,
+    "altura": 182,
+    "contato": [
+      78.7,
+      179.2
+    ],
+    "pivo": [
+      88.0,
+      92.2
+    ],
+    "tipo": "chao"
+  },
+  "grabUp": {
+    "arquivo": "queque-grabUp.png",
+    "largura": 135,
+    "altura": 191,
+    "contato": null,
+    "pivo": [
+      72.9,
+      105.6
+    ],
+    "tipo": "ar"
+  },
+  "grabDown": {
+    "arquivo": "queque-grabDown.png",
+    "largura": 160,
+    "altura": 175,
+    "contato": null,
+    "pivo": [
+      81.2,
+      113.3
+    ],
+    "tipo": "ar"
+  },
+  "grabFront": {
+    "arquivo": "queque-grabFront.png",
+    "largura": 173,
+    "altura": 201,
+    "contato": null,
+    "pivo": [
+      86.8,
+      109.9
+    ],
+    "tipo": "ar"
+  },
+  "grabBack": {
+    "arquivo": "queque-grabBack.png",
+    "largura": 171,
+    "altura": 188,
+    "contato": null,
+    "pivo": [
+      88.1,
+      104.8
+    ],
+    "tipo": "ar"
+  },
+  "rail": {
+    "arquivo": "queque-rail.png",
+    "largura": 225,
+    "altura": 205,
+    "contato": [
+      113.9,
+      201.9
+    ],
+    "pivo": [
+      112.6,
+      118.9
+    ],
+    "tipo": "chao"
+  },
+  "star": {
+    "arquivo": "queque-star.png",
+    "largura": 209,
+    "altura": 237,
+    "contato": null,
+    "pivo": [
+      109.6,
+      112.8
+    ],
+    "tipo": "ar"
+  },
+  "scared": {
+    "arquivo": "queque-scared.png",
+    "largura": 157,
+    "altura": 167,
+    "contato": null,
+    "pivo": [
+      77.2,
+      82.3
+    ],
+    "tipo": "ar"
+  },
+  "sig": {
+    "arquivo": "queque-sig.png",
+    "largura": 208,
+    "altura": 151,
+    "contato": null,
+    "pivo": [
+      99.6,
+      79.1
+    ],
+    "tipo": "ar"
+  },
+  "ride1": {
+    "arquivo": "queque-ride1.png",
+    "largura": 197,
+    "altura": 204,
+    "contato": [
+      109.4,
+      200.5
+    ],
+    "pivo": [
+      102.2,
+      119.1
+    ],
+    "tipo": "chao"
+  },
+  "tuck1": {
+    "arquivo": "queque-tuck1.png",
+    "largura": 186,
+    "altura": 163,
+    "contato": [
+      101.3,
+      159.9
+    ],
+    "pivo": [
+      99.0,
+      100.5
+    ],
+    "tipo": "chao"
+  },
+  "leanBack": {
+    "arquivo": "queque-leanBack.png",
+    "largura": 187,
+    "altura": 209,
+    "contato": [
+      102.2,
+      206.1
+    ],
+    "pivo": [
+      101.6,
+      122.5
+    ],
+    "tipo": "chao"
+  },
+  "leanFwd": {
+    "arquivo": "queque-leanFwd.png",
+    "largura": 186,
+    "altura": 202,
+    "contato": [
+      102.8,
+      199.1
+    ],
+    "pivo": [
+      97.1,
+      122.0
+    ],
+    "tipo": "chao"
+  }
+}

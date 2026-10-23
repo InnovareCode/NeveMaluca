@@ -1,0 +1,305 @@
+{
+  "ride0": {
+    "arquivo": "beto-ride0.png",
+    "largura": 173,
+    "altura": 175,
+    "contato": [
+      87.6,
+      171.8
+    ],
+    "pivo": [
+      84.1,
+      95.7
+    ],
+    "tipo": "chao"
+  },
+  "tuck0": {
+    "arquivo": "beto-tuck0.png",
+    "largura": 173,
+    "altura": 139,
+    "contato": [
+      85.7,
+      136.1
+    ],
+    "pivo": [
+      90.8,
+      80.5
+    ],
+    "tipo": "chao"
+  },
+  "jload": {
+    "arquivo": "beto-jload.png",
+    "largura": 173,
+    "altura": 157,
+    "contato": [
+      86.8,
+      153.6
+    ],
+    "pivo": [
+      84.7,
+      84.0
+    ],
+    "tipo": "chao"
+  },
+  "takeoff": {
+    "arquivo": "beto-takeoff.png",
+    "largura": 172,
+    "altura": 181,
+    "contato": null,
+    "pivo": [
+      85.0,
+      85.9
+    ],
+    "tipo": "ar"
+  },
+  "air": {
+    "arquivo": "beto-air.png",
+    "largura": 169,
+    "altura": 175,
+    "contato": null,
+    "pivo": [
+      84.0,
+      93.5
+    ],
+    "tipo": "ar"
+  },
+  "flip0": {
+    "arquivo": "beto-flip0.png",
+    "largura": 157,
+    "altura": 137,
+    "contato": null,
+    "pivo": [
+      82.2,
+      85.0
+    ],
+    "tipo": "ar"
+  },
+  "land": {
+    "arquivo": "beto-land.png",
+    "largura": 181,
+    "altura": 155,
+    "contato": [
+      92.3,
+      151.5
+    ],
+    "pivo": [
+      90.5,
+      80.6
+    ],
+    "tipo": "chao"
+  },
+  "wobble": {
+    "arquivo": "beto-wobble.png",
+    "largura": 180,
+    "altura": 171,
+    "contato": [
+      93.4,
+      167.6
+    ],
+    "pivo": [
+      85.7,
+      89.9
+    ],
+    "tipo": "chao"
+  },
+  "fall0": {
+    "arquivo": "beto-fall0.png",
+    "largura": 215,
+    "altura": 165,
+    "contato": [
+      116.1,
+      162.0
+    ],
+    "pivo": [
+      107.3,
+      82.2
+    ],
+    "tipo": "chao"
+  },
+  "fall1": {
+    "arquivo": "beto-fall1.png",
+    "largura": 161,
+    "altura": 122,
+    "contato": null,
+    "pivo": [
+      84.7,
+      58.6
+    ],
+    "tipo": "ar"
+  },
+  "fall2": {
+    "arquivo": "beto-fall2.png",
+    "largura": 229,
+    "altura": 78,
+    "contato": [
+      151.3,
+      75.2
+    ],
+    "pivo": [
+      105.7,
+      42.9
+    ],
+    "tipo": "corpo"
+  },
+  "celeb": {
+    "arquivo": "beto-celeb.png",
+    "largura": 178,
+    "altura": 131,
+    "contato": [
+      91.3,
+      127.7
+    ],
+    "pivo": [
+      83.6,
+      77.2
+    ],
+    "tipo": "chao"
+  },
+  "grabUp": {
+    "arquivo": "beto-grabUp.png",
+    "largura": 146,
+    "altura": 185,
+    "contato": null,
+    "pivo": [
+      71.2,
+      86.1
+    ],
+    "tipo": "ar"
+  },
+  "grabDown": {
+    "arquivo": "beto-grabDown.png",
+    "largura": 147,
+    "altura": 163,
+    "contato": null,
+    "pivo": [
+      73.3,
+      90.1
+    ],
+    "tipo": "ar"
+  },
+  "grabFront": {
+    "arquivo": "beto-grabFront.png",
+    "largura": 172,
+    "altura": 176,
+    "contato": null,
+    "pivo": [
+      85.2,
+      91.6
+    ],
+    "tipo": "ar"
+  },
+  "grabBack": {
+    "arquivo": "beto-grabBack.png",
+    "largura": 178,
+    "altura": 183,
+    "contato": null,
+    "pivo": [
+      88.7,
+      91.3
+    ],
+    "tipo": "ar"
+  },
+  "rail": {
+    "arquivo": "beto-rail.png",
+    "largura": 214,
+    "altura": 211,
+    "contato": [
+      168.2,
+      176.8
+    ],
+    "pivo": [
+      101.7,
+      90.1
+    ],
+    "tipo": "chao"
+  },
+  "star": {
+    "arquivo": "beto-star.png",
+    "largura": 180,
+    "altura": 188,
+    "contato": null,
+    "pivo": [
+      88.2,
+      102.0
+    ],
+    "tipo": "ar"
+  },
+  "scared": {
+    "arquivo": "beto-scared.png",
+    "largura": 178,
+    "altura": 177,
+    "contato": null,
+    "pivo": [
+      88.1,
+      91.6
+    ],
+    "tipo": "ar"
+  },
+  "sig": {
+    "arquivo": "beto-sig.png",
+    "largura": 198,
+    "altura": 144,
+    "contato": null,
+    "pivo": [
+      87.5,
+      72.3
+    ],
+    "tipo": "ar"
+  },
+  "ride1": {
+    "arquivo": "beto-ride1.png",
+    "largura": 170,
+    "altura": 161,
+    "contato": [
+      136.1,
+      157.5
+    ],
+    "pivo": [
+      86.5,
+      87.9
+    ],
+    "tipo": "chao"
+  },
+  "tuck1": {
+    "arquivo": "beto-tuck1.png",
+    "largura": 167,
+    "altura": 186,
+    "contato": [
+      134.8,
+      183.0
+    ],
+    "pivo": [
+      80.7,
+      97.9
+    ],
+    "tipo": "chao"
+  },
+  "leanBack": {
+    "arquivo": "beto-leanBack.png",
+    "largura": 167,
+    "altura": 165,
+    "contato": [
+      24.6,
+      162.0
+    ],
+    "pivo": [
+      80.2,
+      87.4
+    ],
+    "tipo": "chao"
+  },
+  "leanFwd": {
+    "arquivo": "beto-leanFwd.png",
+    "largura": 167,
+    "altura": 195,
+    "contato": [
+      134.8,
+      191.4
+    ],
+    "pivo": [
+      81.4,
+      95.6
+    ],
+    "tipo": "chao"
+  }
+}

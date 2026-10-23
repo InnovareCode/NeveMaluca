@@ -18,6 +18,8 @@ export interface OpcoesCenaJogo {
   readonly aoMenu?: (() => void) | undefined;
   readonly audio?: AudioDestravavel | undefined;
   readonly save?: SaveV1 | undefined;
+  /** Id do personagem escolhido (seleção de personagem, UI); repassado direto à cena de descida. */
+  readonly personagem?: string | undefined;
 }
 
 export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
@@ -32,6 +34,7 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
       aoPausar: opcoes.aoPausar,
       audio: opcoes.audio,
       save: opcoes.save,
+      personagem: opcoes.personagem,
       aoTerminar: (resultado) => {
         atual?.destruir?.();
         atual = criarCenaResultado({

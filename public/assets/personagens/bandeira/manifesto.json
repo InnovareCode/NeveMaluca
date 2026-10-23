@@ -1,0 +1,305 @@
+{
+  "ride0": {
+    "arquivo": "bandeira-ride0.png",
+    "largura": 195,
+    "altura": 169,
+    "contato": [
+      120.2,
+      165.9
+    ],
+    "pivo": [
+      89.9,
+      94.9
+    ],
+    "tipo": "chao"
+  },
+  "tuck0": {
+    "arquivo": "bandeira-tuck0.png",
+    "largura": 200,
+    "altura": 131,
+    "contato": [
+      127.6,
+      127.4
+    ],
+    "pivo": [
+      93.3,
+      70.1
+    ],
+    "tipo": "chao"
+  },
+  "jload": {
+    "arquivo": "bandeira-jload.png",
+    "largura": 196,
+    "altura": 159,
+    "contato": [
+      124.6,
+      155.4
+    ],
+    "pivo": [
+      90.4,
+      87.3
+    ],
+    "tipo": "chao"
+  },
+  "takeoff": {
+    "arquivo": "bandeira-takeoff.png",
+    "largura": 197,
+    "altura": 181,
+    "contato": null,
+    "pivo": [
+      86.0,
+      91.5
+    ],
+    "tipo": "ar"
+  },
+  "air": {
+    "arquivo": "bandeira-air.png",
+    "largura": 191,
+    "altura": 186,
+    "contato": null,
+    "pivo": [
+      89.1,
+      98.7
+    ],
+    "tipo": "ar"
+  },
+  "flip0": {
+    "arquivo": "bandeira-flip0.png",
+    "largura": 137,
+    "altura": 159,
+    "contato": null,
+    "pivo": [
+      56.5,
+      85.2
+    ],
+    "tipo": "ar"
+  },
+  "land": {
+    "arquivo": "bandeira-land.png",
+    "largura": 190,
+    "altura": 161,
+    "contato": [
+      136.4,
+      157.5
+    ],
+    "pivo": [
+      86.7,
+      89.2
+    ],
+    "tipo": "chao"
+  },
+  "wobble": {
+    "arquivo": "bandeira-wobble.png",
+    "largura": 184,
+    "altura": 167,
+    "contato": [
+      145.5,
+      163.8
+    ],
+    "pivo": [
+      84.8,
+      92.0
+    ],
+    "tipo": "chao"
+  },
+  "fall0": {
+    "arquivo": "bandeira-fall0.png",
+    "largura": 197,
+    "altura": 150,
+    "contato": [
+      149.1,
+      147.0
+    ],
+    "pivo": [
+      96.5,
+      75.5
+    ],
+    "tipo": "chao"
+  },
+  "fall1": {
+    "arquivo": "bandeira-fall1.png",
+    "largura": 157,
+    "altura": 166,
+    "contato": null,
+    "pivo": [
+      82.2,
+      86.5
+    ],
+    "tipo": "ar"
+  },
+  "fall2": {
+    "arquivo": "bandeira-fall2.png",
+    "largura": 235,
+    "altura": 147,
+    "contato": [
+      111.1,
+      143.8
+    ],
+    "pivo": [
+      107.5,
+      82.8
+    ],
+    "tipo": "corpo"
+  },
+  "celeb": {
+    "arquivo": "bandeira-celeb.png",
+    "largura": 193,
+    "altura": 172,
+    "contato": [
+      134.2,
+      168.3
+    ],
+    "pivo": [
+      88.8,
+      92.8
+    ],
+    "tipo": "chao"
+  },
+  "grabUp": {
+    "arquivo": "bandeira-grabUp.png",
+    "largura": 167,
+    "altura": 191,
+    "contato": null,
+    "pivo": [
+      90.9,
+      92.5
+    ],
+    "tipo": "ar"
+  },
+  "grabDown": {
+    "arquivo": "bandeira-grabDown.png",
+    "largura": 174,
+    "altura": 161,
+    "contato": null,
+    "pivo": [
+      85.4,
+      76.7
+    ],
+    "tipo": "ar"
+  },
+  "grabFront": {
+    "arquivo": "bandeira-grabFront.png",
+    "largura": 195,
+    "altura": 174,
+    "contato": null,
+    "pivo": [
+      96.0,
+      85.4
+    ],
+    "tipo": "ar"
+  },
+  "grabBack": {
+    "arquivo": "bandeira-grabBack.png",
+    "largura": 190,
+    "altura": 173,
+    "contato": null,
+    "pivo": [
+      94.5,
+      85.4
+    ],
+    "tipo": "ar"
+  },
+  "rail": {
+    "arquivo": "bandeira-rail.png",
+    "largura": 209,
+    "altura": 170,
+    "contato": [
+      113.2,
+      166.9
+    ],
+    "pivo": [
+      95.5,
+      93.2
+    ],
+    "tipo": "chao"
+  },
+  "star": {
+    "arquivo": "bandeira-star.png",
+    "largura": 187,
+    "altura": 200,
+    "contato": null,
+    "pivo": [
+      84.7,
+      102.0
+    ],
+    "tipo": "ar"
+  },
+  "scared": {
+    "arquivo": "bandeira-scared.png",
+    "largura": 192,
+    "altura": 194,
+    "contato": null,
+    "pivo": [
+      82.9,
+      102.5
+    ],
+    "tipo": "ar"
+  },
+  "sig": {
+    "arquivo": "bandeira-sig.png",
+    "largura": 195,
+    "altura": 201,
+    "contato": null,
+    "pivo": [
+      87.2,
+      102.7
+    ],
+    "tipo": "ar"
+  },
+  "ride1": {
+    "arquivo": "bandeira-ride1.png",
+    "largura": 218,
+    "altura": 178,
+    "contato": [
+      129.6,
+      175.0
+    ],
+    "pivo": [
+      100.0,
+      97.5
+    ],
+    "tipo": "chao"
+  },
+  "tuck1": {
+    "arquivo": "bandeira-tuck1.png",
+    "largura": 219,
+    "altura": 127,
+    "contato": [
+      132.9,
+      124.2
+    ],
+    "pivo": [
+      101.8,
+      61.0
+    ],
+    "tipo": "chao"
+  },
+  "leanBack": {
+    "arquivo": "bandeira-leanBack.png",
+    "largura": 212,
+    "altura": 172,
+    "contato": [
+      127.2,
+      169.0
+    ],
+    "pivo": [
+      99.5,
+      95.1
+    ],
+    "tipo": "chao"
+  },
+  "leanFwd": {
+    "arquivo": "bandeira-leanFwd.png",
+    "largura": 207,
+    "altura": 165,
+    "contato": [
+      122.6,
+      161.7
+    ],
+    "pivo": [
+      101.7,
+      88.4
+    ],
+    "tipo": "chao"
+  }
+}

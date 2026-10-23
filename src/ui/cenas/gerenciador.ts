@@ -24,9 +24,10 @@ import { criarCenaAbertura } from './abertura';
 import { criarCenaJogo } from './jogo';
 import { criarCenaMenu } from './menu';
 import { criarCenaOpcoes } from './opcoes';
+import { criarCenaSelecao } from './selecao';
 
 /** Nome de cada cena do fluxo, para depuração/testes (o `id` que `Cena` já carrega). */
-export type IdCenaFluxo = 'abertura' | 'menu' | 'jogo' | 'opcoes';
+export type IdCenaFluxo = 'abertura' | 'menu' | 'jogo' | 'opcoes' | 'selecao';
 
 export interface OpcoesGerenciador {
   readonly canvas: AlvoToque;
@@ -61,6 +62,14 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
   function persistirConfig(): void {
     if (opcoes.armazenamento) salvarSave(opcoes.armazenamento, opcoes.save, REGRAS_SAVE);
   }
+
+  /** Personagem ativo: escolha do jogador, ou o primeiro inicial do catálogo quando ele nunca escolheu (implícito, nunca gravado por padrão). */
+  const obterPersonagemAtivo = (): string => opcoes.save.personagemAtivo ?? REGRAS_SAVE.iniciais[0] ?? 'capi';
+
+  const selecionarPersonagem = (id: string): void => {
+    opcoes.save.personagemAtivo = id;
+    persistirConfig();
+  };
 
   const alternarControles = (): void => {
     opcoes.save.cfg.controles = opcoes.save.cfg.controles === 'gestos' ? 'botoes' : 'gestos';
@@ -107,6 +116,18 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           documento: doc,
           aoJogar: () => irPara('jogo'),
           aoOpcoes: () => irPara('opcoes'),
+          aoPersonagem: () => irPara('selecao'),
+          obterPersonagemAtivo,
+        });
+      case 'selecao':
+        return criarCenaSelecao({
+          canvas,
+          janela,
+          documento: doc,
+          catalogo: REGRAS_SAVE.personagens,
+          obterPersonagemAtivo,
+          aoEscolher: selecionarPersonagem,
+          aoVoltar: () => irPara('menu'),
         });
       case 'opcoes':
         return criarCenaOpcoes({
@@ -129,6 +150,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoMenu: () => irPara('menu'),
           audio: opcoes.audio,
           save: opcoes.save,
+          personagem: obterPersonagemAtivo(),
         });
       default: {
         const nunca: never = id;

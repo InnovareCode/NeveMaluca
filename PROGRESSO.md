@@ -1,8 +1,13 @@
 # NEVE MALUCA — Progresso
 
-Atualizado em 2026-10-23. Repositório git local + remoto `origin` (GitHub) + **Pages publicado e jogável**. M0, M1a e a primeira leva de arte/UI (Capi + splash/menu/cenários Pixar) concluídos, commitados e no ar.
+Atualizado em 2026-10-23. Repositório git local + remoto `origin` (GitHub) + **Pages publicado e jogável**. M0, M1a e a primeira leva de arte/UI (Capi + splash/menu/cenários Pixar) concluídos, commitados e no ar. **Elenco completo (6/6) com arte pronta E jogável** — ainda NÃO commitado (ver "Estado").
 
 ## Estado em 2026-10-23 — o mais novo
+- **ELENCO COMPLETO E JOGÁVEL (ainda NÃO commitado, sem build/deploy):** os 6 personagens (Capi, Prof. Bandeira, Vó Cidinha, Tio Beto, Quequé, Bia Pipoca) têm arte pronta (mestra+F1+F2, aprovada pelo dono) e estão **jogáveis**:
+  - **Arte:** 120 sprites (5 novos × 24 poses) recortados e empacotados em `public/assets/personagens/<id>/` (manifesto + recortes), schema igual ao da Capi. Pipeline generalizada em `arte-fonte/ferramentas-curadoria/gerar_personagem.py` (Vega). Fontes em `arte-fonte/personagens/<id>/` (gitignored? conferir). Custo: ~198 dos 500 créditos Runway (D5 cota gratuita).
+  - **Jogo:** tela de **seleção de personagem** nova (`src/ui/cenas/selecao.ts`, botão PERSONAGEM no menu, tecla P), escolha persistida no save (`personagemAtivo` em `meta/`), id threadado até o loader; os 2 `'capi'` fixos trocados. Gating de desbloqueio é M3-futuro (todos liberados por ora). `npm run verificar` VERDE (488 unit, 18 build, 112 e2e) + e2e novo da seleção (Lyra).
+  - **Provado em jogo** (Atlas, navegador real): menu→seleção→escolhe Tio Beto→persiste no F5→desce o Morro do Pinhão com o sprite real; console limpo.
+  - **Pendências:** `brunao`→`beto` feito no catálogo; física por personagem (atributos elenco-m3 §4) é M3-futuro (todos usam `CONFIG_PADRAO`); doc `direcao-arte` §2/§7 ainda cita "Brunão"; `CONTEXTO-SESSAO.md` a atualizar.
 - **AO VIVO e jogável:** https://innovarecode.github.io/NeveMaluca/ (GitHub Pages; deploy por `.github/workflows/pages.yml`). Fluxo: splash → menu (JOGAR/MODOS/OPÇÕES) → descida com a Capi → resultado.
 - **`npm run verificar` VERDE** no main (2026-10-23): **436 unit, 18 e2e de build, 109 e2e** (2 skipped).
 - **Concluído, commitado e no remoto:**
@@ -56,6 +61,6 @@ Nenhuma formal no momento. Pontos menores a fechar na hora de gerar: os nomes fi
 | Fase 2 (Cenários) | Morro do Pinhão estilo Pixar (araucárias, pinheiros, celeiro vermelho, montanhas facetadas, partículas de spray e neve volumosa) | concluído, commitado e empurrado |
 | Fase 3 (Obstáculos & Gameplay) | Estilização vetorial rica 3D/Pixar (pedras facetadas, troncos com casca/anéis, boneco de neve, cerca/trilho para grind, rampas com bandeira e pinhão dourado) | concluído e testado unitariamente |
 | M2 | manobras, combos, replay e fantasma | **núcleo concluído e APROVADO pela Íris** (manobras pontuadas, combo, pontuação, nomes cômicos, popup + barra de combo, áudio sintetizado; commit 17c5080; `verificar` verde). Falta: replay/fantasma, música adaptativa, testes automatizados do render de manobra/combo |
-| M3 | 5 pistas e 4 personagens | não iniciado |
+| M3 | 5 pistas e os 5 personagens restantes | **arte do elenco 6/6 pronta e aprovada; os 5 novos JOGÁVEIS (recorte + seleção), `verificar` verde — a commitar.** Faltam: as 5 pistas, física por personagem (atributos), e F3/objetos de arte (adiáveis) |
 | M4 | polimento mobile | não iniciado |
 | M5 | segurança e deploy | não iniciado |

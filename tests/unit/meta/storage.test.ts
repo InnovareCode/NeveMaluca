@@ -33,6 +33,7 @@ import {
   sanearDiario,
   sanearExtras,
   sanearFantasmas,
+  sanearPersonagemAtivo,
   sanearProg,
   sanearRecorde,
   sanearRecordes,
@@ -356,6 +357,18 @@ describe('diario, fantasmas e extras', () => {
   });
 });
 
+describe('personagemAtivo (selecao de personagem)', () => {
+  it('id do catalogo inteiro passa, mesmo sem estar em desbloqueados (gating e M3-futuro)', () => {
+    expect(sanearPersonagemAtivo('pingu', REGRAS)).toBe('pingu'); // nao esta em prog.desbloqueados de ninguem
+    expect(sanearPersonagemAtivo('kaka', REGRAS)).toBe('kaka'); // inicial
+  });
+
+  it('ausente, lixo ou id fora do catalogo -> undefined (quem le decide o padrao)', () => {
+    for (const ruim of [undefined, null, 5, [], {}, 'urso-polar', 'kaka ', ''])
+      expect(sanearPersonagemAtivo(ruim, REGRAS)).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 describe('sanearSave', () => {
   it('lixo de qualquer tipo -> save vazio valido', () => {
@@ -372,6 +385,13 @@ describe('sanearSave', () => {
     const s = sanearSave({ v: 99, cfg: 3, lixo: undefined }, REGRAS);
     expect(Object.keys(s).sort()).toEqual(['cfg', 'prog', 'recordes', 'v']);
     expect(s.v).toBe(1);
+  });
+
+  it('personagemAtivo valido entra no save saneado; invalido ou ausente nao aparece', () => {
+    expect(sanearSave({ ...saveCheio(), personagemAtivo: 'pingu' }, REGRAS).personagemAtivo).toBe('pingu');
+    expect(sanearSave({ ...saveCheio(), personagemAtivo: 'ninja-fantasma' }, REGRAS).personagemAtivo).toBeUndefined();
+    expect(sanearSave(saveCheio(), REGRAS).personagemAtivo).toBeUndefined();
+    expect('personagemAtivo' in sanearSave(saveCheio(), REGRAS)).toBe(false);
   });
 
   it('nao muta a entrada', () => {

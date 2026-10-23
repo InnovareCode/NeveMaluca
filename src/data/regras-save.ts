@@ -24,8 +24,8 @@ export interface RegrasDoCatalogo {
   readonly versaoPista: Readonly<Record<string, string>>;
 }
 
-/** Elenco provisório (direção de arte §3): capivara, tamanduá, avó, os dois irmãos rivais e a Bia. A capivara é a mascote do M1. */
-export const PERSONAGENS_PROVISORIOS = ['capi', 'bandeira', 'cidinha', 'brunao', 'queque', 'bia'] as const;
+/** Elenco final (dono, elenco-m3): capivara, tamanduá, avó, o tio, o quero-quero e a Bia. A capivara é a mascote do M1. */
+export const PERSONAGENS_PROVISORIOS = ['capi', 'bandeira', 'cidinha', 'beto', 'queque', 'bia'] as const;
 /** Liberados de fábrica: só a mascote. Implícitos: nunca entram no save. */
 export const PERSONAGENS_INICIAIS = ['capi'] as const;
 

@@ -13,7 +13,7 @@ erro clara, nunca um jogo meio quebrado. `main.ts` importa esses módulos para o
 ## Estado (M0)
 
 - `regras-save.ts`: ids **provisórios** (vêm de `docs/direcao-arte-neve-maluca.md` §2-§3 e do plano) e `REGRAS_SAVE`, o que o `meta/storage.ts` pede
-  em `carregarSave(armazenamento, regras)`. Personagens `capi`, `bandeira`, `cidinha`, `brunao`, `queque`, `bia` (inicial: `capi`); pistas
+  em `carregarSave(armazenamento, regras)`. Personagens `capi`, `bandeira`, `cidinha`, `beto`, `queque`, `bia` (inicial: `capi`); pistas
   `morro-do-pinhao` (inicial), `pico-do-picole`, `vila-chocolate`, `vulcao-pe-gelado`, `cume-da-ventania`; 3 objetivos por pista (`<pista>-o1..o3`);
   `versaoPista` = `"provisoria"` até o gerador existir. Valida no import (`exigirRegrasSaveValidas`: `FORMA_ID`, repetição, iniciais existentes).
 - `meta/` importa `data/`, então `data/` **não** importa o tipo `RegrasSave`: declara a forma por estrutura (`RegrasDoCatalogo`) e o teste

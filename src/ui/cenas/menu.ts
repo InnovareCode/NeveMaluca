@@ -23,6 +23,10 @@ export interface OpcoesCenaMenu {
   readonly aoJogar: () => void;
   readonly aoModos?: (() => void) | undefined;
   readonly aoOpcoes: () => void;
+  /** Abre a tela de seleção de personagem; sem ela, o botão PERSONAGEM fica inerte (testes que não usam o recurso). */
+  readonly aoPersonagem?: (() => void) | undefined;
+  /** Id do personagem em destaque na vitrine (sprite + fallback); sem ele, mostra a `capi`. */
+  readonly obterPersonagemAtivo?: (() => string) | undefined;
 }
 
 const COR_CEU_TOPO = '#1b4b8a';
@@ -37,10 +41,12 @@ const BOTOES_X = 80;
 const BOTAO_JOGAR_Y = 220;
 const BOTAO_MODOS_Y = 295;
 const BOTAO_OPCOES_Y = 370;
+const BOTAO_PERSONAGEM_Y = 445;
 
 const BOTAO_JOGAR: BotaoRetangular = { id: 'jogar', x: BOTOES_X, y: BOTAO_JOGAR_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
 const BOTAO_MODOS: BotaoRetangular = { id: 'modos', x: BOTOES_X, y: BOTAO_MODOS_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
 const BOTAO_OPCOES: BotaoRetangular = { id: 'opcoes', x: BOTOES_X, y: BOTAO_OPCOES_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
+const BOTAO_PERSONAGEM: BotaoRetangular = { id: 'personagem', x: BOTOES_X, y: BOTAO_PERSONAGEM_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
 
 function pintarCenarioMenu(ctx: Ctx): void {
   // 1. Céu em degradê
@@ -128,7 +134,7 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
   let botaoHover: string | null = null;
   let cenario: CamadaEstatica | null = null;
 
-  void carregarSpritePersonagem('capi')
+  void carregarSpritePersonagem(opcoes.obterPersonagemAtivo?.() ?? 'capi')
     .then((s) => {
       spriteCapi = s;
     })
@@ -142,6 +148,7 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
     if (pontoDentroDoBotao(pt, BOTAO_JOGAR)) botaoHover = 'jogar';
     else if (pontoDentroDoBotao(pt, BOTAO_MODOS)) botaoHover = 'modos';
     else if (pontoDentroDoBotao(pt, BOTAO_OPCOES)) botaoHover = 'opcoes';
+    else if (pontoDentroDoBotao(pt, BOTAO_PERSONAGEM)) botaoHover = 'personagem';
     else botaoHover = null;
   };
 
@@ -157,6 +164,8 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
       else opcoes.aoJogar();
     } else if (pontoDentroDoBotao(pt, BOTAO_OPCOES)) {
       opcoes.aoOpcoes();
+    } else if (pontoDentroDoBotao(pt, BOTAO_PERSONAGEM)) {
+      opcoes.aoPersonagem?.();
     }
   };
 
@@ -166,6 +175,8 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
       opcoes.aoJogar();
     } else if (ev.code === 'KeyO') {
       opcoes.aoOpcoes();
+    } else if (ev.code === 'KeyP') {
+      opcoes.aoPersonagem?.();
     }
   };
 
@@ -247,6 +258,14 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
         corTopo: botaoHover === 'opcoes' ? '#4da2ff' : '#2a7de1',
         corBase: botaoHover === 'opcoes' ? '#1f6fd0' : '#144d8f',
         aoVivo: botaoHover === 'opcoes',
+      });
+
+      desenharBotao(ctx, {
+        ...BOTAO_PERSONAGEM,
+        texto: 'PERSONAGEM',
+        corTopo: botaoHover === 'personagem' ? '#4da2ff' : '#2a7de1',
+        corBase: botaoHover === 'personagem' ? '#1f6fd0' : '#144d8f',
+        aoVivo: botaoHover === 'personagem',
       });
 
       // Rodapé

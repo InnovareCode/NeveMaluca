@@ -1,0 +1,305 @@
+{
+  "ride0": {
+    "arquivo": "cidinha-ride0.png",
+    "largura": 169,
+    "altura": 196,
+    "contato": [
+      132.4,
+      193.2
+    ],
+    "pivo": [
+      83.0,
+      109.4
+    ],
+    "tipo": "chao"
+  },
+  "tuck0": {
+    "arquivo": "cidinha-tuck0.png",
+    "largura": 169,
+    "altura": 162,
+    "contato": [
+      130.2,
+      158.5
+    ],
+    "pivo": [
+      88.1,
+      93.4
+    ],
+    "tipo": "chao"
+  },
+  "jload": {
+    "arquivo": "cidinha-jload.png",
+    "largura": 170,
+    "altura": 188,
+    "contato": [
+      130.8,
+      185.1
+    ],
+    "pivo": [
+      83.5,
+      105.5
+    ],
+    "tipo": "chao"
+  },
+  "takeoff": {
+    "arquivo": "cidinha-takeoff.png",
+    "largura": 166,
+    "altura": 203,
+    "contato": null,
+    "pivo": [
+      77.5,
+      101.3
+    ],
+    "tipo": "ar"
+  },
+  "air": {
+    "arquivo": "cidinha-air.png",
+    "largura": 163,
+    "altura": 204,
+    "contato": null,
+    "pivo": [
+      81.7,
+      112.4
+    ],
+    "tipo": "ar"
+  },
+  "flip0": {
+    "arquivo": "cidinha-flip0.png",
+    "largura": 104,
+    "altura": 161,
+    "contato": null,
+    "pivo": [
+      43.3,
+      87.6
+    ],
+    "tipo": "ar"
+  },
+  "land": {
+    "arquivo": "cidinha-land.png",
+    "largura": 172,
+    "altura": 187,
+    "contato": [
+      128.4,
+      183.8
+    ],
+    "pivo": [
+      85.5,
+      105.6
+    ],
+    "tipo": "chao"
+  },
+  "wobble": {
+    "arquivo": "cidinha-wobble.png",
+    "largura": 178,
+    "altura": 188,
+    "contato": [
+      142.2,
+      184.4
+    ],
+    "pivo": [
+      75.7,
+      98.4
+    ],
+    "tipo": "chao"
+  },
+  "fall0": {
+    "arquivo": "cidinha-fall0.png",
+    "largura": 189,
+    "altura": 192,
+    "contato": [
+      138.9,
+      188.6
+    ],
+    "pivo": [
+      105.2,
+      104.2
+    ],
+    "tipo": "chao"
+  },
+  "fall1": {
+    "arquivo": "cidinha-fall1.png",
+    "largura": 178,
+    "altura": 143,
+    "contato": null,
+    "pivo": [
+      94.3,
+      75.5
+    ],
+    "tipo": "ar"
+  },
+  "fall2": {
+    "arquivo": "cidinha-fall2.png",
+    "largura": 199,
+    "altura": 143,
+    "contato": [
+      76.2,
+      139.6
+    ],
+    "pivo": [
+      109.1,
+      93.3
+    ],
+    "tipo": "corpo"
+  },
+  "celeb": {
+    "arquivo": "cidinha-celeb.png",
+    "largura": 169,
+    "altura": 196,
+    "contato": [
+      133.9,
+      192.5
+    ],
+    "pivo": [
+      78.8,
+      105.4
+    ],
+    "tipo": "chao"
+  },
+  "grabUp": {
+    "arquivo": "cidinha-grabUp.png",
+    "largura": 152,
+    "altura": 203,
+    "contato": null,
+    "pivo": [
+      81.9,
+      98.5
+    ],
+    "tipo": "ar"
+  },
+  "grabDown": {
+    "arquivo": "cidinha-grabDown.png",
+    "largura": 161,
+    "altura": 186,
+    "contato": null,
+    "pivo": [
+      77.6,
+      106.5
+    ],
+    "tipo": "ar"
+  },
+  "grabFront": {
+    "arquivo": "cidinha-grabFront.png",
+    "largura": 162,
+    "altura": 195,
+    "contato": null,
+    "pivo": [
+      84.9,
+      106.9
+    ],
+    "tipo": "ar"
+  },
+  "grabBack": {
+    "arquivo": "cidinha-grabBack.png",
+    "largura": 172,
+    "altura": 179,
+    "contato": null,
+    "pivo": [
+      99.3,
+      107.3
+    ],
+    "tipo": "ar"
+  },
+  "rail": {
+    "arquivo": "cidinha-rail.png",
+    "largura": 181,
+    "altura": 191,
+    "contato": [
+      69.9,
+      187.6
+    ],
+    "pivo": [
+      87.5,
+      106.9
+    ],
+    "tipo": "chao"
+  },
+  "star": {
+    "arquivo": "cidinha-star.png",
+    "largura": 177,
+    "altura": 198,
+    "contato": null,
+    "pivo": [
+      86.8,
+      113.7
+    ],
+    "tipo": "ar"
+  },
+  "scared": {
+    "arquivo": "cidinha-scared.png",
+    "largura": 171,
+    "altura": 192,
+    "contato": null,
+    "pivo": [
+      83.1,
+      106.0
+    ],
+    "tipo": "ar"
+  },
+  "sig": {
+    "arquivo": "cidinha-sig.png",
+    "largura": 145,
+    "altura": 180,
+    "contato": null,
+    "pivo": [
+      64.3,
+      101.0
+    ],
+    "tipo": "ar"
+  },
+  "ride1": {
+    "arquivo": "cidinha-ride1.png",
+    "largura": 182,
+    "altura": 187,
+    "contato": [
+      86.3,
+      184.1
+    ],
+    "pivo": [
+      87.0,
+      98.1
+    ],
+    "tipo": "chao"
+  },
+  "tuck1": {
+    "arquivo": "cidinha-tuck1.png",
+    "largura": 182,
+    "altura": 174,
+    "contato": [
+      90.7,
+      170.8
+    ],
+    "pivo": [
+      97.4,
+      99.1
+    ],
+    "tipo": "chao"
+  },
+  "leanBack": {
+    "arquivo": "cidinha-leanBack.png",
+    "largura": 182,
+    "altura": 190,
+    "contato": [
+      86.7,
+      186.5
+    ],
+    "pivo": [
+      96.1,
+      102.6
+    ],
+    "tipo": "chao"
+  },
+  "leanFwd": {
+    "arquivo": "cidinha-leanFwd.png",
+    "largura": 182,
+    "altura": 191,
+    "contato": [
+      91.0,
+      187.9
+    ],
+    "pivo": [
+      99.9,
+      106.8
+    ],
+    "tipo": "chao"
+  }
+}

@@ -81,6 +81,13 @@ export interface SaveV1 {
   fantasmas?: Record<IdPista, ReplayOpaco>;
   diario?: DiarioSave;
   /**
+   * Personagem escolhido pelo jogador (seleção de personagem, UI). ADITIVO (sem bump: ausente = jogador nunca
+   * escolheu, e quem lê decide o padrão — hoje o primeiro `RegrasSave.iniciais`, implícito, como os outros
+   * iniciais nunca gravados). Validado contra `RegrasSave.personagens` (o catálogo inteiro, não só
+   * `prog.desbloqueados`: o gating de desbloqueio ainda não existe, M3-futuro).
+   */
+  personagemAtivo?: IdPersonagem;
+  /**
    * Campos de raiz que este build nao conhece (o mesmo `v`, gravados por um build com campo aditivo): preservados
    * com limites (ver `MAX_EXTRAS_*` em storage.ts). Ausente quando nao ha.
    */

@@ -47,6 +47,8 @@ export interface OpcoesCenaDescida {
   readonly audio?: AudioDestravavel | undefined;
   /** Save, só para ler o volume (`cfg.som`) ao vivo. */
   readonly save?: SaveV1 | undefined;
+  /** Id do personagem escolhido (seleção de personagem, UI); sem ele, a cápsula/sprite padrão é a `capi`. */
+  readonly personagem?: string | undefined;
 }
 
 export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
@@ -63,7 +65,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
     : null;
 
   let spritePiloto: SpritePersonagem | null = null;
-  void carregarSpritePersonagem('capi')
+  void carregarSpritePersonagem(opcoes.personagem ?? 'capi')
     .then((s) => {
       spritePiloto = s;
     })

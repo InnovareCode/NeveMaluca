@@ -12,3 +12,4 @@ export * from './motor-teste';
 export * from './opcoes';
 export * from './pista-teste';
 export * from './resultado';
+export * from './selecao';

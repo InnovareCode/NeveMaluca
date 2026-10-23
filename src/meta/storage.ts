@@ -19,6 +19,7 @@ import type {
   ConfigSave,
   DiarioSave,
   EstadoCarga,
+  IdPersonagem,
   IdPista,
   Migracao,
   ModoControles,
@@ -74,7 +75,17 @@ export const CONFIG_PADRAO: Readonly<ConfigSave> = Object.freeze({
 });
 
 /** Chaves de raiz do contrato; qualquer outra e candidata a `extras`. */
-const CHAVES_CONHECIDAS: ReadonlySet<string> = new Set(['v', 'cfg', 'prog', 'recordes', 'recordesAntigos', 'fantasmas', 'diario', 'extras']);
+const CHAVES_CONHECIDAS: ReadonlySet<string> = new Set([
+  'v',
+  'cfg',
+  'prog',
+  'recordes',
+  'recordesAntigos',
+  'fantasmas',
+  'diario',
+  'personagemAtivo',
+  'extras',
+]);
 const FORMA_CHAVE_EXTRA = /^[a-z][A-Za-z0-9]{0,31}$/;
 
 /** Gancho de migracao. Vazio: este e o formato inaugural. Um build v2 acrescenta `{ de: 1, chave: CHAVE_SAVE, migrar }`. */
@@ -327,6 +338,16 @@ export function sanearDiario(bruto: unknown): DiarioSave | undefined {
   return melhor === undefined ? undefined : { data: bruto['data'], melhor };
 }
 
+/**
+ * Personagem ativo (escolha de personagem, UI): so e aceito se for um id do CATALOGO INTEIRO (`regras.personagens`),
+ * de proposito sem checar `prog.desbloqueados` — o gating de desbloqueio ainda nao existe (M3-futuro), e todo id do
+ * catalogo e selecionavel desde ja. Ausente, lixo, ou id fora do catalogo -> `undefined` (quem le decide o padrao;
+ * ver comentario em `meta/tipos.ts`), nunca um valor inventado aqui.
+ */
+export function sanearPersonagemAtivo(bruto: unknown, regras: RegrasSave): IdPersonagem | undefined {
+  return typeof bruto === 'string' && regras.personagens.includes(bruto) ? bruto : undefined;
+}
+
 /** Fantasmas: ate `MAX_FANTASMAS` no total (conhecidas primeiro, na ordem do catalogo), JSON simples e pequeno. */
 export function sanearFantasmas(bruto: unknown, regras: RegrasSave): Record<IdPista, ReplayOpaco> | undefined {
   if (!ehObjeto(bruto)) return undefined;
@@ -396,6 +417,7 @@ export function sanearSave(bruto: unknown, regras: RegrasSave): SaveV1 {
   const { recordes, recordesAntigos } = sanearRecordes(o['recordes'], o['recordesAntigos'], regras);
   const fantasmas = sanearFantasmas(o['fantasmas'], regras);
   const diario = sanearDiario(o['diario']);
+  const personagemAtivo = sanearPersonagemAtivo(o['personagemAtivo'], regras);
   // No disco os campos desconhecidos moram na RAIZ (um build mais novo os le onde os escreveu); em memoria, em `extras`.
   // Aceita as duas formas, para o saneamento ser idempotente sobre o proprio resultado.
   const extras = sanearExtras({ ...(ehObjeto(o['extras']) ? o['extras'] : {}), ...o });
@@ -407,6 +429,7 @@ export function sanearSave(bruto: unknown, regras: RegrasSave): SaveV1 {
     ...(Object.keys(recordesAntigos).length > 0 ? { recordesAntigos } : {}),
     ...(fantasmas !== undefined ? { fantasmas } : {}),
     ...(diario !== undefined ? { diario } : {}),
+    ...(personagemAtivo !== undefined ? { personagemAtivo } : {}),
     ...(extras !== undefined ? { extras } : {}),
   };
 }

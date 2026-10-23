@@ -252,7 +252,8 @@ para fora dela, e as duas coisas aparecem nessa vista:
 | Capi Barbosa | barril largo + sino do poncho | aba reta do chapéu; cuia na mão | vermelho-tijolo (~6°) | 0,80 |
 | Prof. Bandeira | corpo médio | **focinho comprido apontando para a direita e cauda-leque para a esquerda**: a silhueta mais larga | verde-azulado (~179°) | 0,90 |
 | Vó Cidinha | corpinho curvado e baixo | **pompom maior que a cabeça** | rosa-goiaba (~340°) + lavanda | 0,62 |
-| Brunão | **triângulo invertido** extremo | prancha minúscula sob os pés | tangerina (~28°) | 1,00 (referência) |
+| ~~Brunão~~ (arquivado) | **triângulo invertido** extremo | prancha minúscula sob os pés | tangerina (~28°) | 1,00 (referência) |
+| Tio Beto (troca o Brunão) | trapézio da camisa larga + bermuda até o joelho | **boias de braço** que dobram a largura dos braços | tangerina (~28°) | 1,00 (referência) |
 | Quequé | varapau: pernas finas e compridas | **penacho espetado para a esquerda** | azul-royal (~215°) | 0,88 |
 | Bia Bolota | **círculo** | câmera no topo do capacete | amarelo-sol (~46°) | 0,60 |
 
@@ -295,7 +296,29 @@ Regras de cor para todo o elenco, por causa da neve e do pipeline:
 - **Bordão:** "Sai da frente, netinho!" · **Pranchas:** Azul-Retrô · Toalhinha de Crochê · Porcelana de Domingo.
 - **Fundo da folha:** verde `#00FF00` (rosa e lavanda colidem com o magenta).
 
-#### BRUNÃO — fisiculturista humano, 29 anos (id `brunao`)
+#### TIO BETO — tio brasileiro, uns 45 anos (id `beto`) — substitui o Brunão (elenco M3, E2)
+- **Personalidade:** viu neve pela primeira vez e foi de bermuda, chinelo com meia e boia de braço, "porque vai que tem
+  água". Tira foto de tudo, faz piada de tio ("É pavê ou é pra descer?") e jura que não está com frio enquanto bate o
+  queixo. O jogo ri **da situação**, nunca do corpo dele.
+- **Assinatura — Espreguiçadeira:** no ar, recostado como numa cadeira de praia invisível, mãos atrás da cabeça,
+  cotovelos abertos, sorriso de férias. As "pernas cruzadas" do conceito viram **joelhos juntos e relaxados**: com os
+  dois pés presos na prancha não dá para cruzar, e pedir perna livre com os pés presos já falhou na F2 da Capi (§4.8).
+- **Silhueta:** corpo médio, altura de referência 1,00. A forma vem da roupa: camisa larga e solta, mais larga que os
+  ombros (trapézio), bermuda larga até o joelho, canelas finas de meia. **Detalhe-antena:** as duas boias de braço,
+  cada uma da largura da cabeça. Detalhes pequenos: protetor branco só no nariz, óculos escuros na testa, bigode, pochete.
+- **Paleta:** pele bronzeada `#B9805A`; camisa tangerina `#FF8A1F` com coqueiros creme `#F2E3C2`; bermuda azul-petróleo
+  `#0F4C6B` (petróleo puxado para o azul, matiz ~200°, de propósito: o verde-azulado da Bandeira é o que o fundo verde
+  apaga); boias amarelo-sol `#FFD23F`; chinelo azul-petróleo; meia branca de cano alto com duas listras tangerina
+  (branco só na meia e no nariz, área pequena); pochete marrom; **prancha rosa-flamingo `#FF5C8A`** com sol amarelo e
+  ondinhas brancas.
+- **Bordão:** "Frio? Isso aí é ar-condicionado!" · **Pranchas:** Flamingo · Guarda-Sol Listrado · Coqueiro de Ouro (lendária).
+- **Fundo da folha:** verde `#00FF00`. A prancha rosa colide com o magenta (mesmo motivo do Brunão e da Cidinha), e a
+  camisa tangerina, a maior área do traje, é vizinha do vermelho da Capi, que no magenta ganhou borda rosa.
+- **Originalidade:** turista genérico. Camisa tangerina de coqueiros, não a florida vermelha clássica; nada de camisa de
+  seleção ou clube, nada de bandeira, nada de marca no chinelo. Prancha sem verde: verde + amarelo das boias + azul da
+  bermuda leria como bandeira do Brasil.
+
+#### BRUNÃO — fisiculturista humano, 29 anos (id `brunao`) — ARQUIVADO (substituído pelo Tio Beto no elenco M3)
 - **Personalidade:** grandalhão de coração mole; jura que "frio é psicológico" e treme de regata; chora no pódio. O humor é a teimosia, nunca o corpo.
 - **Assinatura — Duplo Bíceps Voador:** no ar, pose de fisiculturista com os dois braços, sorrisão.
 - **Silhueta:** ombros enormes, cintura fina, pernas curtas, cabeça pequena com faixa; **prancha pequena demais**, de criança.
@@ -444,6 +467,12 @@ CHARACTER — VO CIDINHA: a tiny elderly grandmother, about 78 years old, short 
 ```
 
 ```
+CHARACTER — TIO BETO: a cheerful Brazilian uncle, about 45 years old, average build, warm tan skin #B9805A, short dark-brown hair graying at the temples, a thick dark mustache, big friendly eyes and a wide vacation smile. A stripe of white sunscreen only on his nose and dark sunglasses pushed up on his forehead. He wears a loose short-sleeved button-up tangerine shirt #FF8A1F with a cream #F2E3C2 coconut palm tree print, untucked, the top two buttons open, the wide hem flaring out; wide petrol-blue knee-length bermuda shorts #0F4C6B; a small brown fanny pack at the waist; and two big inflated sun-yellow swimming arm floats #FFD23F on his upper arms. Instead of snowboard boots he wears petrol-blue flip-flops over white tube socks pulled up to mid-shin with two thin tangerine stripes; on the snowboard the flip-flops sit in black bindings. No logos, no flags, no lettering. Snowboard: flamingo pink #FF5C8A with a simple yellow sun and thin white wave lines. BODY PROPORTIONS: the head is about one sixth of his height; the shirt is wider than his shoulders; each arm float is as wide as his head; thin shins in socks. Match the attached reference image exactly. Background color: solid flat pure green #00FF00.
+```
+
+Brunão arquivado (substituído pelo Tio Beto); o bloco fica só como registro:
+
+```
 CHARACTER — BRUNAO: a friendly giant bodybuilder man, about 29 years old, warm brown skin #8D5A3B, a small head with a big kind smile and a short buzz cut, a yellow sweatband on his forehead. Extremely wide shoulders and huge arms, a narrow waist and short legs: an exaggerated inverted triangle shape. He wears a tangerine sleeveless tank top #FF8A1F, grape-purple ski pants #5B3FE0, yellow wristbands and big black snowboard boots. Snowboard: much too small for him, a child-size bubblegum-pink board #FF5C8A with little hearts. BODY PROPORTIONS: the head is about one seventh of his height; the shoulders are three times as wide as the head. Match the attached reference image exactly. Background color: solid flat pure green #00FF00.
 ```
 
@@ -489,7 +518,8 @@ Row 3: on the baseline: (1) riding, a second frame: same as a relaxed ride but a
 - **CAPI:** `signature trick in the air: tucked and calm, eyes peacefully closed, sipping from the gourd cup with the silver straw, the other hand resting on his belly`
 - **BANDEIRA:** `signature trick in the air: gliding, the huge tail raised and fanned out high behind her like a sail, arms spread wide, snout pointing RIGHT, delighted face`
 - **CIDINHA:** `signature trick in the air: curled into a tight little ball hugging her knees, only the beanie, the knitting needles, the glasses and the board visible, a fierce happy face`
-- **BRUNAO:** `signature trick in the air: a double-biceps bodybuilder pose, both arms raised and flexed, huge grin`
+- **TIO BETO:** `signature trick in the air: reclining far back as if lying in an invisible beach lounge chair, his head to the LEFT of and higher than his feet, both hands clasped behind his head with the elbows out wide, both feet still strapped to the board, the board level under his feet, the knees bent and resting together, eyes half-closed, a lazy happy vacation smile`
+- ~~BRUNAO~~ (arquivado): `signature trick in the air: a double-biceps bodybuilder pose, both arms raised and flexed, huge grin`
 - **QUEQUE:** `signature trick in the air: gliding low, both wings spread wide, body stretched forward to the RIGHT, crest flat back, beak open shouting`
 - **BIA:** `signature trick in the air: the jacket zipped all the way up so she is a perfect round ball, only the top of the helmet with the camera, the mittens and the board sticking out`
 
@@ -501,7 +531,7 @@ Row 2: (1) tucked for a flip, a second frame: even tighter, eyes squeezed shut, 
 Row 3: this row only is a FRONT VIEW, the character facing the camera, standing on the baseline, OFF the board: (1) victory: holding the snowboard high above the head with both hands, shouting with joy, (2) victory catchphrase: [GESTO], (3) comic defeat: sitting on the snowboard, arms crossed, pouting, (4) character select pose: standing, the snowboard upright on its tail beside the character, one hand resting on top of it, confident smile.
 ```
 
-`[GESTO]`: CAPI `raising the gourd cup in a toast, eyes closed, calm smile` · BANDEIRA `pushing her glasses up the snout with one finger, the other hand giving a thumbs up` · CIDINHA `shaking a tiny fist in the air, laughing` · BRUNAO `happy tears streaming, hugging the tiny snowboard` · QUEQUE `chest puffed out, wings on the hips, beak up, shouting` · BIA `pointing at the camera on her helmet with both hands, winking`.
+`[GESTO]`: CAPI `raising the gourd cup in a toast, eyes closed, calm smile` · BANDEIRA `pushing her glasses up the snout with one finger, the other hand giving a thumbs up` · CIDINHA `shaking a tiny fist in the air, laughing` · TIO BETO `a carefree shrug with both palms up, chest out, big confident grin, shoulders a little hunched from the cold` · ~~BRUNAO~~ (arquivado) `happy tears streaming, hugging the tiny snowboard` · QUEQUE `chest puffed out, wings on the hips, beak up, shouting` · BIA `pointing at the camera on her helmet with both hands, winking`.
 
 ### 4.9 Exemplo montado por inteiro (CAPI, folha 1)
 
