@@ -25,6 +25,7 @@ import {
   carregarSave,
   ehDataUtc,
   ehInstanteUtc,
+  inserirFantasma,
   inserirRecorde,
   obterArmazenamentoDoNavegador,
   paraDisco,
@@ -280,6 +281,27 @@ describe('recordes por pista', () => {
     expect(inserirRecorde(save, 'vale', rec(999, 1000, { versaoPista: 'g0' }), REGRAS).posicao).toBeNull(); // versao antiga
     expect(inserirRecorde(save, 'vale', rec(999, 1000, { versaoPista: 'g0' }), REGRAS).save.recordesAntigos?.['vale']).toHaveLength(1);
     expect(inserirRecorde(save, 'vale', rec(999), REGRAS).posicao).toBe(0);
+  });
+
+  it('inserirFantasma: grava o replay opaco da pista (passa pelo validarReplay das regras), substitui o anterior, nao muta a entrada', () => {
+    const regras: RegrasSave = { ...REGRAS, validarReplay: (r) => (r as { v?: unknown }).v === 1 };
+    const save = saveVazio();
+    const antes = JSON.stringify(save);
+
+    const comFantasma = inserirFantasma(save, 'vale', { v: 1, comandos: 'AAAA' }, regras);
+    expect(JSON.stringify(save)).toBe(antes); // não mutou a entrada
+    expect(comFantasma.fantasmas?.['vale']).toEqual({ v: 1, comandos: 'AAAA' });
+
+    const substituido = inserirFantasma(comFantasma, 'vale', { v: 1, comandos: 'ZZZZ' }, regras);
+    expect(substituido.fantasmas?.['vale']).toEqual({ v: 1, comandos: 'ZZZZ' }); // 1 por pista: o novo troca o antigo
+  });
+
+  it('inserirFantasma: pista fora do catalogo ou replay reprovado pelo gancho -> nao entra (so saneia)', () => {
+    const regras: RegrasSave = { ...REGRAS, validarReplay: (r) => (r as { v?: unknown }).v === 1 };
+    const save = saveVazio();
+
+    expect(inserirFantasma(save, 'pista-que-nao-existe', { v: 1 }, regras).fantasmas).toBeUndefined();
+    expect(inserirFantasma(save, 'vale', { v: 2 }, regras).fantasmas).toBeUndefined(); // reprovado pelo gancho
   });
 });
 

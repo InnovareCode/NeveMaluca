@@ -10,8 +10,12 @@ parametro (`RegrasSave`), entao `meta/` nao depende de `data/` para ser testada.
 ## Estado (M0)
 
 - `tipos.ts`: contrato C4 (`SaveV1`, `Recorde`, `RegrasSave`, `ResultadoCarga`...). So tipos.
-- `storage.ts`: `carregarSave`, `salvarSave`, `sanearSave`, `inserirRecorde`, `ArmazenamentoResiliente`. Contrato publico e
-  decisoes em `docs/handoff-cronos-m0.md`.
+- `storage.ts`: `carregarSave`, `salvarSave`, `sanearSave`, `inserirRecorde`, `inserirFantasma`, `ArmazenamentoResiliente`.
+  Contrato publico e decisoes em `docs/handoff-cronos-m0.md`.
+- `inserirFantasma` (C6, replay/fantasma): grava o `ReplayV1` opaco (`SaveV1.fantasmas`, 1 por pista — a melhor descida
+  salva). Pura, igual `inserirRecorde`: devolve save novo ja saneado; pista fora do catalogo ou replay reprovado por
+  `RegrasSave.validarReplay` (gancho que `data/regras-save.ts` preenche com `validarReplayV1` do `core/`) nao entra.
+  Quem chama decide QUANDO (so quando `inserirRecorde` devolve posicao 0): ver `ui/cenas/gerenciador.ts`.
 - Testes: `tests/unit/meta/storage.test.ts` (Node, `Storage` falso em `tests/support/storage-falso.ts`).
 - Regra: **mudanca de formato = chave nova** (`neve-maluca-v2`); a v1 fica intacta para rollback de build.
 

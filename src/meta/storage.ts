@@ -463,6 +463,18 @@ export function inserirRecorde(
   return { save: proximo, posicao: indice >= 0 ? indice : null };
 }
 
+/**
+ * Registra o fantasma (replay C6) de uma pista: UM por pista, sempre substituindo o que havia (quem chama decide
+ * QUANDO — tipicamente só quando `inserirRecorde` devolve posição 0, o novo #1). Função pura: devolve um save novo,
+ * já saneado (`sanearSave` → `sanearFantasmas`), que recusa o replay se `regras.validarReplay` reprovar ou se a pista
+ * não existir no catálogo — nesses casos o save volta só saneado, sem o fantasma novo.
+ */
+export function inserirFantasma(save: SaveV1, pista: IdPista, replay: ReplayOpaco, regras: RegrasSave): SaveV1 {
+  const existe = regras.pistas.includes(pista) || regras.pistasIniciais.includes(pista);
+  if (!existe) return sanearSave(save, regras);
+  return sanearSave({ ...save, fantasmas: { ...save.fantasmas, [pista]: replay } }, regras);
+}
+
 // ---------------------------------------------------------------------------
 // Disco: inspecao, leitura, gravacao
 // ---------------------------------------------------------------------------

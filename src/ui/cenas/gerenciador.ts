@@ -11,16 +11,20 @@
  * O estado do save (audio on/off, modo de controles) mora aqui, com UM ponto de gravação (`salvarSave`),
  * conforme o comentário de C4. A tela de opções só avisa "alternou"; quem grava é este arquivo.
  */
-import { REGRAS_SAVE } from '../../data/regras-save';
+import type { ReplayV1 } from '../../core/contratos';
+import { validarReplayV1 } from '../../core/replay';
+import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
+import { REGRAS_SAVE, VERSAO_PROVISORIA_DA_PISTA } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { AudioDestravavel } from '../../audio/index';
-import type { ArmazenamentoLike, SaveV1 } from '../../meta/tipos';
-import { salvarSave } from '../../meta/storage';
+import type { ArmazenamentoLike, Recorde, ReplayOpaco, SaveV1 } from '../../meta/tipos';
+import { inserirFantasma, inserirRecorde, salvarSave } from '../../meta/storage';
 import type { Ctx } from '../../platform/canvas';
 import { alternarTelaCheia, situacaoDaTelaCheia, type AlvoTelaCheia } from '../../platform/tela-cheia';
 import type { Cena } from '../tipos';
 import { criarCenaAbertura } from './abertura';
+import type { ResultadoDescida } from './descida';
 import { criarCenaJogo } from './jogo';
 import { criarCenaMenu } from './menu';
 import { criarCenaOpcoes } from './opcoes';
@@ -61,6 +65,49 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
   /** Grava a config no save (um único ponto de escrita na Fase 1). */
   function persistirConfig(): void {
     if (opcoes.armazenamento) salvarSave(opcoes.armazenamento, opcoes.save, REGRAS_SAVE);
+  }
+
+  /**
+   * Substitui o CONTEÚDO do save em memória pelo `novo` (mesma identidade de objeto: quem guardou a referência de
+   * `opcoes.save` — ex. `criarCenaDescida` lendo `cfg.som` ao vivo — continua vendo os campos atualizados). Chaves
+   * que `novo` não tem (ex. `fantasmas` ficou vazio de novo) são removidas, não deixadas penduradas do save antigo.
+   */
+  function aplicarSave(novo: SaveV1): void {
+    const alvo = opcoes.save as unknown as Record<string, unknown>;
+    const fonte = novo as unknown as Record<string, unknown>;
+    for (const chave of new Set([...Object.keys(alvo), ...Object.keys(fonte)])) {
+      if (Object.hasOwn(fonte, chave)) alvo[chave] = fonte[chave];
+      else delete alvo[chave];
+    }
+  }
+
+  /** Fantasma salvo desta pista, já validado como `ReplayV1` (save guarda opaco; `sanearFantasmas` só confere forma/tamanho). */
+  function obterFantasma(pista: string): ReplayV1 | undefined {
+    const bruto = opcoes.save.fantasmas?.[pista];
+    if (bruto === undefined) return undefined;
+    const r = validarReplayV1(bruto);
+    return r.ok ? r.valor : undefined;
+  }
+
+  /**
+   * Registra recorde + fantasma ao fim de UMA descida (C6): sempre tenta o recorde; o fantasma (replay completo,
+   * mais caro) só é gravado quando o recorde bate o #1 da pista — fantasma é "a melhor descida", não um histórico.
+   * Único ponto de escrita de recorde/fantasma (mesma convenção de `persistirConfig` para a config).
+   */
+  function registrarResultadoDescida(resultado: ResultadoDescida): void {
+    const replay = resultado.replay;
+    if (!replay) return; // dublê de teste sem motor real por baixo: nada para persistir
+    const recorde: Recorde = {
+      pontos: resultado.pontos,
+      ticks: resultado.ticks,
+      personagem: replay.personagem,
+      versaoPista: REGRAS_SAVE.versaoPista[replay.pista] ?? VERSAO_PROVISORIA_DA_PISTA,
+      quando: new Date().toISOString(),
+    };
+    const { save: comRecorde, posicao } = inserirRecorde(opcoes.save, replay.pista, recorde, REGRAS_SAVE);
+    const comFantasma = posicao === 0 ? inserirFantasma(comRecorde, replay.pista, replay as unknown as ReplayOpaco, REGRAS_SAVE) : comRecorde;
+    aplicarSave(comFantasma);
+    persistirConfig();
   }
 
   /** Personagem ativo: escolha do jogador, ou o primeiro inicial do catálogo quando ele nunca escolheu (implícito, nunca gravado por padrão). */
@@ -151,6 +198,8 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           audio: opcoes.audio,
           save: opcoes.save,
           personagem: obterPersonagemAtivo(),
+          fantasma: obterFantasma(PISTA_MORRO_DO_PINHAO.id),
+          aoResultado: registrarResultadoDescida,
         });
       default: {
         const nunca: never = id;

@@ -77,3 +77,12 @@ export const CONFIG_PADRAO: ConfigDescida = {
 
 /** Velocidade (m/s) abaixo da qual o piloto é considerado "parado" para fins de pose/HUD. */
 export const VELOCIDADE_PARADO_MS = 0.3;
+
+/**
+ * Versão do motor da descida (contrato C6, `ReplayV1.versaoMotor`): identifica QUAL física gravou um replay. Mudar
+ * uma constante de `CONFIG_PADRAO` ou a lógica de `motor.ts` de um jeito que muda o resultado de um replay já salvo
+ * deve bumpar este texto — um fantasma gravado por uma versão antiga ainda decodifica (`ReplayV1` não trava nisso),
+ * mas passa a rodar com a física NOVA: pode dessincronizar visualmente do que o jogador viu na hora (cosmético, sem
+ * risco de segurança). Texto livre de 1 a 32 caracteres (ver `VERSAO_MOTOR_MAX` em `core/replay.ts`).
+ */
+export const VERSAO_MOTOR = '1';

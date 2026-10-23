@@ -10,11 +10,16 @@
  * Camadas: `data/` só importa `core/`. O tipo `RegrasSave` mora em `meta/` (que importa `data/`), então aqui a forma é declarada
  * por estrutura (`RegrasDoCatalogo`); `tests/unit/integracao-m0.test.ts` prova que ela é atribuível ao `RegrasSave` do `meta/`.
  * Valida no import (`exigirRegrasSaveValidas`): id fora da `FORMA_ID`, repetido ou inicial que não existe derruba o boot.
+ *
+ * `validarReplay` (gancho do fantasma C6, `meta/storage.ts` → `sanearFantasmas`/`inserirFantasma`) mora aqui porque é a
+ * única regra que precisa de `core/` além de `FORMA_ID`: `data/` pode importar `core/` (a proibição de ciclo é só na
+ * direção contrária), e `meta/` não pode importar `core/replay` direto sem quebrar "catálogo de ids entra por parâmetro".
  */
 import { FORMA_ID } from '../core/constantes';
 import { ErroDeContrato } from '../core/erros';
+import { validarReplayV1 } from '../core/replay';
 
-/** Forma das regras que o `meta/` espera (cópia estrutural de `RegrasSave`, sem o gancho opcional `validarReplay`). */
+/** Forma das regras que o `meta/` espera (cópia estrutural de `RegrasSave`, incluindo o gancho `validarReplay`). */
 export interface RegrasDoCatalogo {
   readonly personagens: readonly string[];
   readonly iniciais: readonly string[];
@@ -22,6 +27,8 @@ export interface RegrasDoCatalogo {
   readonly pistasIniciais: readonly string[];
   readonly objetivos: readonly string[];
   readonly versaoPista: Readonly<Record<string, string>>;
+  /** Replay C6 válido (forma, limites, comandos decodificáveis) — ver `core/replay.ts`. */
+  readonly validarReplay: (replay: unknown) => boolean;
 }
 
 /** Elenco final (dono, elenco-m3): capivara, tamanduá, avó, o tio, o quero-quero e a Bia. A capivara é a mascote do M1. */
@@ -54,6 +61,7 @@ export const REGRAS_SAVE: RegrasDoCatalogo = {
   pistasIniciais: PISTAS_INICIAIS,
   objetivos: OBJETIVOS_PROVISORIOS,
   versaoPista: VERSAO_DAS_PISTAS,
+  validarReplay: (replay) => validarReplayV1(replay).ok,
 };
 
 function problemasDeLista(rotulo: string, ids: readonly string[]): string[] {
