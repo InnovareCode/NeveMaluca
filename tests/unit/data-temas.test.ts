@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TEMA_BOSQUE as TEMA_BOSQUE_DO_RENDER } from '../../src/render/temas/bosque';
-import { problemasDosTemasDeDados, TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA } from '../../src/data/temas';
+import { problemasDosTemasDeDados, TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO } from '../../src/data/temas';
 
 describe('TEMAS_DE_DADOS: validação de forma', () => {
   it('não acusa nenhum problema (catálogo publicado é válido)', () => {
@@ -26,6 +26,12 @@ describe('TEMAS_DE_DADOS: validação de forma', () => {
     expect(TEMA_VILA.id).toBe('vila');
     expect(TEMA_VILA.clima).toBe('neve-noturna');
     expect(TEMA_VILA.cores.ceu).toHaveLength(2);
+  });
+
+  it('TEMA_VULCAO (Vulcão Pé-Gelado) tem os 7 campos de cor e o clima "vapor"', () => {
+    expect(TEMA_VULCAO.id).toBe('vulcao');
+    expect(TEMA_VULCAO.clima).toBe('vapor');
+    expect(TEMA_VULCAO.cores.ceu).toHaveLength(2);
   });
 
   it('acusa cor fora do formato hex (mutação)', () => {

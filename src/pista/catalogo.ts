@@ -54,7 +54,8 @@ export const TIPO_BONECO_DE_NEVE: TipoObjeto = 'boneco-de-neve';
 /**
  * Trechos cujo início é seguro para virar checkpoint (chão estável, sem risco de respawn no meio do ar/queda).
  * `palito-longo` entra pelo mesmo motivo que `trilho`: chão plano reto, sem lançamento nem queda. `varal` e
- * `chamine` (Vila) entram pela mesma razão: chão plano, sem lançamento nem queda.
+ * `chamine` (Vila) entram pela mesma razão: chão plano, sem lançamento nem queda. `basalto` (Vulcão) idem: chão
+ * quase plano com obstáculos duros, sem lançamento nem queda — mesmo caso de `pedras`/`chamine`.
  */
 export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
   'reta',
@@ -65,6 +66,7 @@ export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
   'palito-longo',
   'varal',
   'chamine',
+  'basalto',
 ]);
 
 /**
@@ -80,6 +82,11 @@ export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
  * Trechos-assinatura da Vila do Chocolate Quente (M3 §B.2) na mesma família: `telhados` é lançamento (beiral) +
  * queda (parede) encadeados, como `vao`; `escadaria` é uma série de quedas curtas, como `degrau`/`carrinhos`.
  * `varal` e `chamine` ficam de fora (chão plano, como `trilho`/`pedras`).
+ *
+ * Trechos-assinatura do Vulcão Pé-Gelado (M3 §B.2, ficha `docs/temas-pistas-m3.md` §3) na mesma família: `geiser`
+ * é um lançamento curto e íngreme, mesma família de `rampa`; `ponte-basalto` e `cratera` são vãos (lançamento +
+ * queda), mesma família de `vao`/`vao-calda`/`telhados` — precisam do embalo de ANTES. `basalto` fica de fora
+ * (chão quase plano com obstáculos, como `pedras`/`chamine`).
  */
 export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set([
   'rampa',
@@ -90,6 +97,9 @@ export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set([
   'carrinhos',
   'telhados',
   'escadaria',
+  'geiser',
+  'ponte-basalto',
+  'cratera',
 ]);
 
 const TRECHOS: readonly DefTrecho[] = [
@@ -338,6 +348,79 @@ const TRECHOS: readonly DefTrecho[] = [
       { dx: 18, dy: -3.9, anguloGraus: -11 },
     ],
     objetos: [{ tipo: 'pedra', dx: 9, largura: 1.4, altura: 1.0, variante: 0 }],
+  },
+
+  // --- Trechos-assinatura do Vulcão Pé-Gelado (M3 F3, plano §B.2/§B.3, ficha `docs/temas-pistas-m3.md` §3).
+  // SÓ GEOMETRIA: a pele (crosta de gêiser, ponte de basalto, prisma de basalto, parede de basalto com rachadura
+  // de magma) é do `PintorTema` da Lyra, pela mesma detecção de inclinação (§0.4) e pelos tipos de objeto já
+  // existentes (`pedra` -> prisma/bomba vulcânica, trilho -> ponte de basalto). Nenhum `TipoObjeto` novo, nenhuma
+  // mudança no algoritmo do gerador. Regra do F0: entram SÓ NO FIM deste array, e nenhum trecho de cima (Morro,
+  // Picolé, Vila) foi tocado.
+  {
+    id: 'geiser',
+    comprimentoM: 10,
+    dificuldade: 0.55,
+    velMinEntradaMs: 6,
+    pontos: [
+      // Mesma família de forma da `rampa` (sobe e lança), só mais curta e mais íngreme ("crosta de gêiser"): o
+      // ângulo final de lançamento é maior (30° em vez de 22°).
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 5, dy: -1.0, anguloGraus: -14 },
+      { dx: 10, dy: 0.4, anguloGraus: 30 },
+    ],
+  },
+  {
+    id: 'ponte-basalto',
+    comprimentoM: 18,
+    dificuldade: 0.72,
+    velMinEntradaMs: 7,
+    proibidoApos: ['ponte-basalto', 'cratera'],
+    pontos: [
+      // Mesma família de forma do `vao` (sobe com a tangente de um lançamento anterior, vira no alto e desce numa
+      // queda): o "vão com trilho por cima" da ficha é esta mesma cova, com um trilho (a ponte de lajes) atravessando
+      // por cima dela — o jogador escolhe grindar a ponte ou cair na cova e pousar embaixo.
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 3, dy: 1.3, anguloGraus: 0 },
+      { dx: 6, dy: 1.3, anguloGraus: -32 },
+      { dx: 10, dy: -3.6, anguloGraus: -32 },
+      { dx: 13, dy: -5.4, anguloGraus: 0 },
+      { dx: 18, dy: -5.4, anguloGraus: -12 },
+    ],
+    trilho: { dx0: 4, dx1: 12, altura: 0.5 },
+  },
+  {
+    id: 'basalto',
+    comprimentoM: 24,
+    dificuldade: 0.5,
+    velMinEntradaMs: 0,
+    pontos: [
+      // Chão quase plano, como `pedras`/`chamine`, com 3 obstáculos em sequência e alturas diferentes (os prismas
+      // de basalto da ficha, "2 a 3 prismas em sequência, alturas diferentes").
+      { dx: 0, dy: 0, anguloGraus: -12 },
+      { dx: 24, dy: -5.2, anguloGraus: -12 },
+    ],
+    objetos: [
+      { tipo: 'pedra', dx: 6, largura: 1.3, altura: 0.9, variante: 0 },
+      { tipo: 'pedra', dx: 13, largura: 1.1, altura: 1.3, variante: 1 },
+      { tipo: 'pedra', dx: 19, largura: 1.4, altura: 0.7, variante: 0 },
+    ],
+  },
+  {
+    id: 'cratera',
+    comprimentoM: 26,
+    dificuldade: 0.78,
+    velMinEntradaMs: 8,
+    proibidoApos: ['ponte-basalto', 'cratera'],
+    pontos: [
+      // Mesma família do `vao-calda`/`telhados` (lançamento + queda + pouso quase plano), só mais larga e funda: o
+      // "vão largo" da ficha, com a maior parede de basalto e o maior brilho de magma da pista.
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 4, dy: 1.5, anguloGraus: 0 },
+      { dx: 8, dy: 1.5, anguloGraus: -30 },
+      { dx: 14, dy: -4.4, anguloGraus: -30 },
+      { dx: 17, dy: -6.5, anguloGraus: 0 },
+      { dx: 26, dy: -6.5, anguloGraus: -12 },
+    ],
   },
 ];
 

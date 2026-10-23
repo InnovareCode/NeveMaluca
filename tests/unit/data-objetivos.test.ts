@@ -5,7 +5,19 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CAMPOS_RESUMO_DESCIDA } from '../../src/core/contratos';
-import { OBJETIVOS_DE_DADOS, PICOLE_O1, PICOLE_O2, PICOLE_O3, problemasDosObjetivosDeDados, VILA_O1, VILA_O2, VILA_O3 } from '../../src/data/objetivos';
+import {
+  OBJETIVOS_DE_DADOS,
+  PICOLE_O1,
+  PICOLE_O2,
+  PICOLE_O3,
+  problemasDosObjetivosDeDados,
+  VILA_O1,
+  VILA_O2,
+  VILA_O3,
+  VULCAO_O1,
+  VULCAO_O2,
+  VULCAO_O3,
+} from '../../src/data/objetivos';
 import { REGRAS_SAVE } from '../../src/data/regras-save';
 
 describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
@@ -13,7 +25,7 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(problemasDosObjetivosDeDados()).toEqual([]);
   });
 
-  it('os 3 objetivos do Picolé e os 3 da Vila existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
+  it('os 3 objetivos do Picolé, os 3 da Vila e os 3 do Vulcão existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
     expect(OBJETIVOS_DE_DADOS.map((d) => d.id)).toEqual([
       'pico-do-picole-o1',
       'pico-do-picole-o2',
@@ -21,6 +33,9 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
       'vila-chocolate-o1',
       'vila-chocolate-o2',
       'vila-chocolate-o3',
+      'vulcao-pe-gelado-o1',
+      'vulcao-pe-gelado-o2',
+      'vulcao-pe-gelado-o3',
     ]);
     for (const def of OBJETIVOS_DE_DADOS) expect(REGRAS_SAVE.objetivos).toContain(def.id);
   });
@@ -32,6 +47,9 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(VILA_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
     expect(VILA_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 4 });
     expect(VILA_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 18_000 });
+    expect(VULCAO_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
+    expect(VULCAO_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 5 });
+    expect(VULCAO_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 21_000 });
   });
 
   it('todo CondicaoObjetivo.campo (inclusive dentro de "todos") está em CAMPOS_RESUMO_DESCIDA', () => {

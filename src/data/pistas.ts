@@ -113,7 +113,50 @@ export const PISTA_VILA_CHOCOLATE: DefPista = {
   desbloqueio: { tipo: 'objetivos', total: 4 },
 };
 
-export const PISTAS_DE_DADOS: readonly DefPista[] = [PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE, PISTA_VILA_CHOCOLATE];
+/**
+ * Pista 4 (M3 F3, plano §B.2): o vulcão de gelo e magma da Professora Bandeira (ficha `docs/temas-pistas-m3.md`
+ * §3). Trechos-assinatura de GEOMETRIA no FIM do catálogo (`pista/catalogo.ts`): `geiser`, `ponte-basalto`,
+ * `basalto`, `cratera` — a pele (crosta de gêiser, ponte de lajes, prisma de basalto, parede com rachadura de
+ * magma) é da Lyra, por cima do mesmo `TipoObjeto`/feição que já existe. `vao`/`degrau`/`trilho`/`pedras`
+ * originais ficam de fora dos pesos (trocados pelos irmãos temáticos, mesmo padrão do Picolé/Vila); `rampa` fica
+ * (mesmo padrão da Vila: ela também é skinada como "crosta de gêiser" pela detecção de inclinação, §0.4 da
+ * ficha). `hashEsperado` calculado por `ferramentas/harness/cli.mjs -- --pista vulcao-pe-gelado` depois de o
+ * catálogo estar fechado.
+ */
+export const PISTA_VULCAO_PE_GELADO: DefPista = {
+  id: 'vulcao-pe-gelado',
+  nome: 'Vulcão Pé-Gelado',
+  tema: 'vulcao',
+  semente: 20261025,
+  comprimentoM: 1100,
+  dificuldade: [0.35, 0.8],
+  trechos: {
+    reta: 4,
+    ondulado: 3,
+    boneco: 1.2,
+    basalto: 1.3,
+    'ponte-basalto': 1.1,
+    rampa: 0.7,
+    geiser: 0.6,
+    cratera: 0.4,
+  },
+  musica: 'milonga-vulcao',
+  objetivos: ['vulcao-pe-gelado-o1', 'vulcao-pe-gelado-o2', 'vulcao-pe-gelado-o3'],
+  // Travado por `pista-gerador.test.ts` e por `exigirPistaValida`, igual ao Morro/Picolé/Vila: mudar o
+  // catálogo/algoritmo do gerador muda este hash de propósito (invalida recordes antigos, que vão para
+  // `recordesAntigos`, não somem).
+  hashEsperado: 'fa202a1f434bf5d2',
+  // Campos de PROGRESSÃO (plano M3 §B.3), ignorados pelo gerador: não entram no hash acima.
+  ordem: 4,
+  desbloqueio: { tipo: 'objetivos', total: 6 },
+};
+
+export const PISTAS_DE_DADOS: readonly DefPista[] = [
+  PISTA_MORRO_DO_PINHAO,
+  PISTA_PICO_DO_PICOLE,
+  PISTA_VILA_CHOCOLATE,
+  PISTA_VULCAO_PE_GELADO,
+];
 
 /** Busca um `DefPista` do catálogo por id (ex.: seleção de pista na cena de descida). `undefined` se não existir. */
 export function obterPistaDeDados(id: string, defs: readonly DefPista[] = PISTAS_DE_DADOS): DefPista | undefined {

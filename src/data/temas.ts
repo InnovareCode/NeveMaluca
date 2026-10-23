@@ -67,7 +67,23 @@ export const TEMA_VILA: DefTema = {
   musica: 'valsa-chocolate',
 };
 
-export const TEMAS_DE_DADOS: readonly DefTema[] = [TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA];
+/** Vulcão Pé-Gelado (`docs/temas-pistas-m3.md` §3.1; clima e música de §5). */
+export const TEMA_VULCAO: DefTema = {
+  id: 'vulcao',
+  cores: {
+    ceu: ['#1F2A55', '#7A5A8A'],
+    montanhaDistante: '#3A3F66',
+    montanhaMedia: '#2B2E45',
+    silhueta: '#2A2638',
+    neveLuz: '#EEF5FF',
+    neveSombra: '#7FA0C8',
+    destaque: '#FF6A1F',
+  },
+  clima: 'vapor',
+  musica: 'milonga-vulcao',
+};
+
+export const TEMAS_DE_DADOS: readonly DefTema[] = [TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO];
 
 function problemasDeDefTema(def: DefTema): string[] {
   const p: string[] = [];
