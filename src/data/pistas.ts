@@ -77,7 +77,43 @@ export const PISTA_PICO_DO_PICOLE: DefPista = {
   desbloqueio: { tipo: 'objetivos', total: 2 },
 };
 
-export const PISTAS_DE_DADOS: readonly DefPista[] = [PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE];
+/**
+ * Pista 3 (M3 F3, plano §B.2): a vila colonial da Vó Cidinha, "os telhados viraram pista" (ficha
+ * `docs/temas-pistas-m3.md` §2). Trechos-assinatura de GEOMETRIA no FIM do catálogo (`pista/catalogo.ts`):
+ * `telhados`, `escadaria`, `varal`, `chamine` — a pele (telha colonial, enxaimel, varal de luzinhas) é da Lyra,
+ * por cima do mesmo `TipoObjeto`/feição que já existe. `vao`/`degrau` originais ficam de fora dos pesos (trocados
+ * pelos irmãos temáticos `telhados`/`escadaria`, mesmo padrão do Picolé). `hashEsperado` calculado por
+ * `ferramentas/harness/cli.mjs -- --pista vila-chocolate` depois de o catálogo estar fechado.
+ */
+export const PISTA_VILA_CHOCOLATE: DefPista = {
+  id: 'vila-chocolate',
+  nome: 'Vila do Chocolate Quente',
+  tema: 'vila',
+  semente: 20261024,
+  comprimentoM: 1100,
+  dificuldade: [0.25, 0.65],
+  trechos: {
+    reta: 4.5,
+    ondulado: 3,
+    boneco: 1.5,
+    chamine: 1.3,
+    varal: 1.2,
+    rampa: 0.8,
+    telhados: 0.6,
+    escadaria: 0.5,
+  },
+  musica: 'valsa-chocolate',
+  objetivos: ['vila-chocolate-o1', 'vila-chocolate-o2', 'vila-chocolate-o3'],
+  // Travado por `pista-gerador.test.ts` e por `exigirPistaValida`, igual ao Morro e ao Picolé: mudar o
+  // catálogo/algoritmo do gerador muda este hash de propósito (invalida recordes antigos, que vão para
+  // `recordesAntigos`, não somem).
+  hashEsperado: 'f2677ef8e26391d8',
+  // Campos de PROGRESSÃO (plano M3 §B.3), ignorados pelo gerador: não entram no hash acima.
+  ordem: 3,
+  desbloqueio: { tipo: 'objetivos', total: 4 },
+};
+
+export const PISTAS_DE_DADOS: readonly DefPista[] = [PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE, PISTA_VILA_CHOCOLATE];
 
 /** Busca um `DefPista` do catálogo por id (ex.: seleção de pista na cena de descida). `undefined` se não existir. */
 export function obterPistaDeDados(id: string, defs: readonly DefPista[] = PISTAS_DE_DADOS): DefPista | undefined {

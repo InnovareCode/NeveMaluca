@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TEMA_BOSQUE as TEMA_BOSQUE_DO_RENDER } from '../../src/render/temas/bosque';
-import { problemasDosTemasDeDados, TEMA_BOSQUE, TEMA_PARQUE } from '../../src/data/temas';
+import { problemasDosTemasDeDados, TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA } from '../../src/data/temas';
 
 describe('TEMAS_DE_DADOS: validação de forma', () => {
   it('não acusa nenhum problema (catálogo publicado é válido)', () => {
@@ -20,6 +20,12 @@ describe('TEMAS_DE_DADOS: validação de forma', () => {
     expect(TEMA_PARQUE.id).toBe('parque');
     expect(TEMA_PARQUE.clima).toBe('confeito');
     expect(TEMA_PARQUE.cores.ceu).toHaveLength(2);
+  });
+
+  it('TEMA_VILA (Vila do Chocolate Quente) tem os 7 campos de cor e o clima "neve-noturna"', () => {
+    expect(TEMA_VILA.id).toBe('vila');
+    expect(TEMA_VILA.clima).toBe('neve-noturna');
+    expect(TEMA_VILA.cores.ceu).toHaveLength(2);
   });
 
   it('acusa cor fora do formato hex (mutação)', () => {

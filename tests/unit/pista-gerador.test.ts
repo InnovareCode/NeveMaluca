@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DefPista } from '../../src/core/contratos';
 import { FORMATO_HASH } from '../../src/core/hash';
-import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE } from '../../src/data/pistas';
+import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE, PISTA_VILA_CHOCOLATE } from '../../src/data/pistas';
 import { TIPOS_PROIBIDOS_NA_ABERTURA, TIPOS_SEGUROS_PARA_CHECKPOINT } from '../../src/pista/catalogo';
 import { inclinacaoGrausEm } from '../../src/pista/consulta';
 import { exigirPistaValida, exigirPistasValidas, gerarPista } from '../../src/pista/gerador';
@@ -147,6 +147,34 @@ describe('pista publicada: pico-do-picole (M3 F3, plano §B.2)', () => {
         expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(true);
         expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(false);
       }
+    }
+  });
+});
+
+describe('pista publicada: vila-chocolate (M3 F3, plano §B.2)', () => {
+  it('hashEsperado em src/data/pistas.ts bate com o gerador atual', () => {
+    expect(() => exigirPistaValida(PISTA_VILA_CHOCOLATE)).not.toThrow();
+  });
+
+  it('usa só trechos elegíveis (base + assinatura da Vila), tangente casada e dentro da faixa [0, comprimentoM]', () => {
+    const pista = gerarPista(PISTA_VILA_CHOCOLATE);
+    expect(pista.chegadaX).toBe(PISTA_VILA_CHOCOLATE.comprimentoM);
+    expect(pista.checkpoints[0]).toBe(0);
+    for (const o of pista.objetos) expect(o.x).toBeLessThan(pista.chegadaX);
+  });
+
+  it('obterPistaDeDados("vila-chocolate") encontra a pista', () => {
+    expect(obterPistaDeDados('vila-chocolate')?.id).toBe('vila-chocolate');
+  });
+
+  it('"telhados" e "escadaria" não podem abrir a pista nem virar checkpoint (mesma razão de vao/degrau); "varal" e "chamine" podem (chão plano, como trilho/pedras)', () => {
+    for (const id of ['telhados', 'escadaria']) {
+      expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(true);
+      expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(false);
+    }
+    for (const id of ['varal', 'chamine']) {
+      expect(TIPOS_PROIBIDOS_NA_ABERTURA.has(id)).toBe(false);
+      expect(TIPOS_SEGUROS_PARA_CHECKPOINT.has(id)).toBe(true);
     }
   });
 });

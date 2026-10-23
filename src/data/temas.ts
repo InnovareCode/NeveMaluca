@@ -51,7 +51,23 @@ export const TEMA_PARQUE: DefTema = {
   musica: 'pop-picole',
 };
 
-export const TEMAS_DE_DADOS: readonly DefTema[] = [TEMA_BOSQUE, TEMA_PARQUE];
+/** Vila do Chocolate Quente (`docs/temas-pistas-m3.md` §2.1; clima e música de §5). */
+export const TEMA_VILA: DefTema = {
+  id: 'vila',
+  cores: {
+    ceu: ['#2A2257', '#E88A5A'],
+    montanhaDistante: '#5B4A8A',
+    montanhaMedia: '#3F3570',
+    silhueta: '#3A2E5C',
+    neveLuz: '#EAF0FF',
+    neveSombra: '#8F9BD1',
+    destaque: '#FFB84D',
+  },
+  clima: 'neve-noturna',
+  musica: 'valsa-chocolate',
+};
+
+export const TEMAS_DE_DADOS: readonly DefTema[] = [TEMA_BOSQUE, TEMA_PARQUE, TEMA_VILA];
 
 function problemasDeDefTema(def: DefTema): string[] {
   const p: string[] = [];

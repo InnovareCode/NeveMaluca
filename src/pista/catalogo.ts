@@ -53,9 +53,19 @@ export const TIPO_BONECO_DE_NEVE: TipoObjeto = 'boneco-de-neve';
 
 /**
  * Trechos cujo início é seguro para virar checkpoint (chão estável, sem risco de respawn no meio do ar/queda).
- * `palito-longo` entra pelo mesmo motivo que `trilho`: chão plano reto, sem lançamento nem queda.
+ * `palito-longo` entra pelo mesmo motivo que `trilho`: chão plano reto, sem lançamento nem queda. `varal` e
+ * `chamine` (Vila) entram pela mesma razão: chão plano, sem lançamento nem queda.
  */
-export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set(['reta', 'ondulado', 'trilho', 'pedras', 'boneco', 'palito-longo']);
+export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set([
+  'reta',
+  'ondulado',
+  'trilho',
+  'pedras',
+  'boneco',
+  'palito-longo',
+  'varal',
+  'chamine',
+]);
 
 /**
  * Trechos que nunca podem ABRIR a pista. `rampa`/`vao`/`degrau` têm a forma desenhada para encadear com o que vem
@@ -66,8 +76,21 @@ export const TIPOS_SEGUROS_PARA_CHECKPOINT: ReadonlySet<IdTrecho> = new Set(['re
  * Trechos-assinatura do Picolé (M3 §B.2) que herdam a MESMA restrição, pela mesma razão: `kicker-duplo` e
  * `vao-calda` são formas de lançamento/vão (precisam de embalo de ANTES); `carrinhos` é uma série de degraus baixos
  * (mesmo caso de `degrau`). `palito-longo` fica de fora (é chão plano com trilho longo, como `trilho` já é hoje).
+ *
+ * Trechos-assinatura da Vila do Chocolate Quente (M3 §B.2) na mesma família: `telhados` é lançamento (beiral) +
+ * queda (parede) encadeados, como `vao`; `escadaria` é uma série de quedas curtas, como `degrau`/`carrinhos`.
+ * `varal` e `chamine` ficam de fora (chão plano, como `trilho`/`pedras`).
  */
-export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set(['rampa', 'vao', 'degrau', 'kicker-duplo', 'vao-calda', 'carrinhos']);
+export const TIPOS_PROIBIDOS_NA_ABERTURA: ReadonlySet<IdTrecho> = new Set([
+  'rampa',
+  'vao',
+  'degrau',
+  'kicker-duplo',
+  'vao-calda',
+  'carrinhos',
+  'telhados',
+  'escadaria',
+]);
 
 const TRECHOS: readonly DefTrecho[] = [
   {
@@ -244,6 +267,77 @@ const TRECHOS: readonly DefTrecho[] = [
       { dx: 18, dy: -4.4, anguloGraus: -30 },
       { dx: 22, dy: -5, anguloGraus: -12 },
     ],
+  },
+
+  // --- Trechos-assinatura da Vila do Chocolate Quente (M3 F3, plano §B.2/§B.3, ficha `docs/temas-pistas-m3.md`
+  // §2). SÓ GEOMETRIA: a pele (telha colonial, enxaimel, varal de luzinhas, chaminé) é do `PintorTema` da Lyra,
+  // a partir da mesma inclinação detectada (§0.4) e dos tipos de objeto já existentes (`pedra` -> chaminé/barril,
+  // trilho -> varal). Nenhum `TipoObjeto` novo, nenhuma mudança no algoritmo do gerador. Regra do F0: entram SÓ
+  // NO FIM deste array, e nenhum trecho de cima (nem os do Picolé) foi tocado.
+  {
+    id: 'telhados',
+    comprimentoM: 28,
+    dificuldade: 0.68,
+    velMinEntradaMs: 7,
+    proibidoApos: ['telhados', 'escadaria'],
+    pontos: [
+      // Mesma família de forma do `vao`/`vao-calda` (lançamento vindo de uma subida, vira no alto, desce numa
+      // queda), com um trecho final mais longo e quase plano para representar o "telhado" de aterrissagem — a
+      // sequência beiral (subida) -> parede (queda) -> telhado da ficha.
+      { dx: 0, dy: 0, anguloGraus: -14 },
+      { dx: 9, dy: -2.2, anguloGraus: -14 },
+      { dx: 14, dy: -1, anguloGraus: 22 }, // beiral (subida, lançamento)
+      { dx: 17, dy: 0.2, anguloGraus: 0 },
+      { dx: 19, dy: 0.2, anguloGraus: -32 }, // parede (queda)
+      { dx: 23, dy: -3.2, anguloGraus: -32 },
+      { dx: 28, dy: -5.6, anguloGraus: -10 }, // telhado (pouso quase plano)
+    ],
+  },
+  {
+    id: 'escadaria',
+    comprimentoM: 26,
+    dificuldade: 0.58,
+    velMinEntradaMs: 5,
+    proibidoApos: ['telhados', 'escadaria'],
+    pontos: [
+      // Três quedas curtas em série (mais suaves que um `degrau` sozinho, mesma família de `carrinhos`): cada
+      // queda vira uma paredinha enxaimel com a janela acendendo em degraus (pele, sem física nova).
+      { dx: 0, dy: 0, anguloGraus: -10 },
+      { dx: 4, dy: -0.5, anguloGraus: -10 },
+      { dx: 6, dy: -1.7, anguloGraus: -32 },
+      { dx: 9, dy: -2.2, anguloGraus: -10 },
+      { dx: 13, dy: -2.8, anguloGraus: -10 },
+      { dx: 15, dy: -4.0, anguloGraus: -32 },
+      { dx: 18, dy: -4.6, anguloGraus: -10 },
+      { dx: 22, dy: -5.2, anguloGraus: -10 },
+      { dx: 24, dy: -6.4, anguloGraus: -32 },
+      { dx: 26, dy: -7.0, anguloGraus: -12 },
+    ],
+  },
+  {
+    id: 'varal',
+    comprimentoM: 34,
+    dificuldade: 0.32,
+    velMinEntradaMs: 3,
+    pontos: [
+      // Chão plano e reto, como `trilho`/`palito-longo` (a ficha exige reta: "curva de varal enganaria o pulo"),
+      // só mais longo: o varal de luzinhas com 3 postes ou mais.
+      { dx: 0, dy: 0, anguloGraus: -8 },
+      { dx: 34, dy: -4.8, anguloGraus: -8 },
+    ],
+    trilho: { dx0: 2, dx1: 32, altura: 0.4 },
+  },
+  {
+    id: 'chamine',
+    comprimentoM: 18,
+    dificuldade: 0.35,
+    velMinEntradaMs: 0,
+    pontos: [
+      // Chão quase plano, como `pedras`, com UM obstáculo só (a chaminé no meio do telhado) em vez de três.
+      { dx: 0, dy: 0, anguloGraus: -11 },
+      { dx: 18, dy: -3.9, anguloGraus: -11 },
+    ],
+    objetos: [{ tipo: 'pedra', dx: 9, largura: 1.4, altura: 1.0, variante: 0 }],
   },
 ];
 

@@ -7,8 +7,8 @@
  * guarda o DADO; `CondicaoObjetivo.campo` já é validado contra `CAMPOS_RESUMO_DESCIDA` (`core/contratos.ts`), então
  * quando `resumo.ts` nascer as duas listas não podem divergir.
  *
- * Só o Pico do Picolé (M3 F3) está aqui por ora: o Morro do Pinhão não tem `DefObjetivo` ainda (seus 3 ids em
- * `data/pistas.ts` ficam sem catálogo, como já estava antes desta tarefa — fora do escopo de `pico-do-picole`).
+ * Pico do Picolé e Vila do Chocolate Quente (M3 F3) estão aqui por ora: o Morro do Pinhão não tem `DefObjetivo`
+ * ainda (seus 3 ids em `data/pistas.ts` ficam sem catálogo, como já estava antes desta tarefa — fora de escopo).
  */
 import { CAMPOS_RESUMO_DESCIDA } from '../core/contratos';
 import type { CondicaoObjetivo, DefObjetivo } from '../core/contratos';
@@ -18,6 +18,8 @@ import { REGRAS_SAVE } from './regras-save';
 
 // plano M3 §B.4: "grind de 3 s num palito" -> 3 s em ticks (60 Hz, `core/constantes.ts`).
 const TICKS_3S = 3 * TICKS_POR_SEGUNDO;
+// Vila do Chocolate Quente (pista 3, um degrau acima do Picolé): "grind de 4 s num varal" -> 4 s em ticks.
+const TICKS_4S = 4 * TICKS_POR_SEGUNDO;
 
 export const PICOLE_O1: DefObjetivo = {
   id: 'pico-do-picole-o1',
@@ -40,7 +42,28 @@ export const PICOLE_O3: DefObjetivo = {
   condicao: { tipo: 'minimo', campo: 'pontos', valor: 15_000 },
 };
 
-export const OBJETIVOS_DE_DADOS: readonly DefObjetivo[] = [PICOLE_O1, PICOLE_O2, PICOLE_O3];
+export const VILA_O1: DefObjetivo = {
+  id: 'vila-chocolate-o1',
+  pista: 'vila-chocolate',
+  texto: 'Grind de 4 s num varal',
+  condicao: { tipo: 'minimo', campo: 'maiorGrindTicks', valor: TICKS_4S },
+};
+
+export const VILA_O2: DefObjetivo = {
+  id: 'vila-chocolate-o2',
+  pista: 'vila-chocolate',
+  texto: 'Combo ×4',
+  condicao: { tipo: 'minimo', campo: 'maiorMult', valor: 4 },
+};
+
+export const VILA_O3: DefObjetivo = {
+  id: 'vila-chocolate-o3',
+  pista: 'vila-chocolate',
+  texto: '18.000 pontos numa descida',
+  condicao: { tipo: 'minimo', campo: 'pontos', valor: 18_000 },
+};
+
+export const OBJETIVOS_DE_DADOS: readonly DefObjetivo[] = [PICOLE_O1, PICOLE_O2, PICOLE_O3, VILA_O1, VILA_O2, VILA_O3];
 
 const CAMPOS_VALIDOS: ReadonlySet<string> = new Set(CAMPOS_RESUMO_DESCIDA);
 

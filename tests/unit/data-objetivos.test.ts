@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CAMPOS_RESUMO_DESCIDA } from '../../src/core/contratos';
-import { OBJETIVOS_DE_DADOS, PICOLE_O1, PICOLE_O2, PICOLE_O3, problemasDosObjetivosDeDados } from '../../src/data/objetivos';
+import { OBJETIVOS_DE_DADOS, PICOLE_O1, PICOLE_O2, PICOLE_O3, problemasDosObjetivosDeDados, VILA_O1, VILA_O2, VILA_O3 } from '../../src/data/objetivos';
 import { REGRAS_SAVE } from '../../src/data/regras-save';
 
 describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
@@ -13,8 +13,15 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(problemasDosObjetivosDeDados()).toEqual([]);
   });
 
-  it('os 3 objetivos do Picolé existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
-    expect(OBJETIVOS_DE_DADOS.map((d) => d.id)).toEqual(['pico-do-picole-o1', 'pico-do-picole-o2', 'pico-do-picole-o3']);
+  it('os 3 objetivos do Picolé e os 3 da Vila existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
+    expect(OBJETIVOS_DE_DADOS.map((d) => d.id)).toEqual([
+      'pico-do-picole-o1',
+      'pico-do-picole-o2',
+      'pico-do-picole-o3',
+      'vila-chocolate-o1',
+      'vila-chocolate-o2',
+      'vila-chocolate-o3',
+    ]);
     for (const def of OBJETIVOS_DE_DADOS) expect(REGRAS_SAVE.objetivos).toContain(def.id);
   });
 
@@ -22,6 +29,9 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(PICOLE_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
     expect(PICOLE_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 3 });
     expect(PICOLE_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 15_000 });
+    expect(VILA_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
+    expect(VILA_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 4 });
+    expect(VILA_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 18_000 });
   });
 
   it('todo CondicaoObjetivo.campo (inclusive dentro de "todos") está em CAMPOS_RESUMO_DESCIDA', () => {
