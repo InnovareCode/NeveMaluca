@@ -4,18 +4,24 @@
  * `touch-action: none` (que já vem de `src/estilo.css`, fora desta pasta). Um só ponteiro por vez (plano: "com um
  * dedo"); ponteiros extras são ignorados até o primeiro soltar.
  *
- * Semântica (tabela do plano §3.7), tudo no MESMO toque:
+ * Semântica (tabela do plano §3.7), no 1º dedo (ponteiro primário):
  *  - `pular`: true enquanto o dedo está na tela (a BORDA do pulo é derivada depois, em `core/comandos.derivarComando`;
  *    tocar rápido = 1 pulo, segurar não repete).
  *  - `giro`: metade esquerda/direita do canvas => -1/+1, enquanto segurado e sem ter virado um deslize.
  *  - `grab`: deslize (deslocamento >= `limiarDeslizePx` dentro de `janelaGestoMs`) na direção dominante; some o
  *    `giro` daquele toque (não é mais "segurar", é gesto). Depois da janela sem deslize, fica travado em "segurar".
- *  - `agachar`: fora do M1a (decisão D10 do plano: só entra no toque se a falta dele incomodar no teste do dono).
+ *
+ * `agachar` (I4, multi-toque): um 2º dedo na tela, SIMULTÂNEO ao primeiro ou não — `agachar` é true enquanto
+ * esse 2º ponteiro estiver pressionado, e volta a false quando ele soltar. É deliberadamente independente do 1º
+ * dedo (que continua controlando pulo/giro/grab sem nenhuma mudança): soltar o 1º dedo não afeta o 2º e
+ * vice-versa, então agachar nunca "contamina" o pulo nem é perdido se o jogador soltar o dedo do pulo primeiro.
+ * Um 3º+ ponteiro é ignorado (só dois dedos têm efeito).
  *
  * Risco R6 (plano): no Chrome do iPhone, um deslize que nasce rente à borda pode voltar a página mesmo com
  * `touch-action: none` (gesto de sistema fora do alcance do toque da página). Mitigação AQUI: `preventDefault`
- * sempre, e a faixa `margemBordaPx` perto das bordas não conta como "segurar" um lado (reduz a chance de um
- * giro acidental competir com o gesto do sistema). **Confirmar no aparelho** (plano: risco ainda aberto).
+ * sempre (nos dois dedos), e a faixa `margemBordaPx` perto das bordas não conta como "segurar" um lado no 1º
+ * dedo (reduz a chance de um giro acidental competir com o gesto do sistema). **Confirmar no aparelho** (plano:
+ * risco ainda aberto).
  *
  * `alvo` é um subconjunto estrutural de `HTMLCanvasElement` (mesma ideia do `AlvoFoco` de `platform/foco.ts`):
  * permite testar com um objeto falso em Node, sem DOM real.
@@ -58,24 +64,37 @@ export function criarEntradaToque(alvo: AlvoToque, opcoes: OpcoesToque = {}): En
   let classificado: 'pendente' | 'segurando' | 'deslize' = 'pendente';
   let giroAtual: -1 | 0 | 1 = 0;
   let grabPendente: Grab | null = null;
+  // 2º dedo (I4): exclusivamente agachar, sem gesto nem posição — só "pressionado ou não".
+  let ponteiroAgacharId: number | null = null;
+  let agacharAtivo = false;
 
   const aoDescer = (ev: Event): void => {
     const e = ev as PointerEvent;
-    if (ponteiroId !== null) return;
+    if (ponteiroId === null) {
+      e.preventDefault();
+      ponteiroId = e.pointerId;
+      ativo = true;
+      inicioX = e.clientX;
+      inicioY = e.clientY;
+      inicioT = e.timeStamp;
+      classificado = 'pendente';
+      const retangulo = alvo.getBoundingClientRect();
+      const naBorda = e.clientX - retangulo.left < margem || retangulo.right - e.clientX < margem;
+      giroAtual = naBorda ? 0 : e.clientX - retangulo.left < retangulo.width / 2 ? -1 : 1;
+      return;
+    }
+    if (e.pointerId === ponteiroId || ponteiroAgacharId !== null) return; // 3º+ ponteiro: ignorado
     e.preventDefault();
-    ponteiroId = e.pointerId;
-    ativo = true;
-    inicioX = e.clientX;
-    inicioY = e.clientY;
-    inicioT = e.timeStamp;
-    classificado = 'pendente';
-    const retangulo = alvo.getBoundingClientRect();
-    const naBorda = e.clientX - retangulo.left < margem || retangulo.right - e.clientX < margem;
-    giroAtual = naBorda ? 0 : e.clientX - retangulo.left < retangulo.width / 2 ? -1 : 1;
+    ponteiroAgacharId = e.pointerId;
+    agacharAtivo = true;
   };
 
   const aoMover = (ev: Event): void => {
     const e = ev as PointerEvent;
+    if (e.pointerId === ponteiroAgacharId) {
+      e.preventDefault(); // R6: não deixa o 2º dedo também escapar pro gesto de sistema se deslizar
+      return;
+    }
     if (e.pointerId !== ponteiroId || !ativo) return;
     e.preventDefault();
     if (classificado !== 'pendente') return;
@@ -93,6 +112,11 @@ export function criarEntradaToque(alvo: AlvoToque, opcoes: OpcoesToque = {}): En
 
   const aoSoltar = (ev: Event): void => {
     const e = ev as PointerEvent;
+    if (e.pointerId === ponteiroAgacharId) {
+      ponteiroAgacharId = null;
+      agacharAtivo = false;
+      return;
+    }
     if (e.pointerId !== ponteiroId) return;
     ativo = false;
     giroAtual = 0;
@@ -109,7 +133,7 @@ export function criarEntradaToque(alvo: AlvoToque, opcoes: OpcoesToque = {}): En
     quadro(): InputFrame {
       const grab = grabPendente;
       grabPendente = null;
-      return { pular: ativo, giro: giroAtual, grab, agachar: false };
+      return { pular: ativo, giro: giroAtual, grab, agachar: agacharAtivo };
     },
     destruir() {
       alvo.removeEventListener('pointerdown', aoDescer);

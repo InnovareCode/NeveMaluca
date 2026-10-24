@@ -12,7 +12,7 @@ no Chrome do iPhone) tem uma segunda mitigação aqui: `preventDefault` sempre +
 | Arquivo | O que faz |
 |---|---|
 | `teclado.ts` | `criarEntradaTeclado`: Espaço/↑ pulo, ←/→ giro, Z/X/C/V grab, ↓ agachar, Esc/P pausa (callback) |
-| `toque.ts` | `criarEntradaToque`: Pointer Events (não `TouchEvent` — unifica dedo/mouse, mais fácil de testar). Tocar = pulo; segurar metade esquerda/direita = giro; deslizar (limiar em até ~150 ms) = grab; margem nas bordas sem giro (R6) |
+| `toque.ts` | `criarEntradaToque`: Pointer Events (não `TouchEvent` — unifica dedo/mouse, mais fácil de testar). 1º dedo: tocar = pulo; segurar metade esquerda/direita = giro; deslizar (limiar em até ~150 ms) = grab; margem nas bordas sem giro (R6). 2º dedo (I4): agachar enquanto pressionado, independente do 1º |
 | `index.ts` | `criarEntrada`: combina teclado + toque num só `Entrada.obterComando()` (já com a borda do pulo derivada) |
 
 **Por que Pointer Events, não `TouchEvent`:** mesma API cobre dedo, mouse e caneta (o dev no PC também consegue
@@ -28,4 +28,5 @@ ideia do `AlvoFoco` de `platform/foco.ts`): os testes unitários passam objetos 
   ("a sensação de descer está boa?" é testado por toque/teclado) e fica para quando houver necessidade real.
 - Risco R6 (deslize na borda) mitigado no código, mas o plano marca como "a confirmar no aparelho" — só o dono
   testando no iPhone de verdade fecha isso.
-- Agachar no toque (decisão D10) deixado de fora de propósito: só entra se o teste do dono no M1a mostrar falta.
+- Agachar no toque (I4, 2026-10-24): entrou multi-toque — 2º dedo pressionado = agachar, independente do 1º. Não
+  precisou de posição/gesto (diferente do giro): é só presença/ausência do 2º ponteiro.

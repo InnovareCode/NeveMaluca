@@ -94,12 +94,52 @@ describe('input/toque: Pointer Events -> InputFrame (C2)', () => {
     expect(frame.giro).toBe(-1);
   });
 
-  it('um segundo ponteiro é ignorado enquanto o primeiro ainda está ativo (plano: "com um dedo")', () => {
+  it('um segundo dedo não muda pulo/giro do primeiro (I4: 2º dedo é só agachar)', () => {
     const alvo = criarAlvoFalso();
     const entrada = criarEntradaToque(alvo);
     alvo.disparar('pointerdown', { pointerId: 1, clientX: 100, clientY: 300, timeStamp: 0 });
     alvo.disparar('pointerdown', { pointerId: 2, clientX: 800, clientY: 300, timeStamp: 0 });
-    expect(entrada.quadro().giro).toBe(-1); // o segundo (que pediria +1) foi ignorado
+    const frame = entrada.quadro();
+    expect(frame.giro).toBe(-1); // o segundo dedo não disputa giro (não é mais ignorado, mas também não governa isto)
+    expect(frame.pular).toBe(true);
+  });
+
+  it('I4: segundo dedo pressionado = agachar; soltar o segundo zera agachar e mantém o primeiro', () => {
+    const alvo = criarAlvoFalso();
+    const entrada = criarEntradaToque(alvo);
+    alvo.disparar('pointerdown', { pointerId: 1, clientX: 100, clientY: 300, timeStamp: 0 });
+    expect(entrada.quadro().agachar).toBe(false);
+    alvo.disparar('pointerdown', { pointerId: 2, clientX: 800, clientY: 300, timeStamp: 0 });
+    let frame = entrada.quadro();
+    expect(frame.agachar).toBe(true);
+    expect(frame.pular).toBe(true); // o 1º dedo continua intacto
+    alvo.disparar('pointerup', { pointerId: 2, clientX: 800, clientY: 300, timeStamp: 10 });
+    frame = entrada.quadro();
+    expect(frame.agachar).toBe(false);
+    expect(frame.pular).toBe(true); // soltar o 2º não afeta o 1º
+  });
+
+  it('I4: soltar o 1º dedo primeiro não afeta o agachar do 2º (independentes)', () => {
+    const alvo = criarAlvoFalso();
+    const entrada = criarEntradaToque(alvo);
+    alvo.disparar('pointerdown', { pointerId: 1, clientX: 100, clientY: 300, timeStamp: 0 });
+    alvo.disparar('pointerdown', { pointerId: 2, clientX: 800, clientY: 300, timeStamp: 0 });
+    alvo.disparar('pointerup', { pointerId: 1, clientX: 100, clientY: 300, timeStamp: 10 });
+    const frame = entrada.quadro();
+    expect(frame.pular).toBe(false); // 1º dedo soltou
+    expect(frame.agachar).toBe(true); // 2º continua pressionado
+  });
+
+  it('I4: um 3º ponteiro é ignorado (só dois dedos têm efeito)', () => {
+    const alvo = criarAlvoFalso();
+    const entrada = criarEntradaToque(alvo);
+    alvo.disparar('pointerdown', { pointerId: 1, clientX: 100, clientY: 300, timeStamp: 0 });
+    alvo.disparar('pointerdown', { pointerId: 2, clientX: 800, clientY: 300, timeStamp: 0 });
+    alvo.disparar('pointerdown', { pointerId: 3, clientX: 500, clientY: 300, timeStamp: 0 });
+    alvo.disparar('pointerup', { pointerId: 3, clientX: 500, clientY: 300, timeStamp: 5 });
+    const frame = entrada.quadro();
+    expect(frame.agachar).toBe(true); // ainda é o 2º dedo que manda, o 3º não teve efeito
+    expect(frame.pular).toBe(true);
   });
 
   it('destruir() remove os listeners', () => {
