@@ -1,9 +1,16 @@
 /**
  * HUD de velocidade e pontos (plano §7 M1a). Tipografia igual à do boot.ts (Barlow/Barlow Condensed, já carregada
  * por `platform/fontes.ts` antes do 1º quadro). Contorno marinho + miolo claro: legível sobre céu ou neve.
+ *
+ * Botão/slot de item + feedback de eventos (plano itens-corrida §I4b/I5, Lyra): `RETANGULO_BOTAO_ITEM` é a MESMA
+ * zona que `ui/cenas/corrida.ts` repassa pro toque (`input/toque.ts: OpcoesToque.botaoItem`) — um retângulo só,
+ * lido pelos dois lados (desenho aqui, hit-test lá), pra nunca desalinhar hitbox e ícone. Cores/letras são
+ * placeholder vetorial (sem asset novo); o Apolo troca por arte de verdade depois (plano: "polimento de
+ * nomes/arte é do Apolo").
  */
 import { ALTURA, LARGURA } from '../core/constantes';
-import type { ComboLeitura, FaseDescida } from '../core/contratos';
+import type { ComboLeitura, EventoCorrida, FaseDescida, IdPersonagem, TipoItem } from '../core/contratos';
+import { TIPOS_ITEM } from '../core/contratos';
 import { JANELA_LIGACAO_TICKS } from '../data/manobras';
 
 export interface DadosHud {
@@ -218,4 +225,187 @@ export function desenharHud(ctx: CanvasRenderingContext2D, dados: DadosHud): voi
     ctx.fillText('CHEGOU!', LARGURA / 2, 100);
   }
   ctx.restore();
+}
+
+// --- Botão/slot de item (plano itens-corrida §I4b/I5) ---
+
+const LADO_BOTAO_ITEM = 76;
+/** Margem >= 24 px da borda (plano I-D3: alvo de toque numa área segura, nunca colado no canto físico da tela). */
+const MARGEM_BOTAO_ITEM = 24;
+
+/** Zona do botão de item, em coordenadas LÓGICAS (960x540) — canto inferior direito. `ui/cenas/corrida.ts` repassa
+ *  este MESMO objeto pro toque (`input/toque.ts: OpcoesToque.botaoItem`): um retângulo só, nunca duplicado. */
+export const RETANGULO_BOTAO_ITEM = {
+  x: LARGURA - MARGEM_BOTAO_ITEM - LADO_BOTAO_ITEM,
+  y: ALTURA - MARGEM_BOTAO_ITEM - LADO_BOTAO_ITEM,
+  w: LADO_BOTAO_ITEM,
+  h: LADO_BOTAO_ITEM,
+} as const;
+
+/** Cor placeholder por item (vetorial, sem asset — Apolo troca depois). Distinta por item, nada mais. */
+const COR_ITEM: Readonly<Record<TipoItem, string>> = {
+  bola: '#eaf6ff',
+  poca: '#c87f3c',
+  nuvem: '#8fa3c8',
+  turbo: '#ff8a3d',
+  escudo: '#7fe3ff',
+  ima: '#ff5fa8',
+};
+
+export interface DadosBotaoItem {
+  /** Item no slot agora, ou `null` com o slot vazio (nada pra usar). */
+  readonly item: TipoItem | null;
+  /** Roleta girando (plano I-D5): enquanto não for `null`, o ícone cicla entre os tipos até assentar no resultado. */
+  readonly roleta?: { readonly ticksRestantes: number; readonly resultado: TipoItem } | null | undefined;
+}
+
+/** Ticks finais da roleta em que o ícone já assenta no resultado (não cicla até o último tick: ia trocar de ícone
+ *  bem na hora de desaparecer, o que lê como "pisca", não "parou"). */
+const TICKS_ASSENTAR_ROLETA = 4;
+
+function itemMostradoNoBotao(dados: DadosBotaoItem, tick: number): TipoItem | null {
+  const roleta = dados.roleta;
+  if (!roleta) return dados.item;
+  if (roleta.ticksRestantes <= TICKS_ASSENTAR_ROLETA) return roleta.resultado;
+  return TIPOS_ITEM[tick % TIPOS_ITEM.length] as TipoItem;
+}
+
+/** Botão de item (I4b, a MESMA zona que `input/toque.ts` escuta) + ícone do slot/roleta (I5): círculo com fundo
+ *  translúcido sempre visível (alvo de toque óbvio, mesmo com o slot vazio); miolo colorido + inicial do item
+ *  quando há algo pra usar, anel pontilhado quando o slot está vazio (nada a apertar, mas o botão não "some"). */
+export function desenharBotaoItem(ctx: CanvasRenderingContext2D, dados: DadosBotaoItem, tick: number): void {
+  const r = RETANGULO_BOTAO_ITEM;
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const raio = r.w / 2;
+  const itemMostrado = itemMostradoNoBotao(dados, tick);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, raio, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(11, 26, 51, 0.55)';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COR_CONTORNO;
+  ctx.stroke();
+
+  if (itemMostrado === null) {
+    ctx.setLineDash([4, 5]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(244, 249, 255, 0.4)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, raio - 10, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx, cy, raio - 8, 0, Math.PI * 2);
+    ctx.fillStyle = COR_ITEM[itemMostrado];
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = COR_CONTORNO;
+    ctx.stroke();
+    ctx.fillStyle = COR_CONTORNO;
+    ctx.font = `800 ${Math.round(raio * 0.9)}px Barlow, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(itemMostrado.charAt(0).toUpperCase(), cx, cy + 1);
+  }
+  ctx.restore();
+}
+
+// --- Feedback dos eventos de item (plano §I5: "feedback dos eventosCorrida") ---
+
+const CAPACIDADE_FEEDBACK_ITENS = 4;
+const VIDA_FEEDBACK_ITENS_TICKS = 50;
+const COR_FEEDBACK_NEUTRO = '#ffd166';
+const COR_FEEDBACK_BOM = '#7CFC9A';
+const COR_FEEDBACK_RUIM = '#ff6b6b';
+
+interface ToastItem {
+  ativo: boolean;
+  texto: string;
+  cor: string;
+  vida: number;
+}
+
+export interface SistemaFeedbackItens {
+  /** Lê os `eventosCorrida` do tick (só os que envolvem `idJogador`); ignora o resto (rival acertando outro rival). */
+  atualizar(eventos: readonly EventoCorrida[], idJogador: IdPersonagem): void;
+  /** Desenha o toast mais recente ainda vivo, acima do botão de item. */
+  desenhar(ctx: CanvasRenderingContext2D): void;
+}
+
+/** Pool fixo pré-alocado (mesmo padrão de `render/manobra.ts`/`render/particulas.ts`): zero alocação por quadro. */
+export function criarSistemaFeedbackItens(): SistemaFeedbackItens {
+  const pool: ToastItem[] = Array.from({ length: CAPACIDADE_FEEDBACK_ITENS }, () => ({ ativo: false, texto: '', cor: COR_FEEDBACK_NEUTRO, vida: 0 }));
+  let cabeca = 0;
+
+  function abrir(texto: string, cor: string): void {
+    const t = pool[cabeca]!;
+    t.ativo = true;
+    t.texto = texto;
+    t.cor = cor;
+    t.vida = VIDA_FEEDBACK_ITENS_TICKS;
+    cabeca = (cabeca + 1) % CAPACIDADE_FEEDBACK_ITENS;
+  }
+
+  return {
+    atualizar(eventos, idJogador) {
+      for (let i = 0; i < CAPACIDADE_FEEDBACK_ITENS; i += 1) {
+        const t = pool[i]!;
+        if (!t.ativo) continue;
+        t.vida -= 1;
+        if (t.vida <= 0) t.ativo = false;
+      }
+      for (const ev of eventos) {
+        switch (ev.tipo) {
+          case 'item-pego':
+            if (ev.id === idJogador) abrir('ITEM!', COR_FEEDBACK_NEUTRO);
+            break;
+          case 'item-usado':
+            if (ev.id === idJogador) abrir('USOU!', COR_FEEDBACK_NEUTRO);
+            break;
+          case 'acerto':
+            if (ev.de === idJogador) abrir('ACERTOU!', COR_FEEDBACK_BOM);
+            else if (ev.em === idJogador) abrir('ATINGIDO!', COR_FEEDBACK_RUIM);
+            break;
+          case 'bloqueado':
+            if (ev.id === idJogador) abrir('BLOQUEADO!', COR_FEEDBACK_BOM);
+            break;
+          case 'desviou':
+            if (ev.id === idJogador) abrir('DESVIOU!', COR_FEEDBACK_BOM);
+            break;
+        }
+      }
+    },
+    desenhar(ctx) {
+      // Só o mais recente ainda vivo (índice anterior a `cabeca`, voltando): empilhar vários toasts ao mesmo tempo
+      // leria pior do que mostrar 1 por vez (mesmo critério de `LIMIAR_COLADO_PX` em `render/rivais.ts`).
+      let maisRecente: ToastItem | null = null;
+      for (let passo = 1; passo <= CAPACIDADE_FEEDBACK_ITENS; passo += 1) {
+        const t = pool[(cabeca - passo + CAPACIDADE_FEEDBACK_ITENS) % CAPACIDADE_FEEDBACK_ITENS]!;
+        if (t.ativo) {
+          maisRecente = t;
+          break;
+        }
+      }
+      if (!maisRecente) return;
+      const x = RETANGULO_BOTAO_ITEM.x + RETANGULO_BOTAO_ITEM.w / 2;
+      const y = RETANGULO_BOTAO_ITEM.y - 14;
+      const alpha = maisRecente.vida / VIDA_FEEDBACK_ITENS_TICKS < 0.3 ? Math.max(0, maisRecente.vida / VIDA_FEEDBACK_ITENS_TICKS / 0.3) : 1;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.lineJoin = 'round';
+      ctx.font = '800 20px "Barlow Condensed", sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = COR_CONTORNO;
+      ctx.strokeText(maisRecente.texto, x, y);
+      ctx.fillStyle = maisRecente.cor;
+      ctx.fillText(maisRecente.texto, x, y);
+      ctx.restore();
+    },
+  };
 }

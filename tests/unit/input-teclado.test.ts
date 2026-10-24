@@ -62,6 +62,21 @@ describe('input/teclado: tecla -> InputFrame (C2)', () => {
     expect(entrada.quadro().agachar).toBe(true);
   });
 
+  it('KeyE -> itemBorda() (I4b): só true no tick do aperto, NUNCA entra no InputFrame', () => {
+    const alvo = criarAlvoFalso();
+    const entrada = criarEntradaTeclado(alvo);
+    expect(entrada.itemBorda()).toBe(false);
+    const evitado = alvo.disparar('keydown', 'KeyE');
+    expect(evitado).toBe(true);
+    expect(entrada.itemBorda()).toBe(true);
+    expect(entrada.itemBorda()).toBe(false); // consumido: não repete enquanto segura
+    const frame = entrada.quadro();
+    expect(frame).toEqual({ pular: false, giro: 0, grab: null, agachar: false }); // nunca entra no InputFrame
+    alvo.disparar('keyup', 'KeyE');
+    alvo.disparar('keydown', 'KeyE'); // soltou e apertou de novo: nova borda
+    expect(entrada.itemBorda()).toBe(true);
+  });
+
   it('Escape/P chamam aoPausar e NÃO entram no InputFrame', () => {
     const alvo = criarAlvoFalso();
     let pausas = 0;

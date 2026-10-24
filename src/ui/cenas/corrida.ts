@@ -20,6 +20,7 @@ import type { ComandoDescida, ParticipanteCorrida, ResultadoCorrida } from '../.
 import { rngDoCanal } from '../../core/rng';
 import { criarCorrida, type Corrida } from '../../corrida/index';
 import { PERSONAGENS_DE_DADOS, obterPistaDeDados, PISTA_MORRO_DO_PINHAO } from '../../data/index';
+import { PARAMETROS_ESCUDO_ITEM } from '../../data/itens';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 // Import por arquivo (não o barril '../../input'): mesmo motivo de `descida.ts` (ver comentário lá).
@@ -38,7 +39,16 @@ import {
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
-import { desenharContagemRegressiva, desenharHud, desenharLegendaCarregandoCenario } from '../../render/hud';
+import {
+  desenharBotaoItem,
+  desenharContagemRegressiva,
+  desenharHud,
+  desenharLegendaCarregandoCenario,
+  criarSistemaFeedbackItens,
+  RETANGULO_BOTAO_ITEM,
+  type SistemaFeedbackItens,
+} from '../../render/hud';
+import { desenharEntidadesItens, desenharEscudo, desenharAvisoAlvo, type EntidadeItemVisual } from '../../render/itens';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
@@ -126,7 +136,12 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
     ...(opcoes.save?.evolucao !== undefined ? { evolucao: opcoes.save.evolucao } : {}),
   });
 
-  const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
+  // `botaoItem` (I4b): a MESMA zona que `render/hud.ts: desenharBotaoItem` desenha -- um retângulo só, lido pelos
+  // dois lados, pra nunca desalinhar hitbox e ícone (ver cabeçalho de `RETANGULO_BOTAO_ITEM`).
+  const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, {
+    teclado: { aoPausar: opcoes.aoPausar },
+    toque: { botaoItem: RETANGULO_BOTAO_ITEM },
+  });
   const camera: Camera = criarCamera(0, 0);
   const pintorTema: PintorTema = pintorDoTema(defPista.tema);
   const parallax: Parallax = criarParallax(opcoes.documento, pintorTema, temaDeRenderDoTema(defPista.tema));
@@ -142,6 +157,13 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   const turboPouso: SistemaTurboPouso = criarSistemaTurboPouso();
   const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
   const confete: SistemaConfete = criarConfete(rngVisual);
+  // Feedback dos eventosCorrida (I5): toast curto acima do botão de item quando ENVOLVE o jogador.
+  const feedbackItens: SistemaFeedbackItens = criarSistemaFeedbackItens();
+  // Escudo do JOGADOR (plano itens-corrida): `LeituraRivalCorrida.escudo` existe pra cada rival, mas
+  // `LeituraCorrida` não expõe o equivalente do próprio jogador (ver PENDÊNCIAS do handoff) -- espelha a MESMA
+  // duração de `corrida/itens.ts` (`PARAMETROS_ESCUDO_ITEM.ticks`) a partir dos eventos, só pra desenhar a bolha;
+  // nunca decide física (mero reflexo visual, como `SistemaTurboPouso`/`SistemaAvisosObstaculo` acima).
+  let escudoJogadorTicks = 0;
   const rngAudio = opcoes.audio ? rngDoCanal(pista.semente, 'audio') : null;
   const somManobras = opcoes.audio && rngAudio ? criarSomManobras(opcoes.audio, rngAudio, { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 }) : null;
   const musicaAdaptativa =
@@ -184,10 +206,10 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         return;
       }
       const cmd: ComandoDescida = entrada.obterComando();
-      // `usarItem` (plano itens-corrida §I4b): a entrada ainda não tem botão/tecla de item — fica `false` até a
-      // Lyra ligar isso (I4b); `Corrida.processar` já aceita o campo desde a I2, sem mudar NADA do comportamento
-      // de hoje enquanto ele vem sempre `false`.
-      leitura = corrida.processar({ descida: cmd, usarItem: false });
+      // `usarItem` (plano itens-corrida §I4b): borda real do input (tecla E, tap no botão, ou ombro do controle) --
+      // `Corrida.processar` já aceita o campo desde a I2 (Vega), aqui é só o sinal de verdade chegando.
+      const usarItem = entrada.usarItemBorda();
+      leitura = corrida.processar({ descida: cmd, usarItem });
       camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual);
       particulas.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       popupsManobra.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, leitura.jogador.tick);
@@ -196,6 +218,12 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       visualPiloto.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       somManobras?.atualizar(leitura.jogador);
       musicaAdaptativa?.atualizar(leitura.jogador);
+      feedbackItens.atualizar(leitura.eventosCorrida ?? [], idJogador);
+      for (const ev of leitura.eventosCorrida ?? []) {
+        if (ev.tipo === 'item-usado' && ev.id === idJogador && ev.item === 'escudo') escudoJogadorTicks = PARAMETROS_ESCUDO_ITEM.ticks;
+        else if (ev.tipo === 'bloqueado' && ev.id === idJogador) escudoJogadorTicks = 0;
+      }
+      if (escudoJogadorTicks > 0) escudoJogadorTicks -= 1;
       if (leitura.jogador.fase === 'chegou') {
         confete.estourar();
         // finalizar() deixa os rivais que faltam correrem (própria IA) até o fim/teto e fecha o pódio na hora.
@@ -214,6 +242,14 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       desenharItensCamada(ctx, camada, camLeitura, pintorTema, leitura.jogador.tick);
       particulas.desenharSpray(ctx, camLeitura);
 
+      // Entidades de item (caixa/bola/poça, plano I5): `entidadesVisiveis` (`corrida/itens.ts`) devolve `y: 0`
+      // pra bola/poça -- sem altura própria, ancoradas no CHÃO aqui (mesmo padrão de `corrida-rivais-sem-xy`: a
+      // conta de posição mora na CENA, nunca em `render/`). Caixa já chega com `y` real, usado direto.
+      const entidadesVisuais: EntidadeItemVisual[] = (leitura.entidades ?? []).map((e) =>
+        e.tipo === 'caixa' ? { id: e.id, tipo: e.tipo, xM: e.x, yM: e.y } : { id: e.id, tipo: e.tipo, xM: e.x, yM: alturaEm(pista, e.x) + 0.3 },
+      );
+      desenharEntidadesItens(ctx, camLeitura, entidadesVisuais, leitura.jogador.tick);
+
       const rivaisVisuais: RivalVisual[] = leitura.rivais.map((r) => {
         const xM = r.distancia;
         return {
@@ -227,9 +263,16 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         };
       });
       desenharRivais(ctx, camLeitura, rivaisVisuais);
+      // Bolha de gelo dos rivais (plano itens-corrida): `LeituraRivalCorrida.escudo` já vem pronto; mesmo índice
+      // de `rivaisVisuais` (os dois nascem de `leitura.rivais.map(...)`, nunca reordenados).
+      leitura.rivais.forEach((r, i) => {
+        if (r.escudo) desenharEscudo(ctx, camLeitura, (rivaisVisuais[i] as RivalVisual).xM, (rivaisVisuais[i] as RivalVisual).yM, leitura.jogador.tick);
+      });
 
       turboPouso.desenhar(ctx, camLeitura); // ANTES do piloto: o flash fica atrás, nunca cobre o sprite
       desenharPiloto(ctx, leitura.jogador.piloto, camLeitura, sprites.get(idJogador) ?? null, visualPiloto.poseVisual(leitura.jogador.piloto.pose));
+      if (escudoJogadorTicks > 0) desenharEscudo(ctx, camLeitura, leitura.jogador.piloto.x, leitura.jogador.piloto.y, leitura.jogador.tick);
+      if (leitura.alvoNoJogador) desenharAvisoAlvo(ctx, camLeitura, leitura.jogador.piloto.x, leitura.jogador.piloto.y, leitura.jogador.tick);
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.jogador.tick);
       popupsManobra.desenhar(ctx, camLeitura);
       avisosObstaculo.desenhar(ctx, pista, camLeitura);
@@ -250,6 +293,8 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         posicaoJogador: posicaoJogador > 0 ? posicaoJogador : undefined,
         totalCorredores,
       });
+      desenharBotaoItem(ctx, { item: leitura.itemJogador ?? null, roleta: leitura.roleta ?? null }, leitura.jogador.tick);
+      feedbackItens.desenhar(ctx);
       if (!contagemConcluida) {
         const { texto, pulso } = textoDaContagem(ticksContagem + alpha);
         desenharContagemRegressiva(ctx, texto, pulso);

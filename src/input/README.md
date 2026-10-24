@@ -11,9 +11,9 @@ no Chrome do iPhone) tem uma segunda mitigação aqui: `preventDefault` sempre +
 
 | Arquivo | O que faz |
 |---|---|
-| `teclado.ts` | `criarEntradaTeclado`: Espaço/↑ pulo, ←/→ giro, Z/X/C/V grab, ↓ agachar, Esc/P pausa (callback) |
-| `toque.ts` | `criarEntradaToque`: Pointer Events (não `TouchEvent` — unifica dedo/mouse, mais fácil de testar). 1º dedo: tocar = pulo; segurar metade esquerda/direita = giro; deslizar (limiar em até ~150 ms) = grab; margem nas bordas sem giro (R6). 2º dedo (I4): agachar enquanto pressionado, independente do 1º |
-| `index.ts` | `criarEntrada`: combina teclado + toque num só `Entrada.obterComando()` (já com a borda do pulo derivada) |
+| `teclado.ts` | `criarEntradaTeclado`: Espaço/↑ pulo, ←/→ giro, Z/X/C/V grab, ↓ agachar, E usar item (borda, I4b), Esc/P pausa (callback) |
+| `toque.ts` | `criarEntradaToque`: Pointer Events (não `TouchEvent` — unifica dedo/mouse, mais fácil de testar). 1º dedo: tocar = pulo; segurar metade esquerda/direita = giro; deslizar (limiar em até ~150 ms) = grab; margem nas bordas sem giro (R6). 2º dedo (I4): agachar enquanto pressionado, independente do 1º. `opcoes.botaoItem` (I4b): zona lógica que intercepta QUALQUER ponteiro antes de pulo/agachar — 3º slot, só tap/borda |
+| `index.ts` | `criarEntrada`: combina teclado + toque num só `Entrada.obterComando()` (já com a borda do pulo derivada) + `usarItemBorda()` (teclado E + tap do botão + botão de ombro do controle, I4b) |
 
 **Por que Pointer Events, não `TouchEvent`:** mesma API cobre dedo, mouse e caneta (o dev no PC também consegue
 testar sem emulador de toque); `new PointerEvent(...)` é construível em qualquer motor para teste sintético,
@@ -30,3 +30,7 @@ ideia do `AlvoFoco` de `platform/foco.ts`): os testes unitários passam objetos 
   testando no iPhone de verdade fecha isso.
 - Agachar no toque (I4, 2026-10-24): entrou multi-toque — 2º dedo pressionado = agachar, independente do 1º. Não
   precisou de posição/gesto (diferente do giro): é só presença/ausência do 2º ponteiro.
+- Usar item (I4b, 2026-10-24): tecla E, 3º slot de ponteiro dedicado a `opcoes.botaoItem` (toque) e botão de ombro
+  do controle (`navigator.getGamepads`, melhor esforço) — os três combinados em `Entrada.usarItemBorda()`
+  (`index.ts`). Nunca entra em `InputFrame`/`ComandoDescida` (contrato de Vega): é lido direto por
+  `ui/cenas/corrida.ts` pra montar `ComandoCorrida.usarItem`, mesmo padrão lateral de `aoPausar`.
