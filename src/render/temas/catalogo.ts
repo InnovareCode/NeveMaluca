@@ -7,7 +7,6 @@ import type { DefTema, IdTema } from '../../core/contratos';
 import { TEMA_CUME, TEMA_PARQUE, TEMA_VILA, TEMA_VULCAO } from '../../data/temas';
 import { pintorBosqueRaster } from './bosque-raster';
 import { TEMA_BOSQUE } from './bosque';
-import { pintorCume } from './cume';
 import { pintorParqueRaster } from './parque-raster';
 // Re-exportado daqui (mesmo módulo que `pintorDoTema` resolve): quem dispara o pré-carregamento (`selecao-pista.ts`)
 // e quem decide o pintor (`descida.ts`) devem enxergar o MESMO cache de módulo. Um `import()` dinâmico por um
@@ -17,19 +16,23 @@ import { pintorParqueRaster } from './parque-raster';
 export { precarregarAssetsParqueRaster, _esquecerAssetsParqueRasterParaTeste, _dimensoesCacheParaTeste } from './parque-raster';
 export { precarregarAssetsBosqueRaster, _esquecerAssetsBosqueRasterParaTeste, _dimensoesCacheBosqueParaTeste } from './bosque-raster';
 export { precarregarAssetsVilaRaster, _esquecerAssetsVilaRasterParaTeste, _dimensoesCacheVilaParaTeste } from './vila-raster';
+export { precarregarAssetsVulcaoRaster, _esquecerAssetsVulcaoRasterParaTeste, _dimensoesCacheVulcaoParaTeste } from './vulcao-raster';
+export { precarregarAssetsCumeRaster, _esquecerAssetsCumeRasterParaTeste, _dimensoesCacheCumeParaTeste } from './cume-raster';
 import { pintorVilaRaster } from './vila-raster';
-import { pintorVulcao } from './vulcao';
+import { pintorVulcaoRaster } from './vulcao-raster';
+import { pintorCumeRaster } from './cume-raster';
 import type { PintorTema } from './tipos';
 
-// `bosque`, `parque` e `vila` usam o pintor raster "Pixar" (docs/rollout-cenarios-pixar.md): cada um cai sozinho na
-// versão vetorial se os assets ainda não carregaram ou falharem (ver `bosque-raster.ts`/`parque-raster.ts`/
-// `vila-raster.ts`) -- por isso o mapa aponta direto pra eles, sem precisar de um 2º caminho aqui.
+// `bosque`, `parque`, `vila`, `vulcao` e `cume` usam o pintor raster "Pixar" (docs/rollout-cenarios-pixar.md): cada
+// um cai sozinho na versão vetorial se os assets ainda não carregaram ou falharem (ver `bosque-raster.ts`/
+// `parque-raster.ts`/`vila-raster.ts`/`vulcao-raster.ts`/`cume-raster.ts`) -- por isso o mapa aponta direto pra
+// eles, sem precisar de um 2º caminho aqui.
 const PINTORES_POR_TEMA: Readonly<Record<string, PintorTema>> = {
   bosque: pintorBosqueRaster,
   parque: pintorParqueRaster,
   vila: pintorVilaRaster,
-  vulcao: pintorVulcao,
-  cume: pintorCume,
+  vulcao: pintorVulcaoRaster,
+  cume: pintorCumeRaster,
 };
 
 const DEFS_POR_TEMA: Readonly<Record<string, DefTema>> = {

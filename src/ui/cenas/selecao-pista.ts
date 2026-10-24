@@ -12,7 +12,13 @@
  */
 import { ALTURA, LARGURA } from '../../core/constantes';
 import { obterPistaDeDados, PISTAS_DE_DADOS } from '../../data/pistas';
-import { precarregarAssetsBosqueRaster, precarregarAssetsVilaRaster, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import {
+  precarregarAssetsBosqueRaster,
+  precarregarAssetsCumeRaster,
+  precarregarAssetsVilaRaster,
+  precarregarAssetsVulcaoRaster,
+  temaDeRenderDoTema,
+} from '../../render/temas/catalogo';
 import { precarregarAssetsParqueRaster } from '../../render/temas/parque-raster';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
@@ -71,7 +77,7 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   let hover: string | null = null;
 
-  // Dispara o carregamento dos cenários raster do Pico do Picolé e do Morro do Pinhão aqui (fire-and-forget,
+  // Dispara o carregamento dos 5 cenários raster (Picolé, Morro, Vila, Vulcão, Cume) aqui (fire-and-forget,
   // decodificado ANTES de montar o tema -- docs/piloto-cenario-pixar.md §6 / docs/rollout-cenarios-pixar.md §4): por
   // quando o jogador escolher a pista e descer, os assets já estão prontos (ou o pintor cai sozinho no vetorial se
   // ainda não deu tempo/falhou). `precarregarAssetsBosqueRaster` entra pelo MESMO módulo (`catalogo.ts`) que
@@ -79,6 +85,8 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   void precarregarAssetsParqueRaster(opcoes.documento);
   void precarregarAssetsBosqueRaster(opcoes.documento);
   void precarregarAssetsVilaRaster(opcoes.documento);
+  void precarregarAssetsVulcaoRaster(opcoes.documento);
+  void precarregarAssetsCumeRaster(opcoes.documento);
 
   const cartaoNoPonto = (pt: { x: number; y: number }): number | null => {
     for (let i = 0; i < opcoes.catalogo.length; i += 1) {
