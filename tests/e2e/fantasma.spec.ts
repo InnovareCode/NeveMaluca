@@ -86,6 +86,7 @@ test.describe('Fantasma (replay C6): grava na 1ª descida, injeta e reproduz na 
           const { criarBotCuidadoso } = await carregar('/src/descida/bot.ts');
           const { exigirPistaValida } = await carregar('/src/pista/index.ts');
           const { PISTA_MORRO_DO_PINHAO } = await carregar('/src/data/pistas.ts');
+          const { TICKS_CONTAGEM_DESCIDA } = await carregar('/src/ui/cenas/descida.ts');
 
           const neve = (window as unknown as { __neve: NeveHook }).__neve;
           neve.cena.irPara('jogo'); // ainda sem fantasma desta pista: `construirCena('jogo')` lê `obterFantasma` AGORA
@@ -100,6 +101,12 @@ test.describe('Fantasma (replay C6): grava na 1ª descida, injeta e reproduz na 
 
           let ticks = 0;
           for (; ticks < limiteTicks && (neve.save.dados.recordes[pistaId]?.length ?? 0) === 0; ticks++) {
+            if (ticks < TICKS_CONTAGEM_DESCIDA) {
+              // A cena está na contagem "3-2-1-JÁ": não tica nem dirige o motor sombra, só a cena mesmo
+              // (ela própria não tica o motor real nesta janela — ver `ui/cenas/descida.ts`).
+              neve.cena.atualizar();
+              continue;
+            }
             const cmdBot = bot(leituraSombra);
             const frame = { pular: cmdBot.pulo, giro: cmdBot.giro, grab: cmdBot.grab, agachar: cmdBot.agachar };
 
@@ -124,7 +131,7 @@ test.describe('Fantasma (replay C6): grava na 1ª descida, injeta e reproduz na 
             // deveria passar por globalAlpha=0.4 (mesma prova que `ui-descida-fantasma.test.ts` faz com ctx
             // falso, aqui com o ctx real) — medido DENTRO do laço do bot (sem ticks "neutros" fora do lockstep
             // real/sombra, que tiravam a corrida do lockstep e fizeram o bot nunca chegar na 1ª versão deste teste).
-            if (ticks === 5) {
+            if (ticks === TICKS_CONTAGEM_DESCIDA + 5) {
               neve.cena.desenhar((window as unknown as { __e2eCtx: CanvasRenderingContext2D }).__e2eCtx, 0);
               const historico = (window as unknown as { __e2eAlpha: number[] }).__e2eAlpha;
               alphaSemFantasma = [...historico];
@@ -184,12 +191,17 @@ test.describe('Fantasma (replay C6): grava na 1ª descida, injeta e reproduz na 
     // o id pedido já é o atual, e só `construirCena('jogo')` relê `obterFantasma` (a 1ª corrida nunca saiu de
     // 'jogo', só trocou de sub-cena descida->resultado por dentro). Isso é o próprio contrato do Vega: o
     // fantasma só é recarregado ao RE-ENTRAR na cena 'jogo', não durante "jogar de novo" (reiniciar).
-    const segunda = await page.evaluate(() => {
+    const segunda = await page.evaluate(async () => {
+      const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
+      const { TICKS_CONTAGEM_DESCIDA } = await carregar('/src/ui/cenas/descida.ts');
+
       const neve = (window as unknown as { __neve: NeveHook }).__neve;
       neve.cena.irPara('menu');
       neve.cena.irPara('jogo'); // agora relê obterFantasma(pista): o save já tem fantasmas['morro-do-pinhao']
 
-      for (let i = 0; i < 30; i++) neve.cena.atualizar();
+      // Passa da contagem "3-2-1-JÁ" + alguns ticks de corrida de verdade: antes disso a cena nem tica o motor
+      // real nem o fantasma (ver `ui/cenas/descida.ts`).
+      for (let i = 0; i < TICKS_CONTAGEM_DESCIDA + 10; i++) neve.cena.atualizar();
       neve.cena.desenhar((window as unknown as { __e2eCtx: CanvasRenderingContext2D }).__e2eCtx, 0);
 
       return { alphaComFantasma: [...(window as unknown as { __e2eAlpha: number[] }).__e2eAlpha] };

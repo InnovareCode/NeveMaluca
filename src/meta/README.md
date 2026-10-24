@@ -19,6 +19,20 @@ parametro (`RegrasSave`), entao `meta/` nao depende de `data/` para ser testada.
 - Testes: `tests/unit/meta/storage.test.ts` (Node, `Storage` falso em `tests/support/storage-falso.ts`).
 - Regra: **mudanca de formato = chave nova** (`neve-maluca-v2`); a v1 fica intacta para rollback de build.
 
+## Campeonato e evolução (C5a, marco corrida em campeonato)
+
+- `campeonato.ts`: `pontosDaPosicao`, `classificacao`, `situacao`, `desempate` (plano C-D1) — puro, opera sobre
+  `ResultadoCorrida[]` (o `ordem` de CADA pista, nunca um total guardado). `iniciarCampeonato`/`registrarResultado`
+  são o ciclo de vida do `EstadoCampeonato`. Pendência registrada no topo do arquivo: o save só guarda a posição do
+  JOGADOR por pista (`PistaConcluidaCampeonato`), não o pódio completo — reabrir o app no meio de um campeonato não
+  reconstrói os pontos dos adversários sem decidir o que persistir.
+- `tipos.ts`/`storage.ts`: `SaveV1` ganhou `campeonato?`, `trofeus?`, `evolucao?` (todos ADITIVOS, tipos de
+  `core/contratos`). Saneados por `sanearCampeonato`/`sanearTrofeus`/`sanearEvolucao`: a `etapa` do campeonato NUNCA
+  vem do disco, é sempre `pistasConcluidas.length` depois de saneado (mesmo "nunca confiar num total guardado" da
+  classificação). `TETO_NIVEL_EVOLUCAO = 5`, `MAX_CORREDORES_CAMPEONATO = 6`.
+- Custos de evolução e a conversão de uma corrida em flocos (`flocosDaCorrida`) ficam em `data/evolucao.ts` (não
+  aqui: `meta/` não precisa saber a curva de custo para validar o save, só os limites de forma).
+
 ## Ligação no app (integração do M0)
 
 `main.ts` cria UM `ArmazenamentoResiliente` por sessão e chama `carregarSave(armazenamento, REGRAS_SAVE)` no boot (`REGRAS_SAVE` vem de `data/regras-save.ts`, ids provisórios).

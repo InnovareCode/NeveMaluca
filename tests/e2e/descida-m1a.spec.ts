@@ -52,7 +52,7 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
 
     const resultado = await page.evaluate(async () => {
       const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
-      const { criarCenaDescida } = await carregar('/src/ui/cenas/descida.ts');
+      const { criarCenaDescida, TICKS_CONTAGEM_DESCIDA } = await carregar('/src/ui/cenas/descida.ts');
       const { criarCenaResultado } = await carregar('/src/ui/cenas/resultado.ts');
       const { exigirPistaValida } = await carregar('/src/pista/index.ts');
       const { criarDescida } = await carregar('/src/descida/index.ts');
@@ -92,6 +92,12 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
       // ~2340 ticks (plano: bot cuidadoso nesta pista, ~39 s); folga generosa.
       const LIMITE_TICKS = 15_000;
       for (let i = 0; i < LIMITE_TICKS && dadosFinais === null; i += 1) {
+        if (i < TICKS_CONTAGEM_DESCIDA) {
+          // A cena está na contagem "3-2-1-JÁ": não tica nem dirige o motor sombra, só a cena mesmo (ela
+          // própria não tica o motor real nesta janela — ver `ui/cenas/descida.ts`).
+          cena.atualizar();
+          continue;
+        }
         const cmdBot = bot(leituraSombra);
         const frame = { pular: cmdBot.pulo, giro: cmdBot.giro, grab: cmdBot.grab, agachar: cmdBot.agachar };
 

@@ -23,10 +23,13 @@ import type { AlvoToque } from '../../input/toque';
 // cai num só segmento igual ao nome da camada — ver tests/unit/arquitetura.test.ts. Import direto evita o falso positivo.
 import { criarEntrada, type Entrada } from '../../input/index';
 import { criarCamera, type Camera } from '../../render/camera';
-import { desenharHud } from '../../render/hud';
+import { desenharChegada } from '../../render/chegada';
+import { criarConfete, type SistemaConfete } from '../../render/confete';
+import { desenharContagemRegressiva, desenharHud } from '../../render/hud';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
+import { criarRastreadorPoseVisual, type RastreadorPoseVisual } from '../../render/pose-visual';
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
 import { desenharTerreno } from '../../render/terreno';
@@ -50,6 +53,31 @@ export interface ResultadoDescida {
    */
   readonly replay?: ReplayV1 | undefined;
 }
+
+// Contagem "3-2-1-JÁ" (plano "corrida em campeonato" §C1), ~0,83 s por número + ~0,5 s no "JÁ!": roda ANTES do
+// motor, só na cena -- nunca chama `entrada.obterComando()`/`motor.processar()` nesta janela, então não grava
+// tick nenhum no replay antes da corrida de fato começar.
+const TICKS_POR_NUMERO = 50;
+const TICKS_JA = 30;
+/**
+ * Exportada para quem dirige a cena por um motor "sombra" em testes (`ui-descida-*.test.ts`): o sombra precisa
+ * ficar OCIOSO pelos mesmos ticks (sem tickar nem despachar tecla), senão desalinha do motor real da cena -- que
+ * só começa a consumir `entrada.obterComando()` depois da contagem -- e os bots saem de sincronia.
+ */
+export const TICKS_CONTAGEM_DESCIDA = TICKS_POR_NUMERO * 3 + TICKS_JA;
+const TOTAL_TICKS_CONTAGEM = TICKS_CONTAGEM_DESCIDA;
+
+/** Texto e "pulso" (0=acabou de trocar, perto de 1=tamanho de repouso) da contagem em `t` ticks (fração incluída, p/ interpolar). */
+function textoDaContagem(t: number): { texto: string; pulso: number } {
+  if (t < TICKS_POR_NUMERO) return { texto: '3', pulso: t / TICKS_POR_NUMERO };
+  if (t < TICKS_POR_NUMERO * 2) return { texto: '2', pulso: (t - TICKS_POR_NUMERO) / TICKS_POR_NUMERO };
+  if (t < TICKS_POR_NUMERO * 3) return { texto: '1', pulso: (t - TICKS_POR_NUMERO * 2) / TICKS_POR_NUMERO };
+  return { texto: 'JÁ!', pulso: (t - TICKS_POR_NUMERO * 3) / TICKS_JA };
+}
+
+// ~2 s de comemoração (confete + pose 'celeb', já ativa pela última leitura) antes de ir para o resultado: o
+// motor fica CONGELADO neste intervalo (nunca mais `processar`), então não entra tick extra no replay/resultado.
+const TICKS_COMEMORACAO = 120;
 
 export interface OpcoesCenaDescida {
   readonly canvas: AlvoToque;
@@ -87,6 +115,9 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
+  // Pose visual (takeoff/wobble/grab, §C1) e confete de chegada: ambos de RENDER só, nunca entram no replay.
+  const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
+  const confete: SistemaConfete = criarConfete(rngVisual);
   // Um gerador só para o canal `audio`, compartilhado entre som de manobras e música adaptativa (mesmo padrão de
   // `rngVisual`, compartilhado por câmera e partículas): consumido em ordem fixa (som antes de música) a cada tick.
   const rngAudio = opcoes.audio ? rngDoCanal(pista.semente, 'audio') : null;
@@ -131,12 +162,35 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   // leitura inicial fora do `desenhar()`: a cena nunca tica o motor no quadro, só no tick (ver `ui/tipos.ts`)
   let leitura = motor.leitura();
   camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
-  let terminou = false;
+
+  // UI local, nunca no replay: contagem "3-2-1-JÁ" ANTES do motor rodar, e a comemoração DEPOIS do motor
+  // congelar (§C1). `resultadoPendente` guarda o resultado já calculado no tick da chegada; só sai pra
+  // `aoTerminar` depois de `TICKS_COMEMORACAO` ticks de confete.
+  let ticksContagem = 0;
+  let contagemConcluida = false;
+  let resultadoPendente: ResultadoDescida | null = null;
+  let ticksComemoracao = 0;
 
   return {
     id: 'descida',
     atualizar() {
-      if (terminou) return;
+      if (resultadoPendente) {
+        // Já chegou: o motor fica CONGELADO (nunca mais `processar`) -- só a comemoração (confete) avança.
+        confete.atualizar();
+        ticksComemoracao += 1;
+        if (ticksComemoracao >= TICKS_COMEMORACAO) {
+          const r = resultadoPendente;
+          resultadoPendente = null;
+          opcoes.aoTerminar?.(r);
+        }
+        return;
+      }
+      if (!contagemConcluida) {
+        // SEM `entrada.obterComando()`/`motor.processar()` aqui: nenhum tick de contagem entra no replay.
+        ticksContagem += 1;
+        if (ticksContagem >= TOTAL_TICKS_CONTAGEM) contagemConcluida = true;
+        return;
+      }
       const cmd = entrada.obterComando();
       comandosGravados.push(cmd);
       leitura = motor.processar(cmd);
@@ -144,10 +198,11 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
       particulas.atualizar(leitura.piloto, leitura.eventos);
       popupsManobra.atualizar(leitura.piloto, leitura.eventos, leitura.tick);
+      visualPiloto.atualizar(leitura.piloto, leitura.eventos);
       somManobras?.atualizar(leitura);
       musicaAdaptativa?.atualizar(leitura);
       if (leitura.fase === 'chegou') {
-        terminou = true;
+        confete.estourar();
         const replay: ReplayV1 = {
           v: 1,
           pista: pista.id,
@@ -158,15 +213,16 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
           comandos: codificarComandos(comandosGravados),
           resultado: { pontos: leitura.pontos, ticks: leitura.tick, hashFinal: motor.hashEstado() },
         };
-        opcoes.aoTerminar?.({ pontos: leitura.pontos, ticks: leitura.tick, replay });
+        resultadoPendente = { pontos: leitura.pontos, ticks: leitura.tick, replay };
       }
     },
-    desenhar(ctx) {
+    desenhar(ctx, alpha) {
       const camLeitura = camera.leitura();
       parallax.desenhar(ctx, camLeitura.x, leitura.tick);
       desenharTerreno(ctx, pista, camLeitura, pintorTema);
       desenharTrilhos(ctx, pista, camLeitura, pintorTema);
       desenharObjetos(ctx, pista, camLeitura, pintorTema);
+      desenharChegada(ctx, pista, camLeitura, pintorTema);
       particulas.desenharSpray(ctx, camLeitura);
       if (leituraFantasma) {
         // translúcido e ANTES do piloto real: nunca deve confundir qual é o jogador de verdade
@@ -175,15 +231,21 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
         desenharPiloto(ctx, leituraFantasma, camLeitura, spriteFantasma);
         ctx.restore();
       }
-      desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto);
+      desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto, visualPiloto.poseVisual(leitura.piloto.pose));
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.tick);
       popupsManobra.desenhar(ctx, camLeitura);
+      confete.desenhar(ctx);
       desenharHud(ctx, {
         velocidadeMs: leitura.piloto.velocidade,
         pontos: leitura.pontos,
         fase: leitura.fase,
         combo: leitura.combo,
+        progressoJogador: leitura.piloto.x / pista.chegadaX,
       });
+      if (!contagemConcluida) {
+        const { texto, pulso } = textoDaContagem(ticksContagem + alpha);
+        desenharContagemRegressiva(ctx, texto, pulso);
+      }
     },
     destruir() {
       entrada.destruir();

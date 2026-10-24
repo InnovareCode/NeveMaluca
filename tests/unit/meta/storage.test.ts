@@ -11,6 +11,7 @@ import {
   CONFIG_PADRAO,
   FORMA_ID,
   MAX_CHARS_REPLAY,
+  MAX_CORREDORES_CAMPEONATO,
   MAX_DESCONHECIDOS,
   MAX_EXTRAS_CHARS_POR_CAMPO,
   MAX_EXTRAS_CHAVES,
@@ -20,6 +21,7 @@ import {
   MAX_TEXTO_SAVE,
   MIGRACOES,
   TETO_FLOCOS,
+  TETO_NIVEL_EVOLUCAO,
   TETO_PONTOS,
   TETO_TICKS,
   carregarSave,
@@ -30,8 +32,10 @@ import {
   obterArmazenamentoDoNavegador,
   paraDisco,
   salvarSave,
+  sanearCampeonato,
   sanearCfg,
   sanearDiario,
+  sanearEvolucao,
   sanearExtras,
   sanearFantasmas,
   sanearPersonagemAtivo,
@@ -40,6 +44,7 @@ import {
   sanearRecorde,
   sanearRecordes,
   sanearSave,
+  sanearTrofeus,
   saveVazio,
 } from '../../../src/meta/storage';
 import type { ArmazenamentoLike, Migracao, Recorde, RegrasSave, SaveV1 } from '../../../src/meta/tipos';
@@ -405,6 +410,92 @@ describe('pistaAtiva (selecao de pista)', () => {
 });
 
 // ---------------------------------------------------------------------------
+describe('campeonato (plano C5a)', () => {
+  it('valido passa intacto; etapa e SEMPRE pistasConcluidas.length (nunca o bruto)', () => {
+    const c = sanearCampeonato(
+      { semente: 123, personagem: 'kaka', etapa: 99, pistasConcluidas: [{ pista: 'vale', ordem: 2, ticks: 3000 }] },
+      REGRAS,
+    );
+    expect(c).toEqual({ semente: 123, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem: 2, ticks: 3000 }] });
+  });
+
+  it('sem semente ou personagem invalido: todo o campeonato e descartado (nao da pra repetir as 5 pistas sem eles)', () => {
+    expect(sanearCampeonato({ personagem: 'kaka', pistasConcluidas: [] }, REGRAS)).toBeUndefined();
+    expect(sanearCampeonato({ semente: 1, personagem: 'fantasma', pistasConcluidas: [] }, REGRAS)).toBeUndefined();
+    expect(sanearCampeonato({ semente: -1, personagem: 'kaka' }, REGRAS)).toBeUndefined();
+    for (const lixo of [null, undefined, 5, 'x', []]) expect(sanearCampeonato(lixo, REGRAS)).toBeUndefined();
+  });
+
+  it('pistasConcluidas: pista invalida/ordem fora de 1..MAX_CORREDORES/ticks invalido descarta o REGISTRO, nao o campeonato', () => {
+    const c = sanearCampeonato(
+      {
+        semente: 1,
+        personagem: 'kaka',
+        pistasConcluidas: [
+          { pista: 'vale', ordem: 1, ticks: 100 },
+          { pista: 'pista-fantasma', ordem: 1, ticks: 100 },
+          { pista: 'cume', ordem: MAX_CORREDORES_CAMPEONATO + 1, ticks: 100 },
+          { pista: 'gelo', ordem: 1, ticks: 0 },
+        ],
+      },
+      REGRAS,
+    );
+    expect(c?.pistasConcluidas).toEqual([{ pista: 'vale', ordem: 1, ticks: 100 }]);
+    expect(c?.etapa).toBe(1);
+  });
+
+  it('pista repetida: so a primeira ocorrencia conta; teto no tamanho do catalogo de pistas', () => {
+    const c = sanearCampeonato(
+      {
+        semente: 1,
+        personagem: 'kaka',
+        pistasConcluidas: [
+          { pista: 'vale', ordem: 1, ticks: 100 },
+          { pista: 'vale', ordem: 3, ticks: 200 },
+          { pista: 'cume', ordem: 2, ticks: 300 },
+          { pista: 'gelo', ordem: 2, ticks: 300 },
+        ],
+      },
+      REGRAS,
+    );
+    expect(c?.pistasConcluidas.map((p) => p.pista)).toEqual(['vale', 'cume', 'gelo']); // REGRAS so tem 3 pistas
+    expect(c?.pistasConcluidas[0]).toEqual({ pista: 'vale', ordem: 1, ticks: 100 });
+  });
+
+  it('nao muta a entrada; idempotente dentro de sanearSave', () => {
+    const bruto = { semente: 1, personagem: 'kaka', pistasConcluidas: [{ pista: 'vale', ordem: 1, ticks: 100 }] };
+    const antes = JSON.stringify(bruto);
+    sanearCampeonato(bruto, REGRAS);
+    expect(JSON.stringify(bruto)).toBe(antes);
+    const s1 = sanearSave({ ...saveCheio(), campeonato: bruto }, REGRAS);
+    expect(sanearSave(s1, REGRAS)).toEqual(s1);
+  });
+});
+
+describe('trofeus (plano C-D9)', () => {
+  it('so ids do catalogo, sem repeticao, na ordem do catalogo; ausente/vazio -> undefined', () => {
+    expect(sanearTrofeus(['pingu', 'pingu', 'kaka', 'fantasma'], REGRAS)).toEqual(['kaka', 'pingu']);
+    for (const vazio of [undefined, null, [], ['fantasma'], 5, {}]) expect(sanearTrofeus(vazio, REGRAS)).toBeUndefined();
+  });
+});
+
+describe('evolucao (plano C-D3/C-D4)', () => {
+  it('flocos: inteiro 0..TETO_FLOCOS (mesmo teto de prog.flocos); niveis: so personagens do catalogo, 1..TETO_NIVEL_EVOLUCAO', () => {
+    expect(sanearEvolucao({ flocos: 50, niveis: { kaka: 3, fantasma: 5 } }, REGRAS)).toEqual({ flocos: 50, niveis: { kaka: 3 } });
+    expect(sanearEvolucao({ flocos: -5 }, REGRAS)).toEqual({ flocos: 0, niveis: {} });
+  });
+
+  it('nivel 0 e implicito: nao e gravado; nivel fora de 0..TETO_NIVEL_EVOLUCAO cai fora', () => {
+    const e = sanearEvolucao({ flocos: 0, niveis: { kaka: 0, pingu: TETO_NIVEL_EVOLUCAO + 1, yeti: TETO_NIVEL_EVOLUCAO } }, REGRAS);
+    expect(e).toEqual({ flocos: 0, niveis: { yeti: TETO_NIVEL_EVOLUCAO } });
+  });
+
+  it('nao-objeto -> undefined (ausente do save, nao um objeto vazio inventado)', () => {
+    for (const lixo of [undefined, null, 5, 'x', []]) expect(sanearEvolucao(lixo, REGRAS)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe('sanearSave', () => {
   it('lixo de qualquer tipo -> save vazio valido', () => {
     for (const lixo of [undefined, null, 5, 'texto', true, [], [1, 2], Number.NaN]) expect(sanearSave(lixo, REGRAS)).toEqual(saveVazio());
@@ -434,6 +525,26 @@ describe('sanearSave', () => {
     expect(sanearSave({ ...saveCheio(), pistaAtiva: 'vulcao-fantasma' }, REGRAS).pistaAtiva).toBeUndefined();
     expect(sanearSave(saveCheio(), REGRAS).pistaAtiva).toBeUndefined();
     expect('pistaAtiva' in sanearSave(saveCheio(), REGRAS)).toBe(false);
+  });
+
+  it('campeonato/trofeus/evolucao validos entram no save saneado; invalidos ou ausentes nao aparecem', () => {
+    const cheio = sanearSave(
+      {
+        ...saveCheio(),
+        campeonato: { semente: 1, personagem: 'kaka', pistasConcluidas: [{ pista: 'vale', ordem: 1, ticks: 10 }] },
+        trofeus: ['kaka', 'kaka'],
+        evolucao: { flocos: 30, niveis: { kaka: 2 } },
+      },
+      REGRAS,
+    );
+    expect(cheio.campeonato).toEqual({ semente: 1, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem: 1, ticks: 10 }] });
+    expect(cheio.trofeus).toEqual(['kaka']);
+    expect(cheio.evolucao).toEqual({ flocos: 30, niveis: { kaka: 2 } });
+
+    const vazio = sanearSave(saveCheio(), REGRAS);
+    expect('campeonato' in vazio).toBe(false);
+    expect('trofeus' in vazio).toBe(false);
+    expect('evolucao' in vazio).toBe(false);
   });
 
   it('nao muta a entrada', () => {

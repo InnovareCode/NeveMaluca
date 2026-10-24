@@ -16,7 +16,7 @@ describe('fumaça do M0', () => {
   it('toda camada de src/ existe e é importável', async () => {
     const camadas = import.meta.glob('../../src/*/index.ts');
     expect(Object.keys(camadas).sort()).toEqual(
-      ['assets', 'audio', 'core', 'data', 'descida', 'input', 'meta', 'pista', 'platform', 'render', 'ui'].map((c) => `../../src/${c}/index.ts`),
+      ['assets', 'audio', 'core', 'corrida', 'data', 'descida', 'input', 'meta', 'pista', 'platform', 'render', 'ui'].map((c) => `../../src/${c}/index.ts`),
     );
     for (const carregar of Object.values(camadas)) await expect(carregar()).resolves.toBeDefined();
   });

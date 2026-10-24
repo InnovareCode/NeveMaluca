@@ -18,11 +18,14 @@ import type {
   ArmazenamentoLike,
   ConfigSave,
   DiarioSave,
+  EstadoCampeonato,
   EstadoCarga,
+  Evolucao,
   IdPersonagem,
   IdPista,
   Migracao,
   ModoControles,
+  PistaConcluidaCampeonato,
   ProgressoSave,
   Recorde,
   RegrasSave,
@@ -61,6 +64,10 @@ export const MAX_CHARS_REPLAY = 98_304;
 export const MAX_EXTRAS_CHAVES = 16;
 export const MAX_EXTRAS_CHARS_POR_CAMPO = 2_048;
 export const MAX_EXTRAS_CHARS_TOTAL = 8_192;
+/** Nível máximo de evolução por personagem (plano C-D3: "até 5 níveis"; mesmo teto de `data/evolucao.ts`). */
+export const TETO_NIVEL_EVOLUCAO = 5;
+/** Máximo de corredores de uma corrida do campeonato (plano: jogador + 5 rivais, C-D1/C-D2). */
+export const MAX_CORREDORES_CAMPEONATO = 6;
 /** Teto do texto lido do disco; acima disso o conteudo e tratado como adulterado. */
 export const MAX_TEXTO_SAVE = 1_500_000;
 
@@ -85,6 +92,9 @@ const CHAVES_CONHECIDAS: ReadonlySet<string> = new Set([
   'diario',
   'personagemAtivo',
   'pistaAtiva',
+  'campeonato',
+  'trofeus',
+  'evolucao',
   'extras',
 ]);
 const FORMA_CHAVE_EXTRA = /^[a-z][A-Za-z0-9]{0,31}$/;
@@ -358,6 +368,81 @@ export function sanearPistaAtiva(bruto: unknown, regras: RegrasSave): IdPista | 
   return typeof bruto === 'string' && regras.pistas.includes(bruto) ? bruto : undefined;
 }
 
+/**
+ * Uma pista do campeonato já concluída (plano C5a): só a posição do JOGADOR (1..`MAX_CORREDORES_CAMPEONATO`) e os
+ * ticks dela, não o pódio completo — `meta/campeonato.ts` deriva pontos a partir do `ResultadoCorrida.ordem` da
+ * CORRIDA em si (dado rico, em memória), não deste registro resumido do save. Registro inválido é descartado por
+ * inteiro (não remendado), igual a `sanearRecorde`.
+ */
+function sanearPistaConcluida(bruto: unknown, regras: RegrasSave): PistaConcluidaCampeonato | undefined {
+  if (!ehObjeto(bruto)) return undefined;
+  const existe = regras.pistas.includes(bruto['pista'] as string) || regras.pistasIniciais.includes(bruto['pista'] as string);
+  if (typeof bruto['pista'] !== 'string' || !existe) return undefined;
+  const ordem = inteiroLimitado(bruto['ordem'], 1, MAX_CORREDORES_CAMPEONATO);
+  const ticks = inteiroLimitado(bruto['ticks'], 1, TETO_TICKS);
+  if (ordem === undefined || ticks === undefined) return undefined;
+  return { pista: bruto['pista'], ordem, ticks };
+}
+
+/** Até uma pista por pista do catálogo (duplicata é lixo: mantém a 1ª válida), capado no tamanho do catálogo. */
+function sanearPistasConcluidas(bruto: unknown, regras: RegrasSave): PistaConcluidaCampeonato[] {
+  if (!Array.isArray(bruto)) return [];
+  const vistas = new Set<IdPista>();
+  const saida: PistaConcluidaCampeonato[] = [];
+  for (const item of (bruto as unknown[]).slice(0, MAX_ITENS_BRUTOS)) {
+    if (saida.length >= regras.pistas.length) break;
+    const limpo = sanearPistaConcluida(item, regras);
+    if (limpo === undefined || vistas.has(limpo.pista)) continue;
+    vistas.add(limpo.pista);
+    saida.push(limpo);
+  }
+  return saida;
+}
+
+/**
+ * Campeonato em andamento (plano C5a). `semente`/`personagem` precisam ser válidos (sem eles não há como repetir
+ * as 5 pistas: o registro inteiro é descartado, como `sanearRecorde`). `etapa` NUNCA vem do bruto: é sempre
+ * `pistasConcluidas.length` depois do saneamento — mesmo "nunca confiar num total guardado" de `classificacao`
+ * (`meta/campeonato.ts`), aplicado aqui à contagem de etapas.
+ */
+export function sanearCampeonato(bruto: unknown, regras: RegrasSave): EstadoCampeonato | undefined {
+  if (!ehObjeto(bruto)) return undefined;
+  const semente = inteiroLimitado(bruto['semente'], 0, 0xffffffff);
+  const personagem = bruto['personagem'];
+  if (semente === undefined || typeof personagem !== 'string' || !regras.personagens.includes(personagem)) return undefined;
+  const pistasConcluidas = sanearPistasConcluidas(bruto['pistasConcluidas'], regras);
+  const etapa = Math.min(5, pistasConcluidas.length) as EstadoCampeonato['etapa'];
+  return { semente, personagem, etapa, pistasConcluidas };
+}
+
+/** Só ids de `regras.personagens`, sem repetição, na ordem do catálogo (determinístico). `undefined` se nenhum. */
+export function sanearTrofeus(bruto: unknown, regras: RegrasSave): readonly IdPersonagem[] | undefined {
+  const lidos = new Set(strings(bruto));
+  const saida = regras.personagens.filter((id) => lidos.has(id));
+  return saida.length > 0 ? saida : undefined;
+}
+
+/** Só ids de `regras.personagens`; nível inteiro 1..`TETO_NIVEL_EVOLUCAO` (nível 0 é implícito: não é gravado). */
+function sanearNiveisEvolucao(bruto: unknown, regras: RegrasSave): Partial<Record<IdPersonagem, number>> {
+  const o = ehObjeto(bruto) ? bruto : {};
+  const saida: Record<IdPersonagem, number> = {};
+  for (const [id, valor] of Object.entries(o).slice(0, MAX_ITENS_BRUTOS)) {
+    if (!regras.personagens.includes(id)) continue;
+    const nivel = inteiroLimitado(valor, 0, TETO_NIVEL_EVOLUCAO);
+    if (nivel !== undefined && nivel > 0) saida[id] = nivel;
+  }
+  return saida;
+}
+
+/** Evolução entre campeonatos (plano C-D3/C-D4): carteira de flocos (mesmo teto de `prog.flocos`) + nível por personagem. */
+export function sanearEvolucao(bruto: unknown, regras: RegrasSave): Evolucao | undefined {
+  if (!ehObjeto(bruto)) return undefined;
+  return {
+    flocos: inteiroLimitado(bruto['flocos'], 0, TETO_FLOCOS) ?? 0,
+    niveis: sanearNiveisEvolucao(bruto['niveis'], regras),
+  };
+}
+
 /** Fantasmas: ate `MAX_FANTASMAS` no total (conhecidas primeiro, na ordem do catalogo), JSON simples e pequeno. */
 export function sanearFantasmas(bruto: unknown, regras: RegrasSave): Record<IdPista, ReplayOpaco> | undefined {
   if (!ehObjeto(bruto)) return undefined;
@@ -429,6 +514,9 @@ export function sanearSave(bruto: unknown, regras: RegrasSave): SaveV1 {
   const diario = sanearDiario(o['diario']);
   const personagemAtivo = sanearPersonagemAtivo(o['personagemAtivo'], regras);
   const pistaAtiva = sanearPistaAtiva(o['pistaAtiva'], regras);
+  const campeonato = sanearCampeonato(o['campeonato'], regras);
+  const trofeus = sanearTrofeus(o['trofeus'], regras);
+  const evolucao = sanearEvolucao(o['evolucao'], regras);
   // No disco os campos desconhecidos moram na RAIZ (um build mais novo os le onde os escreveu); em memoria, em `extras`.
   // Aceita as duas formas, para o saneamento ser idempotente sobre o proprio resultado.
   const extras = sanearExtras({ ...(ehObjeto(o['extras']) ? o['extras'] : {}), ...o });
@@ -442,6 +530,9 @@ export function sanearSave(bruto: unknown, regras: RegrasSave): SaveV1 {
     ...(diario !== undefined ? { diario } : {}),
     ...(personagemAtivo !== undefined ? { personagemAtivo } : {}),
     ...(pistaAtiva !== undefined ? { pistaAtiva } : {}),
+    ...(campeonato !== undefined ? { campeonato } : {}),
+    ...(trofeus !== undefined ? { trofeus } : {}),
+    ...(evolucao !== undefined ? { evolucao } : {}),
     ...(extras !== undefined ? { extras } : {}),
   };
 }

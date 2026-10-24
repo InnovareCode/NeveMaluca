@@ -15,7 +15,9 @@ import type {
   Giro,
   IdPose,
   LeituraDescida,
+  ModoDescida,
   ModoPiloto,
+  OpcoesDescida,
   PistaGerada,
   PilotoLeitura,
   ComandoDescida,
@@ -102,6 +104,8 @@ export interface MotorDescida {
   /** Hash estável do estado interno completo (para provar determinismo e, no futuro, o `hashFinal` do replay C6). */
   hashEstado(): string;
   readonly config: ConfigDescida;
+  /** Modo desta descida (plano corrida-campeonato, C0): `'treino'` sempre que `opcoes`/`opcoes.modo` for omitido. */
+  readonly modo: ModoDescida;
 }
 
 /** Pontos de tempo de ar (plano §3.5: 10 a cada 0,1 s acima de 0,5 s). */
@@ -167,9 +171,16 @@ function leituraDe(estado: EstadoDescida, eventos: readonly EventoDescida[]): Le
   };
 }
 
-/** Cria o motor para uma pista já gerada. `semente` é reservado (M2: canais de RNG de manobra), não usado no M1a. */
-export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_PADRAO): MotorDescida {
+/**
+ * Cria o motor para uma pista já gerada. `semente` é reservado (M2: canais de RNG de manobra), não usado no M1a.
+ *
+ * `opcoes` (plano corrida-campeonato, C0): `camada` (coletáveis/kickers desta rodada) e `modo` ainda não mudam
+ * NADA do cálculo — são aceitos e guardados para C3 (turbo de pouso)/C6 (replay) usarem depois. Por isso omitir
+ * `opcoes` (como todo chamador faz hoje) é, por construção, o comportamento de sempre: golden da Capi intacto.
+ */
+export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_PADRAO, opcoes: OpcoesDescida = {}): MotorDescida {
   if (pista.alturas.length < 2) throw new ErroDeContrato('contrato-invalido', 'PistaGerada precisa de ao menos 2 amostras de altura');
+  const modo: ModoDescida = opcoes.modo ?? 'treino';
 
   const anguloInicial = inclinacaoGrausEm(pista, 0);
 
@@ -457,6 +468,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
 
   return {
     config,
+    modo,
     processar(cmd: ComandoDescida): LeituraDescida {
       estado.tick++;
       if (estado.fase === 'contagem') estado.fase = 'descendo';

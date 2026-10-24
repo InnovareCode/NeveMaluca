@@ -260,6 +260,18 @@ export const CAMPOS_RESUMO_DESCIDA = [
 ] as const;
 export type CampoResumoDescida = (typeof CAMPOS_RESUMO_DESCIDA)[number];
 
+/**
+ * Resumo final de UMA descida (plano M3 §B.4; plano corrida-campeonato §Contratos, `ResultadoCorrida.resumoJogador`).
+ * Vive aqui (não em `descida/`) pela mesma razão de `CAMPOS_RESUMO_DESCIDA`: `CondicaoObjetivo` (abaixo) e
+ * `ResultadoCorrida` (fim do arquivo) precisam do tipo sem cruzar camada (`core/` não importa `descida/`).
+ * `descida/resumo.ts` (redutor puro, ainda não escrito — M3 F5) e `corrida/` (C2a) produzem valores desta forma a
+ * partir de uma `LeituraDescida`/`EventoDescida[]`; a forma em si já está fixada aqui, com os mesmos campos de
+ * `CAMPOS_RESUMO_DESCIDA` e só eles (mais `concluiu`, que não é um dos campos numéricos do objetivo).
+ */
+export interface ResumoDescida extends Readonly<Record<CampoResumoDescida, number>> {
+  readonly concluiu: boolean;
+}
+
 /** Condição de objetivo (plano M3 §B.4), avaliada sobre um `ResumoDescida` (redutor puro, ainda sem F5). */
 export type CondicaoObjetivo =
   | { readonly tipo: 'concluir' }
@@ -294,4 +306,111 @@ export interface ReplayV1 {
   /** Comandos em RLE + base64. Formato em `replay.ts` (`codificarComandos`/`decodificarComandos`). */
   readonly comandos: string;
   readonly resultado: ResultadoReplay;
+}
+
+// --- Corrida em campeonato (plano `docs/plano-corrida-campeonato.md` §Contratos, C0) ---
+// Tipos fixados aqui (sem lógica: isso é `corrida/`, camada nova, C2a) para Lyra/Cronos/Íris terem o contrato real
+// desde já. `ModoDescida`/`criarDescida` mantêm o golden da Capi por construção: omitir `opcoes` (ou `modo`) chama
+// o motor exatamente como antes (padrão sem camada, modo `'treino'`) — nenhum teste existente muda de resultado.
+
+export const MODOS_DESCIDA = ['treino', 'corrida'] as const;
+export type ModoDescida = (typeof MODOS_DESCIDA)[number];
+
+/**
+ * Camada de jogo por cima do terreno gerado (coletáveis, kickers, obstáculos altos, pórtico — plano §Arquitetura,
+ * C3, AINDA NÃO IMPLEMENTADA). Reservada aqui só para `criarDescida` já nascer com a forma final do parâmetro;
+ * `motor.ts` aceita o campo e o ignora até C3 (omitir `camada`, como todo chamador faz hoje, é EXATAMENTE o
+ * comportamento de sempre — nenhum bit muda). Alias de `ObjetoPista[]` (mesmo catálogo de `TIPOS_OBJETO`, que já
+ * tem `floco`) até C3 decidir se precisa de forma própria.
+ */
+export type CamadaJogo = readonly ObjetoPista[];
+
+/** 3º parâmetro de `criarDescida` (`descida/motor.ts`). Omitido (ou `{}`) => sem camada extra, modo `'treino'`. */
+export interface OpcoesDescida {
+  readonly camada?: CamadaJogo;
+  readonly modo?: ModoDescida;
+}
+
+/** Quem pilota um corredor da corrida: o jogador (entrada ao vivo) ou uma IA (perfil do personagem + nível da pista). */
+export type PilotoCorrida =
+  | { readonly tipo: 'jogador' }
+  | { readonly tipo: 'ia'; readonly perfil: IdPersonagem; readonly nivel: number };
+
+/** Um corredor da corrida (plano §Contratos): a ficha do personagem (`config`) e quem o pilota. */
+export interface ParticipanteCorrida {
+  readonly id: IdPersonagem;
+  readonly config: DefPersonagem;
+  readonly piloto: PilotoCorrida;
+}
+
+/** Projeção de UM rival na `LeituraCorrida` (plano C-D2: sem colisão, cada corredor é um motor independente). */
+export interface LeituraRivalCorrida {
+  readonly id: IdPersonagem;
+  readonly piloto: PilotoCorrida;
+  readonly fase: FaseDescida;
+  readonly distancia: number;
+}
+
+/** Leitura de UM tick da corrida inteira (plano §Contratos): o jogador em detalhe, os rivais resumidos. */
+export interface LeituraCorrida {
+  readonly tick: number;
+  readonly jogador: LeituraDescida;
+  readonly rivais: readonly LeituraRivalCorrida[];
+  /** Do 1º ao último lugar NESTE tick (plano C-D1: critério de desempate só se aplica ao `ResultadoCorrida` final). */
+  readonly posicoes: readonly IdPersonagem[];
+  readonly chegadas: readonly { readonly id: IdPersonagem; readonly tick: number }[];
+}
+
+/** Resultado final de uma pista da corrida (plano §Contratos): pódio, duração de cada um e o que o jogador ganhou. */
+export interface ResultadoCorrida {
+  readonly pista: IdPista;
+  /** Ordem de chegada (1º ao último); quem não chegou no teto de `corrida/` entra no fim, por distância. */
+  readonly ordem: readonly IdPersonagem[];
+  readonly ticks: Readonly<Record<IdPersonagem, number>>;
+  readonly resumoJogador: ResumoDescida;
+  readonly flocosGanhos: number;
+}
+
+// --- Campeonato e evolução (plano §Arquitetura: `meta/campeonato.ts` e `aplicarEvolucao`, C5a/C6, Cronos) ---
+// Só os TIPOS do save aqui (plano C0): a lógica de pontuação/classificação/desempate (`meta/campeonato.ts`) e de
+// upgrade (`aplicarEvolucao`) é do Cronos. `SaveV1` (`meta/tipos.ts`) ganha `campeonato?: EstadoCampeonato`,
+// `trofeus?: readonly IdPersonagem[]` e `evolucao?: Evolucao` como campos ADITIVOS (mesmo padrão dos outros campos
+// opcionais de `SaveV1`: ausente = sem campeonato em andamento / sem troféu / sem evolução, sem bump de versão).
+
+/** Uma pista já corrida dentro do campeonato em andamento (plano C-D1): a classificação é sempre DERIVADA daqui. */
+export interface PistaConcluidaCampeonato {
+  readonly pista: IdPista;
+  /** Posição final do jogador nessa pista (1 = 1º lugar). */
+  readonly ordem: number;
+  readonly ticks: number;
+}
+
+/** Campeonato em andamento (plano §Arquitetura): semente fixa das 5 pistas, personagem escolhido, progresso. */
+export interface EstadoCampeonato {
+  readonly semente: number;
+  readonly personagem: IdPersonagem;
+  /** 0 = nenhuma pista corrida ainda; 5 = as 5 concluídas (campeonato decidido). */
+  readonly etapa: 0 | 1 | 2 | 3 | 4 | 5;
+  readonly pistasConcluidas: readonly PistaConcluidaCampeonato[];
+}
+
+/** Progresso de upgrade entre campeonatos (plano C-D3/C-D4): carteira única de flocos, nível por personagem. */
+export interface Evolucao {
+  readonly flocos: number;
+  /** Ausente = nível 0 (identidade, plano C-D3: "no nível 0 é idêntico por construção"). */
+  readonly niveis: Readonly<Partial<Record<IdPersonagem, number>>>;
+}
+
+/**
+ * Replay C6 do modo corrida (plano §Arquitetura): mesma forma do `ReplayV1`, mais o modo, os níveis de evolução
+ * ativos na hora da gravação e, se foi corrida (não treino), a semente e os rivais daquela corrida.
+ */
+export interface ReplayV2 extends Omit<ReplayV1, 'v'> {
+  readonly v: 2;
+  readonly modo: ModoDescida;
+  readonly niveis: Readonly<Partial<Record<IdPersonagem, number>>>;
+  readonly corrida?: {
+    readonly semente: number;
+    readonly rivais: readonly IdPersonagem[];
+  };
 }

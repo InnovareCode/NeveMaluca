@@ -17,6 +17,7 @@ import type { ArmazenamentoLike, SaveV1 } from '../../src/meta/tipos';
 import { saveVazio } from '../../src/meta/storage';
 import { exigirPistaValida } from '../../src/pista/index';
 import { criarGerenciadorCenas } from '../../src/ui/cenas/gerenciador';
+import { TICKS_CONTAGEM_DESCIDA } from '../../src/ui/cenas/descida';
 
 const PISTA_ID = PISTA_MORRO_DO_PINHAO.id;
 
@@ -72,6 +73,11 @@ function descerAteRegistrar(save: SaveV1, armazenamento: ArmazenamentoLike): voi
   let frameAnterior: InputFrame = INPUT_NEUTRO;
 
   for (let i = 0; i < LIMITE_TICKS && (save.recordes[PISTA_ID]?.length ?? 0) === 0; i++) {
+    if (i < TICKS_CONTAGEM_DESCIDA) {
+      // A cena está na contagem "3-2-1-JÁ" (§C1): não tica nem dirige o motor sombra, só o gerenciador mesmo.
+      gerenciador.atualizar();
+      continue;
+    }
     const cmdBot = bot(leituraSombra);
     const frame: InputFrame = { pular: cmdBot.pulo, giro: cmdBot.giro, grab: cmdBot.grab, agachar: cmdBot.agachar };
 

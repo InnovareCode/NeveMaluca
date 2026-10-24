@@ -16,8 +16,11 @@
 | `objetos.ts` | `desenharObjetos`/`desenharTrilhos`: `ObjetoPista` e `Trilho` (grind) apoiados no terreno, pela pele do tema (`PintorTema`, default bosque) |
 | `temas/tipos.ts` | `PintorTema` (plano M3 §B.3): contrato do DESENHO de um tema — `construirCamadas`/`desenharObjeto`/`desenharTrilho` |
 | `temas/bosque.ts` | Pele do Morro do Pinhão (tema `bosque`), extraída de `parallax.ts`/`objetos.ts` sem mudar pixel (M3-F4). `TEMA_BOSQUE` (`DefTema`) + `pintorBosque` (`PintorTema`). Novos temas do M3 (parque/vila/vulcao/cume) entram aqui do lado, um arquivo por tema |
-| `piloto.ts` | `desenharPiloto`: renderiza sprite com ancoragem de contato/pivô ou cápsula de fallback |
-| `hud.ts` | `desenharHud`: velocidade (km/h), pontos e a barra de combo (xMULT + soma, janela de ligação como barra que esvazia); aviso "PREPARA..." na contagem |
+| `piloto.ts` | `desenharPiloto`: renderiza sprite com ancoragem de contato/pivô ou cápsula de fallback; `poseOverride` opcional (5º parâmetro) pra sobrepor a pose do motor (ver `pose-visual.ts`) |
+| `pose-visual.ts` | `criarRastreadorPoseVisual` (plano "corrida em campeonato" §C1): takeoff no pulo, wobble num pouso torto, pose de grab por direção — tudo de RENDER, lendo só `PilotoLeitura.grab`/`EventoDescida`, nunca o motor |
+| `chegada.ts` | `desenharChegada`: pórtico + faixa "CHEGADA" em `pista.chegadaX`, via `ObjetoPista` SINTÉTICO (nunca em `PistaGerada.objetos`, pra não mudar o hash) — reusa a pele do tema de cada pista |
+| `confete.ts` | `criarConfete` (§C1): rajada de confete na comemoração da chegada, pool fixo em espaço de TELA (não de mundo) |
+| `hud.ts` | `desenharHud`: velocidade (km/h), pontos, barra de combo (xMULT + soma, janela de ligação) e barra de progresso (`progressoJogador`, pensada pra receber os 6 rostos no C2b); aviso "CHEGOU!" na chegada. `desenharContagemRegressiva`: "3-2-1-JÁ" antes da descida (chamada pela cena, não por `desenharHud` — ela conta ticks próprios antes do motor rodar) |
 | `manobra.ts` | `criarSistemaPopupsManobra` (M2): popups de texto que sobem e somem a cada evento `manobra`/`combo-fechado`/`combo-perdido`, mesmo padrão de pool fixo do `particulas.ts`. Nomes de exibição são PROVISÓRIOS — ver TODO no arquivo (definitivos são do Apolo) |
 
 **Regras de desempenho (o portão é o iPhone):** camadas de montanha e floresta pré-desenhadas em canvas fora da tela (uma vez, não a cada quadro — lição do boot.ts); sem `shadowBlur` nem `filter`. Sistema de partículas em pool circular de 128 instâncias reutilizadas, zero alocação de objetos por quadro.

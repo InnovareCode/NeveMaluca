@@ -34,12 +34,13 @@ const PLANO: Readonly<Record<string, readonly string[]>> = {
   data: ['core'],
   pista: ['core', 'data'],
   descida: ['core', 'data', 'pista'],
+  corrida: ['core', 'data', 'pista', 'descida'],
   meta: ['core', 'data'],
   render: ['core', 'data', 'assets'],
   audio: ['core', 'data'],
   input: ['core'],
   assets: ['core', 'data'],
-  ui: ['core', 'data', 'pista', 'descida', 'meta', 'render', 'audio', 'input', 'assets', 'platform'],
+  ui: ['core', 'data', 'pista', 'descida', 'corrida', 'meta', 'render', 'audio', 'input', 'assets', 'platform'],
   platform: ['core'],
 };
 
@@ -92,7 +93,7 @@ describe('importes entre camadas: matriz completa 11 x 11 (mutação)', () => {
         casos++;
       }
     }
-    expect(casos).toBe(121);
+    expect(casos).toBe(144);
   });
 
   it('pega todas as formas de importe: type, export from, efeito, dinâmico literal, glob', () => {
@@ -175,15 +176,15 @@ describe('textos proibidos: cada regra reprova nas camadas em que vale e só nel
       return r === undefined ? [] : r.camadas === 'todas' ? [...CAMADAS] : [...r.camadas];
     };
     expect(escopo('Math.random').sort()).toEqual([...CAMADAS].sort());
-    expect(escopo('Math fora da lista').sort()).toEqual(['core', 'descida', 'pista']);
-    expect(escopo('operador **').sort()).toEqual(['core', 'descida', 'pista']);
-    expect(escopo('Date').sort()).toEqual(['audio', 'core', 'descida', 'pista']);
-    expect(escopo('performance').sort()).toEqual(['audio', 'core', 'descida', 'pista']);
+    expect(escopo('Math fora da lista').sort()).toEqual(['core', 'corrida', 'descida', 'pista']);
+    expect(escopo('operador **').sort()).toEqual(['core', 'corrida', 'descida', 'pista']);
+    expect(escopo('Date').sort()).toEqual(['audio', 'core', 'corrida', 'descida', 'pista']);
+    expect(escopo('performance').sort()).toEqual(['audio', 'core', 'corrida', 'descida', 'pista']);
   });
 
   it('as funções que o plano proíbe no motor reprovam uma a uma em descida/, pista/ e core/', () => {
     const proibidas = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'pow', 'exp', 'expm1', 'log', 'log2', 'log10', 'log1p', 'cbrt', 'hypot'];
-    for (const camada of ['descida', 'pista', 'core']) {
+    for (const camada of ['descida', 'pista', 'core', 'corrida']) {
       for (const f of proibidas) {
         expect(regras(analisarArquivo(`${camada}/m.ts`, `export const v = Math.${f}(1, 2);`)), `${camada}: Math.${f}`).toContain('texto-proibido');
       }

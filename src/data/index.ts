@@ -5,3 +5,4 @@ export * from './pistas';
 export * from './personagens';
 export * from './temas';
 export * from './objetivos';
+export * from './evolucao';

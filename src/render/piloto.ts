@@ -5,7 +5,7 @@
  */
 import type { QuadroCarregado, SpritePersonagem } from '../assets/index';
 import { PX_POR_METRO } from '../core/constantes';
-import type { PilotoLeitura } from '../core/contratos';
+import type { IdPose, PilotoLeitura } from '../core/contratos';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
 
 export const COR_POR_MODO: Readonly<Record<PilotoLeitura['modo'], string>> = {
@@ -39,7 +39,13 @@ export function desenharPiloto(
   ctx: CanvasRenderingContext2D,
   piloto: PilotoLeitura,
   camera: EstadoCamera,
-  sprite?: SpritePersonagem | null
+  sprite?: SpritePersonagem | null,
+  /**
+   * Pose a desenhar, se diferente de `piloto.pose` (plano "corrida em campeonato" §C1): takeoff/wobble/grab são
+   * ajuste de RENDER (`render/pose-visual.ts`), o motor nunca sabe disso. Sem este parâmetro, usa `piloto.pose`
+   * (mesmo comportamento de sempre — quem chama sem ele não muda nada).
+   */
+  poseOverride?: IdPose
 ): void {
   const centro = mundoParaTela(piloto.x, piloto.y, camera, PX_POR_METRO);
   const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
@@ -49,7 +55,8 @@ export function desenharPiloto(
   ctx.translate(centro.x, centro.y);
   ctx.rotate(anguloCanvasRad);
 
-  const quadro: QuadroCarregado | null = sprite ? sprite.obterQuadro(piloto.pose) : null;
+  const pose = poseOverride ?? piloto.pose;
+  const quadro: QuadroCarregado | null = sprite ? sprite.obterQuadro(pose) : null;
 
   if (quadro) {
     const d = quadro.dados;

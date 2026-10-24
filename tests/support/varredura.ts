@@ -14,21 +14,26 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-export const CAMADAS = ['core', 'data', 'pista', 'descida', 'meta', 'render', 'audio', 'input', 'assets', 'ui', 'platform'] as const;
+export const CAMADAS = ['core', 'data', 'pista', 'descida', 'corrida', 'meta', 'render', 'audio', 'input', 'assets', 'ui', 'platform'] as const;
 export type Camada = (typeof CAMADAS)[number];
 
-/** Tabela do plano §3.1, coluna "Importa de". `ui` importa de todas. Uma camada sempre pode importar de si mesma. */
+/**
+ * Tabela do plano §3.1, coluna "Importa de" (+ `corrida`, plano `docs/plano-corrida-campeonato.md` §Arquitetura,
+ * C2a: núcleo da corrida, por cima de `descida/` do mesmo jeito que `descida/` é por cima de `pista/`). `ui`
+ * importa de todas. Uma camada sempre pode importar de si mesma.
+ */
 export const PODE_IMPORTAR: Readonly<Record<Camada, readonly Camada[]>> = {
   core: [],
   data: ['core'],
   pista: ['core', 'data'],
   descida: ['core', 'data', 'pista'],
+  corrida: ['core', 'data', 'pista', 'descida'],
   meta: ['core', 'data'],
   render: ['core', 'data', 'assets'],
   audio: ['core', 'data'],
   input: ['core'],
   assets: ['core', 'data'],
-  ui: ['core', 'data', 'pista', 'descida', 'meta', 'render', 'audio', 'input', 'assets', 'platform'],
+  ui: ['core', 'data', 'pista', 'descida', 'corrida', 'meta', 'render', 'audio', 'input', 'assets', 'platform'],
   platform: ['core'],
 };
 
@@ -248,8 +253,8 @@ interface RegraDeTexto {
   readonly camadas: readonly Camada[] | 'todas';
 }
 
-const NUCLEO_DETERMINISTICO: readonly Camada[] = ['core', 'pista', 'descida'];
-const SEM_RELOGIO: readonly Camada[] = ['core', 'pista', 'descida', 'audio'];
+const NUCLEO_DETERMINISTICO: readonly Camada[] = ['core', 'pista', 'descida', 'corrida'];
+const SEM_RELOGIO: readonly Camada[] = ['core', 'pista', 'descida', 'corrida', 'audio'];
 
 /** Math.* permitido no núcleo determinístico: tudo que é exato pelo padrão (inclui `sqrt`, correto em IEEE 754). */
 const MATH_PERMITIDO = 'abs|ceil|floor|round|trunc|sign|min|max|sqrt|imul|fround|clz32|PI|SQRT2';

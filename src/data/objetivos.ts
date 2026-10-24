@@ -7,9 +7,12 @@
  * guarda o DADO; `CondicaoObjetivo.campo` já é validado contra `CAMPOS_RESUMO_DESCIDA` (`core/contratos.ts`), então
  * quando `resumo.ts` nascer as duas listas não podem divergir.
  *
- * Pico do Picolé, Vila do Chocolate Quente, Vulcão Pé-Gelado e Cume da Ventania (M3 F3) estão aqui por ora: o Morro
- * do Pinhão não tem `DefObjetivo` ainda (seus 3 ids em `data/pistas.ts` ficam sem catálogo, como já estava antes
- * desta tarefa — fora de escopo).
+ * As 5 pistas (plano corrida-campeonato §Dívida técnica): Morro do Pinhão ganha seus 3 objetivos nesta tarefa (C5a,
+ * antes ficavam sem catálogo); o `CUME_O2` ("Combo ×6") foi corrigido aqui porque era IMPOSSÍVEL — `mult = 1 +
+ * famílias distintas` (`descida/combo.ts`) e só há 4 famílias (`FAMILIAS_MANOBRA`, `data/manobras.ts`), teto real
+ * ×5 (o `MULT_TETO = 10` de `data/manobras.ts` nunca é alcançado). A escada do Cume continua subindo, mas por
+ * CONTAGEM de manobras no combo (`maiorComboManobras`, que aceita repetir família com desconto — esse sim cresce
+ * além de 5), não por família distinta.
  */
 import { CAMPOS_RESUMO_DESCIDA } from '../core/contratos';
 import type { CondicaoObjetivo, DefObjetivo } from '../core/contratos';
@@ -17,6 +20,8 @@ import { FORMA_ID, TICKS_POR_SEGUNDO } from '../core/constantes';
 import { ErroDeContrato } from '../core/erros';
 import { REGRAS_SAVE } from './regras-save';
 
+// plano M3 §B.4, Morro do Pinhão (pista 1, tutorial): "grind de 2 s na cerca de madeira" -> 2 s em ticks.
+const TICKS_2S = 2 * TICKS_POR_SEGUNDO;
 // plano M3 §B.4: "grind de 3 s num palito" -> 3 s em ticks (60 Hz, `core/constantes.ts`).
 const TICKS_3S = 3 * TICKS_POR_SEGUNDO;
 // Vila do Chocolate Quente (pista 3, um degrau acima do Picolé): "grind de 4 s num varal" -> 4 s em ticks.
@@ -25,6 +30,27 @@ const TICKS_4S = 4 * TICKS_POR_SEGUNDO;
 const TICKS_5S = 5 * TICKS_POR_SEGUNDO;
 // Cume da Ventania (pista 5, a última, um degrau acima do Vulcão): "grind de 6 s na corda" -> 6 s em ticks.
 const TICKS_6S = 6 * TICKS_POR_SEGUNDO;
+
+export const MORRO_O1: DefObjetivo = {
+  id: 'morro-do-pinhao-o1',
+  pista: 'morro-do-pinhao',
+  texto: 'Grind de 2 s na cerca de madeira',
+  condicao: { tipo: 'minimo', campo: 'maiorGrindTicks', valor: TICKS_2S },
+};
+
+export const MORRO_O2: DefObjetivo = {
+  id: 'morro-do-pinhao-o2',
+  pista: 'morro-do-pinhao',
+  texto: 'Combo ×2',
+  condicao: { tipo: 'minimo', campo: 'maiorMult', valor: 2 },
+};
+
+export const MORRO_O3: DefObjetivo = {
+  id: 'morro-do-pinhao-o3',
+  pista: 'morro-do-pinhao',
+  texto: '12.000 pontos numa descida',
+  condicao: { tipo: 'minimo', campo: 'pontos', valor: 12_000 },
+};
 
 export const PICOLE_O1: DefObjetivo = {
   id: 'pico-do-picole-o1',
@@ -99,8 +125,10 @@ export const CUME_O1: DefObjetivo = {
 export const CUME_O2: DefObjetivo = {
   id: 'cume-da-ventania-o2',
   pista: 'cume-da-ventania',
-  texto: 'Combo ×6',
-  condicao: { tipo: 'minimo', campo: 'maiorMult', valor: 6 },
+  // "Combo ×6" era impossível (mult trava em ×5: só 4 famílias de manobra). Escada por CONTAGEM de manobras em vez
+  // de família distinta — essa sim passa de 5 (repetir família custa menos, mas ainda soma ao combo).
+  texto: 'Combo de 6 manobras',
+  condicao: { tipo: 'minimo', campo: 'maiorComboManobras', valor: 6 },
 };
 
 export const CUME_O3: DefObjetivo = {
@@ -111,6 +139,9 @@ export const CUME_O3: DefObjetivo = {
 };
 
 export const OBJETIVOS_DE_DADOS: readonly DefObjetivo[] = [
+  MORRO_O1,
+  MORRO_O2,
+  MORRO_O3,
   PICOLE_O1,
   PICOLE_O2,
   PICOLE_O3,

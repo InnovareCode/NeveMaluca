@@ -90,6 +90,75 @@ export function desenharBotao(ctx: Ctx, b: RetratoDeBotao): void {
   ctx.restore();
 }
 
+export interface RetratoDeBotaoBala extends RetratoDeBotao {
+  /** Etiqueta pequena no canto (ex. "EM BREVE"); omitir quando não precisar. */
+  readonly etiqueta?: string | undefined;
+}
+
+/**
+ * Botão "bala"/pill (plano "corrida em campeonato" §C8a, key art): mesma receita de `desenharBotao` (sombra,
+ * gradiente, contorno, texto com contorno), só com o raio = metade da altura (cápsula) e um brilho vítreo na
+ * metade de cima -- sem `shadowBlur`/`filter` (caro em canvas por software, mesma regra do README de `render/`).
+ */
+export function desenharBotaoBala(ctx: Ctx, b: RetratoDeBotaoBala): void {
+  const raio = b.h / 2;
+  ctx.save();
+
+  ctx.fillStyle = 'rgba(11, 26, 51, 0.38)';
+  caminhoArredondado(ctx, { x: b.x + 3, y: b.y + 5, w: b.w, h: b.h }, raio);
+  ctx.fill();
+
+  const grad = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.h);
+  grad.addColorStop(0, b.corTopo);
+  grad.addColorStop(1, b.corBase);
+  ctx.fillStyle = grad;
+  caminhoArredondado(ctx, b, raio);
+  ctx.fill();
+
+  ctx.save();
+  caminhoArredondado(ctx, b, raio);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(b.x + b.w / 2, b.y + b.h * 0.18, b.w * 0.46, b.h * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = b.aoVivo ? '#ffffff' : '#0b1a33';
+  caminhoArredondado(ctx, b, raio);
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.font = b.destaque ? 'italic 900 26px "Barlow Condensed", Impact, sans-serif' : 'italic 800 22px "Barlow Condensed", Impact, sans-serif';
+
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#0b1a33';
+  ctx.strokeText(b.texto, b.x + b.w / 2, b.y + b.h / 2);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(b.texto, b.x + b.w / 2, b.y + b.h / 2);
+
+  if (b.etiqueta) {
+    ctx.save();
+    ctx.translate(b.x + b.w - 8, b.y - 2);
+    ctx.rotate((-8 * Math.PI) / 180);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '800 11px Barlow, sans-serif';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#0b1a33';
+    ctx.strokeText(b.etiqueta, 0, 0);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(b.etiqueta, 0, 0);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
 export interface OpcoesDeTexto {
   readonly fonte?: string | undefined;
   readonly cor?: string | undefined;

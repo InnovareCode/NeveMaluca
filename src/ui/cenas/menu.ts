@@ -1,18 +1,28 @@
 /**
- * Cena de Menu Principal (Canvas 2D).
+ * Cena de Menu Principal (Canvas 2D) -- visual "key art" Pixar (plano "corrida em campeonato" §C8a, ZERO
+ * crédito): cenário raster de UMA pista (`public/assets/cenarios/`, mesmas camadas que a descida usa, via
+ * `render/temas/catalogo.ts`) + os 6 personagens (`public/assets/personagens/`) num pelotão close -- o ativo
+ * (hero) na frente/maior, os outros 5 ao redor, em poses de manobra. Botões "bala" (`ui/desenho.ts`,
+ * `desenharBotaoBala`) + logo tipográfico.
  *
- * Requisitos atendidos:
- *  1. Botões estilizados: Jogar, Modos, Opções (toque e mouse).
- *  2. Capi em destaque com morro nevado ao fundo.
- *  3. Partículas de neve e céu alpino característico.
+ * Menu: CAMPEONATO / TREINO / PERSONAGEM / OPÇÕES (o antigo MODOS vira TREINO -- o modo solo de hoje -- e
+ * CAMPEONATO é NOVO). Contrato de callbacks e POSIÇÃO de cada botão ficam EXATAMENTE como antes (`aoJogar`/
+ * `aoModos`/`aoOpcoes`/`aoPersonagem`/`aoPista`, mesmas coordenadas): só o RÓTULO visual muda -- os testes de
+ * `ui-cenas-fase1.test.ts` e os e2e (`fase1-fluxo-cenas`, `selecao-pista`, `selecao-personagem`) clicam por
+ * posição, sem conhecer texto. Única mudança de comportamento: o botão de CAMPEONATO (posição que era "MODOS")
+ * fica INERTE sem `aoModos` -- nunca mais cai de volta em `aoJogar` (campeonato ainda não existe, C2a/C5a; cair
+ * em silêncio na descida solo seria mentir pro jogador). Mesmo padrão "fica inerte" de `aoPersonagem`/`aoPista`.
  */
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import { ALTURA, LARGURA } from '../../core/constantes';
 import { seno } from '../../core/trig';
+import { REGRAS_SAVE } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { criarCamadaEstatica, desenharBotao, desenharFlocos, type CamadaEstatica } from '../desenho';
+import { criarParallax, type Parallax } from '../../render/parallax';
+import { pintorDoTema, precarregarAssetsParqueRaster, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import { criarCamadaEstatica, desenharBotaoBala, desenharFlocos, type CamadaEstatica } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import type { Cena } from '../tipos';
 
@@ -27,14 +37,13 @@ export interface OpcoesCenaMenu {
   readonly aoPersonagem?: (() => void) | undefined;
   /** Abre a tela de seleção de pista; sem ela, o botão PISTA fica inerte (testes que não usam o recurso). */
   readonly aoPista?: (() => void) | undefined;
-  /** Id do personagem em destaque na vitrine (sprite + fallback); sem ele, mostra a `capi`. */
+  /** Id do personagem em destaque no pelotão (hero, maior/na frente); sem ele, mostra a `capi`. */
   readonly obterPersonagemAtivo?: (() => string) | undefined;
+  /** Catálogo pro pelotão (hero + 5 ao redor); sem ele, cai no elenco inteiro de `data/regras-save.ts`. */
+  readonly catalogoPersonagens?: readonly string[] | undefined;
 }
 
-const COR_CEU_TOPO = '#1b4b8a';
-const COR_CEU_BASE = '#70aae0';
-const COR_NEVE = '#f4f9ff';
-const COR_CONTORNO_NEVE = '#9fb6c9';
+const COR_TEXTO = '#f4f9ff';
 const COR_CONTORNO = '#0b1a33';
 
 const BOTOES_LARGURA = 220;
@@ -58,29 +67,15 @@ const BOTAO_PISTA: BotaoRetangular = {
   h: BOTOES_ALTURA,
 };
 
-function pintarCenarioMenu(ctx: Ctx): void {
-  // 1. Céu em degradê
+/** Fallback vetorial enquanto o cenário raster carrega (fire-and-forget) ou se ele falhar -- nunca trava o menu. */
+function pintarCenarioReserva(ctx: Ctx): void {
   const ceu = ctx.createLinearGradient(0, 0, 0, ALTURA);
-  ceu.addColorStop(0, COR_CEU_TOPO);
-  ceu.addColorStop(1, COR_CEU_BASE);
+  ceu.addColorStop(0, '#1b4b8a');
+  ceu.addColorStop(1, '#70aae0');
   ctx.fillStyle = ceu;
   ctx.fillRect(0, 0, LARGURA, ALTURA);
 
-  // 2. Montanhas distantes
-  ctx.fillStyle = '#6f9fd6';
-  ctx.beginPath();
-  ctx.moveTo(0, ALTURA);
-  ctx.lineTo(0, ALTURA * 0.65);
-  ctx.lineTo(260, ALTURA * 0.48);
-  ctx.lineTo(540, ALTURA * 0.62);
-  ctx.lineTo(820, ALTURA * 0.44);
-  ctx.lineTo(LARGURA, ALTURA * 0.54);
-  ctx.lineTo(LARGURA, ALTURA);
-  ctx.closePath();
-  ctx.fill();
-
-  // 3. Grande morro nevado descendo da direita para a esquerda
-  ctx.fillStyle = COR_NEVE;
+  ctx.fillStyle = '#f4f9ff';
   ctx.beginPath();
   ctx.moveTo(0, ALTURA);
   ctx.lineTo(0, ALTURA * 0.76);
@@ -88,50 +83,46 @@ function pintarCenarioMenu(ctx: Ctx): void {
   ctx.lineTo(LARGURA, ALTURA);
   ctx.closePath();
   ctx.fill();
+}
 
-  // Contorno suave na crista do morro de neve
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = COR_CONTORNO_NEVE;
-  ctx.beginPath();
-  ctx.moveTo(0, ALTURA * 0.76);
-  ctx.bezierCurveTo(LARGURA * 0.35, ALTURA * 0.74, LARGURA * 0.65, ALTURA * 0.56, LARGURA, ALTURA * 0.42);
-  ctx.stroke();
+/** Um "ator" do pelotão (plano §C8a): posição/tamanho/pose fixos por SLOT, não por identidade -- qualquer
+ *  catálogo de 6 ids encaixa aqui, o hero só ocupa o slot `heroi`. */
+interface SlotPelotao {
+  readonly x: number;
+  readonly y: number;
+  readonly alturaPx: number;
+  readonly pose: string;
+  readonly anguloGraus: number;
+}
 
-  // Pinheiros decorativos na montanha
-  ctx.fillStyle = '#1e4738';
-  const desenharPinheiro = (px: number, py: number, alturaArvore: number): void => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - alturaArvore);
-    ctx.lineTo(px + alturaArvore * 0.4, py);
-    ctx.lineTo(px - alturaArvore * 0.4, py);
-    ctx.closePath();
-    ctx.fill();
-  };
-  desenharPinheiro(680, ALTURA * 0.54, 46);
-  desenharPinheiro(720, ALTURA * 0.52, 38);
-  desenharPinheiro(760, ALTURA * 0.50, 42);
-  desenharPinheiro(860, ALTURA * 0.44, 34);
+/** Hero (ativo) na frente/maior, mais baixo na composição (perto da "câmera"); os outros 5 atrás, menores, em
+ *  arco -- poses de manobra variadas (voo, grab, pouso), nunca a mesma pose duas vezes. */
+const SLOT_HEROI: SlotPelotao = { x: 740, y: 440, alturaPx: 210, pose: 'star', anguloGraus: -4 };
+const SLOTS_COMPANHEIROS: readonly SlotPelotao[] = [
+  { x: 565, y: 335, alturaPx: 100, pose: 'air', anguloGraus: 8 },
+  { x: 650, y: 268, alturaPx: 105, pose: 'grabUp', anguloGraus: -6 },
+  { x: 762, y: 254, alturaPx: 102, pose: 'flip0', anguloGraus: 10 },
+  { x: 878, y: 296, alturaPx: 108, pose: 'land', anguloGraus: -3 },
+  { x: 900, y: 420, alturaPx: 112, pose: 'tuck1', anguloGraus: 4 },
+];
 
-  // Título e subtítulo do Menu
+function desenharAtorPelotao(ctx: Ctx, sprite: SpritePersonagem | null, slot: SlotPelotao): void {
+  const quadro = sprite ? (sprite.obterQuadro(slot.pose) ?? sprite.obterQuadro('ride0')) : null;
   ctx.save();
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.lineJoin = 'round';
-  ctx.font = 'italic 900 68px "Barlow Condensed", Impact, sans-serif';
-
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = COR_CONTORNO;
-  ctx.strokeText('NEVE MALUCA', BOTOES_X, 130);
-
-  const gradTitulo = ctx.createLinearGradient(BOTOES_X, 80, BOTOES_X, 140);
-  gradTitulo.addColorStop(0, '#ffffff');
-  gradTitulo.addColorStop(1, '#a8e0ff');
-  ctx.fillStyle = gradTitulo;
-  ctx.fillText('NEVE MALUCA', BOTOES_X, 130);
-
-  ctx.font = '700 20px Barlow, sans-serif';
-  ctx.fillStyle = COR_CONTORNO;
-  ctx.fillText('DESCIDA RADICAL & COMÉDIA', BOTOES_X + 2, 162);
+  ctx.translate(slot.x, slot.y);
+  ctx.rotate((slot.anguloGraus * Math.PI) / 180);
+  if (quadro) {
+    const d = quadro.dados;
+    const escala = slot.alturaPx / d.altura;
+    const [ancoraX, ancoraY] = d.contato ?? d.pivo;
+    ctx.drawImage(quadro.imagem, -ancoraX * escala, -ancoraY * escala, d.largura * escala, d.altura * escala);
+  } else {
+    // fallback silencioso: cápsula genérica enquanto o sprite não carregou
+    ctx.fillStyle = '#8e5b23';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, slot.alturaPx * 0.17, slot.alturaPx * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -140,17 +131,29 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
 
   let ticks = 0;
-  let spriteCapi: SpritePersonagem | null = null;
   let botaoHover: string | null = null;
-  let cenario: CamadaEstatica | null = null;
+  let cenarioReserva: CamadaEstatica | null = null;
 
-  void carregarSpritePersonagem(opcoes.obterPersonagemAtivo?.() ?? 'capi')
-    .then((s) => {
-      spriteCapi = s;
-    })
-    .catch(() => {
-      // fallback silencioso
-    });
+  // Cenário raster "Pixar" do Pico do Picolé (tema `parque`, plano §C8a: "UMA pista" de fundo): decide raster x
+  // vetorial UMA vez, só depois de o carregamento (fire-and-forget) assentar -- mesmo padrão de
+  // `ui/cenas/selecao-pista.ts` -- então cai sozinho no vetorial (`pintarCenarioReserva`) se ainda não deu tempo
+  // ou se os assets falharem (nunca trava o menu).
+  let parallaxPronto: Parallax | null = null;
+  void precarregarAssetsParqueRaster(doc).then(() => {
+    parallaxPronto = criarParallax(doc, pintorDoTema('parque'), temaDeRenderDoTema('parque'));
+  });
+  let derivaXm = 0;
+
+  // Elenco do pelotão (hero + 5): melhor esforço, cada sprite cai no fallback de cápsula se ainda não carregou.
+  const catalogo = opcoes.catalogoPersonagens ?? REGRAS_SAVE.personagens;
+  const sprites = new Map<string, SpritePersonagem>();
+  for (const id of catalogo) {
+    void carregarSpritePersonagem(id)
+      .then((s) => sprites.set(id, s))
+      .catch(() => {
+        // fallback silencioso: o slot mostra a cápsula genérica
+      });
+  }
 
   const aoMover = (e: Event): void => {
     const ev = e as PointerEvent;
@@ -171,8 +174,9 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
     if (pontoDentroDoBotao(pt, BOTAO_JOGAR)) {
       opcoes.aoJogar();
     } else if (pontoDentroDoBotao(pt, BOTAO_MODOS)) {
-      if (opcoes.aoModos) opcoes.aoModos();
-      else opcoes.aoJogar();
+      // CAMPEONATO (posição que era MODOS): ainda não existe motor de campeonato (C2a/C5a) -- fica inerte sem
+      // `aoModos`, nunca cai de volta pra `aoJogar` (mentiria pro jogador que campeonato = descida solo).
+      opcoes.aoModos?.();
     } else if (pontoDentroDoBotao(pt, BOTAO_OPCOES)) {
       opcoes.aoOpcoes();
     } else if (pontoDentroDoBotao(pt, BOTAO_PERSONAGEM)) {
@@ -186,6 +190,8 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
     const ev = e as KeyboardEvent;
     if (ev.code === 'Enter' || ev.code === 'Space') {
       opcoes.aoJogar();
+    } else if (ev.code === 'KeyC') {
+      opcoes.aoModos?.();
     } else if (ev.code === 'KeyO') {
       opcoes.aoOpcoes();
     } else if (ev.code === 'KeyP') {
@@ -203,71 +209,85 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
     id: 'menu',
     atualizar() {
       ticks += 1;
+      derivaXm += 0.012; // deriva lenta do parallax (sensação de "cenário vivo", não uma câmera de corrida)
     },
     desenhar(ctx: Ctx, alpha: number) {
-      if (!cenario && doc) {
-        cenario = criarCamadaEstatica(doc, pintarCenarioMenu);
-      }
-      if (cenario) {
-        cenario.desenhar(ctx);
-      } else {
-        pintarCenarioMenu(ctx);
-      }
-
       const t = ticks + alpha;
 
-      // Partículas de neve caindo
+      if (parallaxPronto) {
+        parallaxPronto.desenhar(ctx, derivaXm, t);
+      } else {
+        if (!cenarioReserva && doc) cenarioReserva = criarCamadaEstatica(doc, pintarCenarioReserva);
+        if (cenarioReserva) cenarioReserva.desenhar(ctx);
+        else pintarCenarioReserva(ctx);
+      }
+
+      // Estouro de luz atrás do pelotão (key art): gradiente simples, sem `shadowBlur`/`filter` (caro em canvas
+      // por software -- mesma regra de performance do README de `render/`).
+      const brilho = ctx.createRadialGradient(SLOT_HEROI.x, SLOT_HEROI.y - 90, 10, SLOT_HEROI.x, SLOT_HEROI.y - 90, 280);
+      brilho.addColorStop(0, 'rgba(255, 248, 220, 0.55)');
+      brilho.addColorStop(1, 'rgba(255, 248, 220, 0)');
+      ctx.fillStyle = brilho;
+      ctx.fillRect(0, 0, LARGURA, ALTURA);
+
       desenharFlocos(ctx, 40, t);
 
-      // Capi Barbosa em destaque
-      const capiX = LARGURA * 0.72;
-      const capiY = ALTURA * 0.68 + seno((t * 3) % 360) * 3;
-      const quadroCapi = spriteCapi ? (spriteCapi.obterQuadro('ride0') ?? spriteCapi.obterQuadro('star')) : null;
+      // Pelotão: os 5 companheiros (atrás, menores) primeiro, o hero (ativo, na frente/maior) por último.
+      const idHeroi = opcoes.obterPersonagemAtivo?.() ?? catalogo[0] ?? 'capi';
+      const companheiros = catalogo.filter((id) => id !== idHeroi);
+      SLOTS_COMPANHEIROS.forEach((slot, i) => {
+        const id = companheiros[i % Math.max(1, companheiros.length)];
+        desenharAtorPelotao(ctx, id ? sprites.get(id) ?? null : null, slot);
+      });
+      const bobHeroi = seno((t * 2.4) % 360) * 3;
+      desenharAtorPelotao(ctx, sprites.get(idHeroi) ?? null, { ...SLOT_HEROI, y: SLOT_HEROI.y + bobHeroi });
 
+      // Logo + subtítulo (key art, canto superior esquerdo -- fora do pelotão).
       ctx.save();
-      ctx.translate(capiX, capiY);
-      ctx.rotate((-12 * Math.PI) / 180);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.lineJoin = 'round';
+      ctx.font = 'italic 900 68px "Barlow Condensed", Impact, sans-serif';
 
-      if (quadroCapi) {
-        const d = quadroCapi.dados;
-        const escalaCapi = 145 / d.altura;
-        const [ancoraX, ancoraY] = d.contato ?? d.pivo;
-        ctx.drawImage(
-          quadroCapi.imagem,
-          -ancoraX * escalaCapi,
-          -ancoraY * escalaCapi,
-          d.largura * escalaCapi,
-          d.altura * escalaCapi,
-        );
-      } else {
-        ctx.fillStyle = '#8e5b23';
-        ctx.beginPath();
-        ctx.ellipse(0, -30, 36, 48, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ff9f43';
-        ctx.fillRect(-45, 12, 90, 10);
-      }
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = COR_CONTORNO;
+      ctx.strokeText('NEVE MALUCA', BOTOES_X, 130);
+
+      const gradTitulo = ctx.createLinearGradient(BOTOES_X, 80, BOTOES_X, 140);
+      gradTitulo.addColorStop(0, '#ffffff');
+      gradTitulo.addColorStop(1, '#a8e0ff');
+      ctx.fillStyle = gradTitulo;
+      ctx.fillText('NEVE MALUCA', BOTOES_X, 130);
+
+      ctx.font = '700 20px Barlow, sans-serif';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = COR_CONTORNO;
+      ctx.strokeText('CAMPEONATO DA MONTANHA', BOTOES_X + 2, 162);
+      ctx.fillStyle = COR_TEXTO;
+      ctx.fillText('CAMPEONATO DA MONTANHA', BOTOES_X + 2, 162);
       ctx.restore();
 
-      // Botões estilizados
-      desenharBotao(ctx, {
+      // Botões "bala": CAMPEONATO (destaque, novo) e TREINO (a descida solo de sempre) na mesma posição de
+      // JOGAR/MODOS de antes -- só o rótulo muda (ver comentário de topo do arquivo).
+      desenharBotaoBala(ctx, {
         ...BOTAO_JOGAR,
-        texto: 'JOGAR',
+        texto: 'TREINO',
         corTopo: botaoHover === 'jogar' ? '#ffe066' : '#f6c90e',
         corBase: botaoHover === 'jogar' ? '#f39c12' : '#d35400',
         destaque: true,
         aoVivo: botaoHover === 'jogar',
       });
 
-      desenharBotao(ctx, {
+      desenharBotaoBala(ctx, {
         ...BOTAO_MODOS,
-        texto: 'MODOS',
+        texto: 'CAMPEONATO',
         corTopo: botaoHover === 'modos' ? '#4da2ff' : '#2a7de1',
         corBase: botaoHover === 'modos' ? '#1f6fd0' : '#144d8f',
         aoVivo: botaoHover === 'modos',
+        etiqueta: 'EM BREVE',
       });
 
-      desenharBotao(ctx, {
+      desenharBotaoBala(ctx, {
         ...BOTAO_OPCOES,
         texto: 'OPÇÕES',
         corTopo: botaoHover === 'opcoes' ? '#4da2ff' : '#2a7de1',
@@ -275,7 +295,7 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
         aoVivo: botaoHover === 'opcoes',
       });
 
-      desenharBotao(ctx, {
+      desenharBotaoBala(ctx, {
         ...BOTAO_PERSONAGEM,
         texto: 'PERSONAGEM',
         corTopo: botaoHover === 'personagem' ? '#4da2ff' : '#2a7de1',
@@ -283,7 +303,7 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
         aoVivo: botaoHover === 'personagem',
       });
 
-      desenharBotao(ctx, {
+      desenharBotaoBala(ctx, {
         ...BOTAO_PISTA,
         texto: 'PISTA',
         corTopo: botaoHover === 'pista' ? '#4da2ff' : '#2a7de1',
@@ -295,7 +315,10 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
       ctx.save();
       ctx.textAlign = 'left';
       ctx.font = '600 14px Barlow, sans-serif';
-      ctx.fillStyle = '#2a517f';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = COR_CONTORNO;
+      ctx.strokeText('v1.0 · Neve Maluca · Innovare Games', 20, ALTURA - 16);
+      ctx.fillStyle = COR_TEXTO;
       ctx.fillText('v1.0 · Neve Maluca · Innovare Games', 20, ALTURA - 16);
       ctx.restore();
     },

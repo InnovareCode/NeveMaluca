@@ -17,7 +17,7 @@ import { criarDescida } from '../../src/descida/motor';
 import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
 import { exigirPistaValida } from '../../src/pista/index';
-import { criarCenaDescida, type ResultadoDescida } from '../../src/ui/cenas/descida';
+import { criarCenaDescida, TICKS_CONTAGEM_DESCIDA, type ResultadoDescida } from '../../src/ui/cenas/descida';
 
 function criarCanvasFalso(): AlvoToque {
   return {
@@ -113,6 +113,11 @@ function criarEDescerComBot(fantasma?: ReplayV1): { resultado: ResultadoDescida;
   let frameAnterior: InputFrame = INPUT_NEUTRO;
 
   for (let i = 0; i < LIMITE_TICKS && resultado === null; i++) {
+    if (i < TICKS_CONTAGEM_DESCIDA) {
+      // A cena está na contagem "3-2-1-JÁ" (§C1): não tica nem dirige o motor sombra, só a cena mesmo.
+      cena.atualizar();
+      continue;
+    }
     const cmdBot = bot(leituraSombra);
     const frame: InputFrame = { pular: cmdBot.pulo, giro: cmdBot.giro, grab: cmdBot.grab, agachar: cmdBot.agachar };
 
@@ -157,7 +162,9 @@ describe('criarCenaDescida desenha o fantasma translúcido (globalAlpha 0.4) ANT
     const canvas = criarCanvasFalso();
     const janela = criarJanelaFalsa();
     const cena = criarCenaDescida({ canvas, janela, fantasma });
-    for (let i = 0; i < 5; i++) cena.atualizar();
+    // Passa da contagem "3-2-1-JÁ" (§C1, `TICKS_CONTAGEM_DESCIDA`) + alguns ticks de corrida de verdade: antes
+    // disso a cena nem tica o motor real nem o fantasma (ver `ui/cenas/descida.ts`).
+    for (let i = 0; i < TICKS_CONTAGEM_DESCIDA + 5; i++) cena.atualizar();
 
     const ctx = criarCtxFalso();
     cena.desenhar(ctx, 0);
@@ -169,7 +176,7 @@ describe('criarCenaDescida desenha o fantasma translúcido (globalAlpha 0.4) ANT
     const canvas = criarCanvasFalso();
     const janela = criarJanelaFalsa();
     const cena = criarCenaDescida({ canvas, janela });
-    for (let i = 0; i < 5; i++) cena.atualizar();
+    for (let i = 0; i < TICKS_CONTAGEM_DESCIDA + 5; i++) cena.atualizar();
 
     const ctx = criarCtxFalso();
     cena.desenhar(ctx, 0);

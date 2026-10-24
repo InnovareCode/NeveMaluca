@@ -20,3 +20,8 @@ erro clara, nunca um jogo meio quebrado. `main.ts` importa esses módulos para o
   `tests/unit/integracao-m0.test.ts` prova que ela é atribuível a `RegrasSave`.
 - **Trocar id depois de haver save gravado** manda o id antigo para `prog.desconhecidos` (não se perde, mas some da UI). Renomear só antes de haver jogador.
 - Cronos substitui esta tabela pelos `DefPersonagem`/`DefPista`/`DefObjetivo` reais no M1 (e decide os iniciais, o ganho de flocos e a escolha final do elenco, D3).
+- `objetivos.ts`: as 5 pistas têm 3 objetivos cada agora (Morro ganhou os seus no C5a); `CUME_O2` usa
+  `maiorComboManobras` (não `maiorMult` — ×6 é impossível, só 4 famílias de manobra existem).
+- `evolucao.ts` (plano C-D3/C-D4, C5a): custo em flocos por nível (1 nível por personagem, até 5), e
+  `flocosDaCorrida` (conversão de `ResultadoCorrida` em flocos ganhos — hoje plugada em `0` em `corrida/corrida.ts`,
+  Vega conecta). `aplicarEvolucao` (a física do upgrade) NÃO mora aqui: é `descida/atributos.ts`, C6.

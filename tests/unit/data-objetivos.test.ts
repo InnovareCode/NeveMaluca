@@ -9,6 +9,9 @@ import {
   CUME_O1,
   CUME_O2,
   CUME_O3,
+  MORRO_O1,
+  MORRO_O2,
+  MORRO_O3,
   OBJETIVOS_DE_DADOS,
   PICOLE_O1,
   PICOLE_O2,
@@ -28,8 +31,11 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(problemasDosObjetivosDeDados()).toEqual([]);
   });
 
-  it('os 3 objetivos do Picolé, os 3 da Vila, os 3 do Vulcão e os 3 do Cume existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
+  it('os 3 objetivos do Morro, os 3 do Picolé, os 3 da Vila, os 3 do Vulcão e os 3 do Cume existem, na ordem o1..o3, e estão em REGRAS_SAVE.objetivos', () => {
     expect(OBJETIVOS_DE_DADOS.map((d) => d.id)).toEqual([
+      'morro-do-pinhao-o1',
+      'morro-do-pinhao-o2',
+      'morro-do-pinhao-o3',
       'pico-do-picole-o1',
       'pico-do-picole-o2',
       'pico-do-picole-o3',
@@ -46,7 +52,10 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     for (const def of OBJETIVOS_DE_DADOS) expect(REGRAS_SAVE.objetivos).toContain(def.id);
   });
 
-  it('o1 é "minimo" sobre maiorGrindTicks, o2 sobre maiorMult, o3 sobre pontos (escada de dificuldade do plano)', () => {
+  it('o1 é "minimo" sobre maiorGrindTicks, o2 sobre maiorMult (Cume: maiorComboManobras), o3 sobre pontos (escada de dificuldade do plano)', () => {
+    expect(MORRO_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
+    expect(MORRO_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 2 });
+    expect(MORRO_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 12_000 });
     expect(PICOLE_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
     expect(PICOLE_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 3 });
     expect(PICOLE_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 15_000 });
@@ -57,8 +66,12 @@ describe('OBJETIVOS_DE_DADOS: validação de forma', () => {
     expect(VULCAO_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 5 });
     expect(VULCAO_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 21_000 });
     expect(CUME_O1.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorGrindTicks' });
-    expect(CUME_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorMult', valor: 6 });
+    expect(CUME_O2.condicao).toMatchObject({ tipo: 'minimo', campo: 'maiorComboManobras', valor: 6 });
     expect(CUME_O3.condicao).toMatchObject({ tipo: 'minimo', campo: 'pontos', valor: 24_000 });
+  });
+
+  it('CUME_O2 não pede "Combo ×6" (impossível: mult trava em ×5, só 4 famílias de manobra em data/manobras.ts)', () => {
+    expect(CUME_O2.condicao).not.toMatchObject({ campo: 'maiorMult' });
   });
 
   it('todo CondicaoObjetivo.campo (inclusive dentro de "todos") está em CAMPOS_RESUMO_DESCIDA', () => {

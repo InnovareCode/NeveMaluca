@@ -8,7 +8,18 @@
  * Os ids sao `string` de proposito: o save de um build mais novo pode conter ids que este build nao conhece, e eles
  * precisam atravessar a leitura e a regravacao sem perda (ver `prog.desconhecidos`). Quando `data/` existir, o tipo
  * literal dos ids conhecidos mora la; aqui o storage so sabe "id com forma valida".
+ *
+ * `campeonato`/`trofeus`/`evolucao` (plano `docs/plano-corrida-campeonato.md` §Arquitetura, C5a) importam os tipos
+ * de `core/contratos` (permitido: a camada `meta -> core, data` do plano §3.1 já cobre isso). São campos ADITIVOS
+ * (mesmo padrao de `personagemAtivo`/`pistaAtiva`): ausentes = sem campeonato em andamento / sem troféu / sem
+ * evolução, sem bump de `v`. Saneados em `storage.ts` (`sanearCampeonato`/`sanearTrofeus`/`sanearEvolucao`).
  */
+
+// `storage.ts` NÃO importa `core/` direto (teste `tests/unit/meta/storage.test.ts` → "pureza da camada meta/":
+// "storage.ts só importa tipos, não depende de core/ nem de data/" — o catálogo de ids entra por parâmetro). Por
+// isso os tipos de `core/contratos` entram AQUI e saem reexportados: `storage.ts` os pega via `./tipos`.
+import type { EstadoCampeonato, Evolucao, PistaConcluidaCampeonato } from '../core/contratos';
+export type { EstadoCampeonato, Evolucao, PistaConcluidaCampeonato };
 
 export type IdPersonagem = string;
 export type IdPista = string;
@@ -94,6 +105,23 @@ export interface SaveV1 {
    * desbloqueio ainda não existe, M3-futuro). Mesmo padrão de [[personagemAtivo]].
    */
   pistaAtiva?: IdPista;
+  /**
+   * Campeonato em andamento (plano C5a). ADITIVO: ausente = nenhum campeonato em andamento. `etapa` é recalculada
+   * no saneamento a partir do `pistasConcluidas` saneado (nunca confia no `etapa` bruto do disco: mesmo espirito de
+   * `meta/campeonato.ts` → `classificacao`, "nunca um total guardado").
+   */
+  campeonato?: EstadoCampeonato;
+  /**
+   * Personagens que já venceram ao menos um campeonato (plano C-D9: substitui o desbloqueio por estrelas, agora
+   * obsoleto). ADITIVO, sem repeticao, so ids de `RegrasSave.personagens`.
+   */
+  trofeus?: readonly IdPersonagem[];
+  /**
+   * Evolução entre campeonatos (plano C-D3/C-D4): carteira ÚNICA de flocos + nível por personagem (0..5, ausente =
+   * nível 0). ADITIVO: ausente = nunca comprou upgrade nenhum. Persiste mesmo quando `campeonato` é removido (perder
+   * ou terminar um campeonato não reseta a evolução — "todos um dia vencem").
+   */
+  evolucao?: Evolucao;
   /**
    * Campos de raiz que este build nao conhece (o mesmo `v`, gravados por um build com campo aditivo): preservados
    * com limites (ver `MAX_EXTRAS_*` em storage.ts). Ausente quando nao ha.

@@ -18,6 +18,7 @@
     "verificar": "npm run typecheck && npm test && npm run test:e2e:build && npm run test:e2e",
     "icone:provisorio": "node ferramentas/icone/gerar-icone-provisorio.mjs",
     "harness": "node ferramentas/harness/cli.mjs",
+    "harness:corrida": "node ferramentas/harness-corrida/cli.mjs",
     "balanco": "node ferramentas/balanco/cli.mjs"
   },
   "devDependencies": {

@@ -12,7 +12,7 @@ import { criarDescida } from '../../src/descida/motor';
 import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
 import { exigirPistaValida } from '../../src/pista/index';
-import { criarCenaDescida, type ResultadoDescida } from '../../src/ui/cenas/descida';
+import { criarCenaDescida, TICKS_CONTAGEM_DESCIDA, type ResultadoDescida } from '../../src/ui/cenas/descida';
 
 function criarCanvasFalso(): AlvoToque {
   return {
@@ -59,6 +59,11 @@ describe('criarCenaDescida({ pista: "vila-chocolate" })', () => {
     let frameAnterior: InputFrame = INPUT_NEUTRO;
 
     for (let i = 0; i < LIMITE_TICKS && resultado === null; i++) {
+      if (i < TICKS_CONTAGEM_DESCIDA) {
+        // A cena está na contagem "3-2-1-JÁ" (§C1): não tica nem dirige o motor sombra, só a cena mesmo.
+        cena.atualizar();
+        continue;
+      }
       const cmdBot = bot(leituraSombra);
       const frame: InputFrame = { pular: cmdBot.pulo, giro: cmdBot.giro, grab: cmdBot.grab, agachar: cmdBot.agachar };
 
