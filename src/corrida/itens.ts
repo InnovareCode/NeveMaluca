@@ -77,6 +77,9 @@ export interface OrquestradorItens {
   roletaDe(id: IdPersonagem): { readonly ticksRestantes: number; readonly resultado: TipoItem } | null;
   /** `id` é alvo de uma Nuvem de Granizo com aviso ainda contando (plano I-D2: "~2s de aviso"). */
   alvoDeNuvemAtiva(id: IdPersonagem): boolean;
+  /** x da Bola de Neve viva que mira `id`, ou `null` sem nenhuma — só o ALVO dela corre risco (plano: "acerta o 1º
+   *  rival à frente"). Usado pela IA de desvio (`corrida/ia-itens.ts`, I3) pra saber quando pular. */
+  ameacaBolaPara(id: IdPersonagem): number | null;
   /** Projéteis/armadilhas vivos + caixas que `idPerspectiva` ainda NÃO pegou (plano: "a já pega aparece apagada"). */
   entidadesVisiveis(idPerspectiva: IdPersonagem): readonly EntidadeVisivel[];
   estatisticas(id: IdPersonagem): EstatisticasItensCorredor;
@@ -354,6 +357,12 @@ export function criarOrquestradorItens(opcoes: OpcoesOrquestradorItens): Orquest
     },
     alvoDeNuvemAtiva(id: IdPersonagem): boolean {
       return entidades.some((ent) => ent.tipo === 'nuvem' && ent.alvo === id);
+    },
+    ameacaBolaPara(id: IdPersonagem): number | null {
+      for (const ent of entidades) {
+        if (ent.tipo === 'bola' && ent.alvo === id) return ent.x;
+      }
+      return null;
     },
     entidadesVisiveis(idPerspectiva: IdPersonagem): readonly EntidadeVisivel[] {
       const visiveis: EntidadeVisivel[] = [];

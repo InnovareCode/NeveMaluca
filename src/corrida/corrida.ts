@@ -41,7 +41,9 @@ import { aplicarEvolucao, configDoPersonagem, criarDescida, type MotorDescida } 
 import { gerarCamadaJogo } from '../pista/index';
 import { flocosDaCorrida } from '../data/evolucao';
 import { FLOCOS_POR_ACERTO_ITEM } from '../data/itens';
-import { PERFIS_IA, criarIA, type PerfilIA } from './ia';
+import { obterPistaDeDados } from '../data/pistas';
+import { PERFIS_IA, criarIA, perfilIA, type PerfilIA } from './ia';
+import { agressividadePorPistaOrdem, decidirUsoItemIA, devePularPraDesviar, type AmeacasIA } from './ia-itens';
 import { criarOrquestradorItens, type DecisaoItemCorredor, type OrquestradorItens, type RetratoCorredorItens } from './itens';
 import { criarAcumuladorResumo } from './resumo';
 
@@ -124,6 +126,13 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
   const niveisEvolucao = opcoes.evolucao?.niveis ?? {};
   const obstaculosAltos = camada?.obstaculosAltos ?? [];
   const resumoJogador = criarAcumuladorResumo();
+  // Itens (I3, plano I-D9): agressividade de uso por pista, calculada 1x (não por tick). ACHADO: `ui/cenas/
+  // corrida.ts` (produção) NUNCA passa `opcoes.def` pra `criarCorrida` (só `pista`/`camada` já prontos) — se esta
+  // conta dependesse só de `opcoes.def?.ordem`, a pista 1/2 nunca ficaria "menos agressiva" no jogo real (só em
+  // teste, que passa `def`). Por isso cai pro catálogo por `pista.id` (`data/pistas.ts`, sempre disponível, pista
+  // sempre tem id) quando `def` não vem; ids fora do catálogo (teste/pista futura) caem no cheio, mesmo padrão de
+  // "omitido = comportamento de hoje".
+  const agressividadePistaIA = agressividadePorPistaOrdem(opcoes.def?.ordem ?? obterPistaDeDados(opcoes.pista.id)?.ordem);
 
   const corredores: Corredor[] = opcoes.participantes.map((p): Corredor => {
     // C6: evolução é CAMADA por cima da ficha (`aplicarEvolucao`) — nível 0 (sem `opcoes.evolucao`, como todo
@@ -158,6 +167,43 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
   /** Fase 1 do tick (plano §Determinismo): retrato de cada corredor no fim do tick ANTERIOR — nunca o atual. */
   function retratosAtuais(): RetratoCorredorItens[] {
     return corredores.map((c) => ({ id: c.id, x: c.leitura.piloto.x, y: c.leitura.piloto.y, modo: c.leitura.piloto.modo, fase: c.leitura.fase }));
+  }
+
+  /** Existe algum rival `'descendo'` estritamente na frente de `id` (plano: bola sem alguém pra acertar é jogar
+   *  fora) — consulta pura sobre o RETRATO, não depende da ordem em que os outros ids são verificados. */
+  function existeRivalNaFrenteDe(id: IdPersonagem, retratos: readonly RetratoCorredorItens[]): boolean {
+    const proprio = retratos.find((r) => r.id === id);
+    if (proprio === undefined) return false;
+    return retratos.some((r) => r.id !== id && r.fase === 'descendo' && r.x > proprio.x);
+  }
+
+  /** Decisão de usar item (I3, `corrida/ia-itens.ts`) de UM rival — nunca do jogador (`cmd.usarItem` decide por
+   *  ele). Pura por `id`: não importa em que ordem é chamada pros 6 corredores (mesmo princípio de `idsOrdenados`
+   *  em `corrida/itens.ts`). */
+  function decisaoUsoItemRival(id: IdPersonagem, tickAtual: number, retratos: readonly RetratoCorredorItens[]): boolean {
+    return decidirUsoItemIA({
+      semente: opcoes.semente,
+      id,
+      tick: tickAtual,
+      ousadia: perfilIA(id, opcoes.catalogoPerfis ?? PERFIS_IA).ousadia,
+      agressividadePista: agressividadePistaIA,
+      item: itensCorrida.itemDe(id),
+      escudoAtivo: itensCorrida.escudoAtivo(id),
+      alvoDeNuvemAtiva: itensCorrida.alvoDeNuvemAtiva(id),
+      existeRivalNaFrente: existeRivalNaFrenteDe(id, retratos),
+    });
+  }
+
+  /** Comando de descida de UM rival (`c.ia`, pura/sem item), com o desvio reativo (I3) sobreposto por cima: nunca
+   *  cancela um pulo que a IA de terreno já ia dar, só FORÇA pulo quando há uma Bola de Neve/Poça de Calda vindo
+   *  na direção dele e ele ainda está no chão (ver `devePularPraDesviar`). */
+  function comandoRivalComDesvio(c: Corredor): ComandoDescida {
+    const base = (c.ia as (l: LeituraDescida) => ComandoDescida)(c.leitura);
+    const ameacas: AmeacasIA = {
+      bolaAlvoX: itensCorrida.ameacaBolaPara(c.id),
+      pocasX: itensCorrida.entidadesVisiveis(c.id).filter((e) => e.tipo === 'poca').map((e) => e.x),
+    };
+    return devePularPraDesviar(c.leitura.piloto, ameacas) ? { ...base, pulo: true } : base;
   }
 
   function leituraCorridaDe(tick: number, eventosCorrida: readonly EventoCorrida[] = []): LeituraCorrida {
@@ -215,17 +261,21 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
     },
     processar(cmd: ComandoCorrida): LeituraCorrida {
       tick++;
-      // Fase 1: retrato do tick anterior + decisão de `usarItem` de cada corredor (IA ainda não usa item — I3).
+      // Fase 1: retrato do tick anterior + decisão de `usarItem` de cada corredor (I3: cada rival decide pela
+      // própria IA, `decisaoUsoItemRival`; o jogador decide pela entrada, `cmd.usarItem`).
       const retratos = retratosAtuais();
       const posicoesAnteriores = posicoesDe(corredores);
-      const decisoes: DecisaoItemCorredor[] = corredores.map((c) => ({ id: c.id, usarItem: c.ehJogador ? cmd.usarItem : false }));
+      const decisoes: DecisaoItemCorredor[] = corredores.map((c) => ({
+        id: c.id,
+        usarItem: c.ehJogador ? cmd.usarItem : decisaoUsoItemRival(c.id, tick, retratos),
+      }));
 
       // Fase 2: o orquestrador resolve caixas/projéteis/armadilhas/escudos sobre esse retrato.
       const { efeitosPorId, eventos: eventosCorrida } = itensCorrida.processarTick(retratos, decisoes, posicoesAnteriores);
 
       // Fase 3: cada motor processa com os efeitos recebidos — nenhum lê outro, a ORDEM aqui nunca muda o resultado.
       for (const c of corredores) {
-        const cmdDescida = c.ehJogador ? cmd.descida : (c.ia as (l: LeituraDescida) => ComandoDescida)(c.leitura);
+        const cmdDescida = c.ehJogador ? cmd.descida : comandoRivalComDesvio(c);
         tiqueUm(c, cmdDescida, efeitosPorId[c.id] ?? []);
       }
       return leituraCorridaDe(tick, eventosCorrida);
@@ -235,14 +285,21 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
       // tick a tick, pelas mesmas 3 fases de `processar()`: sem isso, um rival terminando a corrida inteira antes
       // de outro nem começar faria toda interação entre eles (bola/poça/nuvem) acontecer fora de ordem.
       let seguranca = 0;
+      let tickFinalizar = tick;
       while (corredores.some((c) => !c.ehJogador && c.tickChegada === null) && seguranca < TETO_FINALIZAR_TICKS) {
+        tickFinalizar++;
         const retratos = retratosAtuais();
         const posicoesAnteriores = posicoesDe(corredores);
-        const decisoes: DecisaoItemCorredor[] = corredores.map((c) => ({ id: c.id, usarItem: false }));
+        // Jogador nunca usa item aqui (comentário abaixo: ele só chega por conta própria); rivais decidem como em
+        // `processar()` (`decisaoUsoItemRival`) — sem itens no lockstep final, a interação ficaria incompleta.
+        const decisoes: DecisaoItemCorredor[] = corredores.map((c) => ({
+          id: c.id,
+          usarItem: c.ehJogador ? false : decisaoUsoItemRival(c.id, tickFinalizar, retratos),
+        }));
         const { efeitosPorId } = itensCorrida.processarTick(retratos, decisoes, posicoesAnteriores);
         for (const c of corredores) {
           if (c.ehJogador) continue; // finalizar() não joga pelo jogador: ele só chega por conta própria.
-          tiqueUm(c, (c.ia as (l: LeituraDescida) => ComandoDescida)(c.leitura), efeitosPorId[c.id] ?? []);
+          tiqueUm(c, comandoRivalComDesvio(c), efeitosPorId[c.id] ?? []);
         }
         seguranca++;
       }

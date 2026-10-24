@@ -11,7 +11,7 @@ import { PISTA_VULCAO_PE_GELADO } from '../../src/data/pistas';
 import { configDoPersonagem } from '../../src/descida/atributos';
 import { criarDescida } from '../../src/descida/motor';
 import { gerarPista } from '../../src/pista/gerador';
-import { PERFIS_IA, criarIA, perfilIA } from '../../src/corrida/ia';
+import { PERFIS_IA, contaComoQueda, criarIA, perfilIA } from '../../src/corrida/ia';
 
 const MAX_TICKS = 16200; // mesmo teto generoso do golden do F0 e dos harnesses de bot.
 const BETO = PERSONAGENS_DE_DADOS.find((d) => d.id === 'beto')!;
@@ -72,5 +72,24 @@ describe('perfilIA', () => {
 
   it('capi é o perfil mais constante (ousadia 0), coerente com a personalidade do plano', () => {
     expect(perfilIA('capi').ousadia).toBe(0);
+  });
+});
+
+describe('contaComoQueda (plano itens-corrida §achado 2: acerto de item NÃO pode travar a IA)', () => {
+  it('tombo real conta como queda', () => {
+    expect(contaComoQueda({ tipo: 'tombo', causa: 'angulo' })).toBe(true);
+    expect(contaComoQueda({ tipo: 'tombo', causa: 'obstaculo' })).toBe(true);
+  });
+
+  it('atingido (acerto de item: trombada/freada) NUNCA conta como queda — é evento separado de propósito', () => {
+    expect(contaComoQueda({ tipo: 'atingido', item: 'bola' })).toBe(false);
+    expect(contaComoQueda({ tipo: 'atingido', item: 'poca' })).toBe(false);
+    expect(contaComoQueda({ tipo: 'atingido', item: 'nuvem' })).toBe(false);
+  });
+
+  it('nenhum outro tipo de evento conta como queda', () => {
+    expect(contaComoQueda({ tipo: 'pulo', forca: 1 })).toBe(false);
+    expect(contaComoQueda({ tipo: 'checkpoint', indice: 0 })).toBe(false);
+    expect(contaComoQueda({ tipo: 'pouso', qualidade: 'bom', queda: 0 })).toBe(false);
   });
 });

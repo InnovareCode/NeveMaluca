@@ -6,11 +6,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { derivarComando, INPUT_NEUTRO } from '../../src/core/comandos';
-import type { InputFrame, ResultadoCorrida } from '../../src/core/contratos';
+import type { InputFrame, ParticipanteCorrida, ResultadoCorrida } from '../../src/core/contratos';
+import { PERSONAGENS_DE_DADOS } from '../../src/data/personagens';
 import { PISTA_MORRO_DO_PINHAO } from '../../src/data/pistas';
-import { configDoPersonagem } from '../../src/descida/atributos';
 import { criarBotCuidadoso } from '../../src/descida/bot';
-import { criarDescida } from '../../src/descida/motor';
+import { criarCorrida } from '../../src/corrida/corrida';
 import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
 import { exigirPistaValida, gerarCamadaJogo } from '../../src/pista/index';
@@ -55,11 +55,30 @@ function rodarAteOFim(cena: { atualizar(): void }, janela: ReturnType<typeof cri
   // `criarCorrida` -- a sombra precisa da MESMA (pura/determinística) pra não tombar num obstáculo que ela não
   // sabia existir (os rivais de IA já são camada-aware por dentro de `criarCorrida`, só o jogador é "sombra" aqui).
   const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_MORRO_DO_PINHAO);
-  // modo 'corrida' (turbo de pouso, C-D7): mesma física do jogador real dentro de `corrida/criarCorrida` -- sem
-  // isto a sombra fica mais devagar que o jogador real e o bot mistima pulos pela posição real (mais rápida).
-  const motorSombra = criarDescida(pistaSombra, configDoPersonagem('capi'), { modo: 'corrida', camada: camadaSombra });
+  // Sombra = uma 2ª `criarCorrida` INTEIRA (não só `criarDescida`), com a MESMA pista/camada/semente/elenco da cena
+  // real (plano itens-corrida §I3, achado desta fase): desde que rivais de IA possam acertar o jogador com um item
+  // (trombada corta a velocidade dele na hora), uma sombra "pura" (sem itens) corre LIVRE enquanto o jogador real
+  // leva o soco -- diverge pra sempre e o bot passa a decidir giro/pulo pelo terreno ERRADO (visto na prática: 1
+  // acerto bastava pra sombra chegar e o jogador real ficar tombando no mesmo lugar até o teto de 60k ticks). Com
+  // os mesmos inputs e o mesmo elenco determinístico (`corrida-itens.test.ts`/`corrida-itens-fuzz.test.ts` provam
+  // isso), esta sombra sofre o MESMO acerto no MESMO tick e fica byte a byte igual ao jogador real da cena opaca.
+  const participantesSombra: ParticipanteCorrida[] = PERSONAGENS_DE_DADOS.map((def) => ({
+    id: def.id,
+    config: def,
+    piloto: def.id === 'capi' ? { tipo: 'jogador' as const } : { tipo: 'ia' as const, perfil: def.id, nivel: 0 },
+  }));
+  // SEM `def` (de propósito): `ui/cenas/corrida.ts` também nunca passa `def` pro `criarCorrida` real (só
+  // `pista`/`camada` já prontos) -- a sombra precisa da MESMA receita exata, senão a agressividade de item por
+  // pista (I-D9, `obterPistaDeDados(pista.id)` quando `def` falta) fica diferente dos dois lados e os rivais
+  // tomam decisões diferentes de uso de item -- foi exatamente o que causou esta divergência na prática.
+  const corridaSombra = criarCorrida({
+    pista: pistaSombra,
+    camada: camadaSombra,
+    semente: PISTA_MORRO_DO_PINHAO.semente,
+    participantes: participantesSombra,
+  });
   const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
-  let leituraSombra = motorSombra.leitura();
+  let leituraSombra = corridaSombra.leitura().jogador;
   let frameAnterior: InputFrame = INPUT_NEUTRO;
 
   for (let i = 0; i < LIMITE_TICKS && obterResultado() === null; i++) {
@@ -80,7 +99,7 @@ function rodarAteOFim(cena: { atualizar(): void }, janela: ReturnType<typeof cri
     }
     if (frame.agachar !== frameAnterior.agachar) janela.disparar(frame.agachar ? 'keydown' : 'keyup', 'ArrowDown');
 
-    leituraSombra = motorSombra.processar(derivarComando(frameAnterior, frame));
+    leituraSombra = corridaSombra.processar({ descida: derivarComando(frameAnterior, frame), usarItem: false }).jogador;
     cena.atualizar();
     frameAnterior = frame;
   }

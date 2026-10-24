@@ -79,6 +79,59 @@ describe('corrida + itens: determinismo com a ORDEM dos participantes permutada'
   });
 });
 
+describe('corrida + itens: IA usa item e desvia (plano itens-corrida §Fases, I3)', () => {
+  it('jogador NUNCA usa item (usarItem:false sempre); ainda assim rivais pegam caixa, usam item, acertam/bloqueiam/desviam', () => {
+    const { pista, camada } = prepararMorro();
+    const bot = criarBotCuidadoso(pista, {}, camada.obstaculosAltos);
+    const tiposDeEventoDeRival = new Set<string>();
+    let algumaCorridaComUsoRival = false;
+
+    for (let semente = 1; semente <= 6; semente++) {
+      const corrida = criarCorrida({ pista, camada, semente, participantes: participantesEm(IDS_PADRAO, 'capi') });
+      let leitura = corrida.leitura();
+      let usoRivalNestaCorrida = false;
+      for (let i = 0; i < MAX_TICKS && leitura.jogador.fase !== 'chegou'; i++) {
+        leitura = corrida.processar({ descida: bot(leitura.jogador), usarItem: false });
+        for (const ev of leitura.eventosCorrida ?? []) {
+          const idEnvolvido = 'id' in ev ? ev.id : ev.de;
+          if (idEnvolvido !== 'capi') {
+            tiposDeEventoDeRival.add(ev.tipo);
+            usoRivalNestaCorrida = true;
+          }
+        }
+      }
+      expect(leitura.jogador.fase, `semente ${semente}: jogador não chegou`).toBe('chegou');
+      corrida.finalizar();
+      if (usoRivalNestaCorrida) algumaCorridaComUsoRival = true;
+    }
+
+    expect(algumaCorridaComUsoRival).toBe(true);
+    expect(tiposDeEventoDeRival.has('item-usado'), `tipos vistos: ${[...tiposDeEventoDeRival].join(',')}`).toBe(true);
+  });
+
+  it('determinismo: a decisão da IA de usar item (mesma semente) não muda entre 2 corridas do zero', () => {
+    const { pista, camada } = prepararMorro();
+    const bot = criarBotCuidadoso(pista, {}, camada.obstaculosAltos);
+
+    function rodar() {
+      const corrida = criarCorrida({ pista, camada, semente: 11, participantes: participantesEm(IDS_PADRAO, 'capi') });
+      let leitura = corrida.leitura();
+      const eventos: string[] = [];
+      for (let i = 0; i < MAX_TICKS && leitura.jogador.fase !== 'chegou'; i++) {
+        leitura = corrida.processar({ descida: bot(leitura.jogador), usarItem: false });
+        for (const ev of leitura.eventosCorrida ?? []) eventos.push(JSON.stringify(ev));
+      }
+      return { eventos, hash: corrida.hashEstado(), resultado: corrida.finalizar() };
+    }
+
+    const a = rodar();
+    const b = rodar();
+    expect(b.eventos).toEqual(a.eventos);
+    expect(b.hash).toBe(a.hash);
+    expect(b.resultado).toEqual(a.resultado);
+  });
+});
+
 describe('corrida + itens: grava e reproduz 1 ReplayV2 com itens', () => {
   it('codifica os `ComandoCorrida` do jogador (bit 7 = usarItem), decodifica, roda de novo do zero e bate o hashEstado final', () => {
     const { pista, camada } = prepararMorro();

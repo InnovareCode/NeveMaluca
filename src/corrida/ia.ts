@@ -45,6 +45,16 @@ export function perfilIA(id: IdPersonagem, catalogo: Readonly<Record<IdPersonage
 /** Quantas quedas NO MESMO checkpoint até a trava anti-travamento desistir da manobra pelo resto da corrida. */
 export const QUEDAS_PARA_TRAVAR = 2;
 
+/**
+ * Só `'tombo'` conta como queda pra trava (plano itens-corrida §achado 2: "acerto de item NÃO pode contar como
+ * queda, senão 2 acertos travam o rival no modo cuidadoso até o fim"). `'atingido'` (trombada/freada vinda de um
+ * item) é um evento SEPARADO de propósito em `core/contratos.ts` — extraído aqui como função pura só pra o
+ * critério da trava ficar testável sem depender do bot de verdade (ver `corrida-ia.test.ts`).
+ */
+export function contaComoQueda(evento: EventoDescida): boolean {
+  return evento.tipo === 'tombo';
+}
+
 /** Canal de RNG próprio do rival `id` (plano §Arquitetura: "sorteio pelo canal `ia-<id>` da semente"). */
 function rngDaIA(semente: number, id: IdPersonagem): Rng {
   const deslocamento = parseInt(hashDeTexto(`ia-${id}`).slice(0, 8), 16);
@@ -91,7 +101,7 @@ export function criarIA(
     for (const ev of leitura.eventos as readonly EventoDescida[]) {
       if (ev.tipo === 'checkpoint') {
         checkpointAtual = ev.indice;
-      } else if (ev.tipo === 'tombo') {
+      } else if (contaComoQueda(ev)) {
         const quedas = (quedasPorCheckpoint.get(checkpointAtual) ?? 0) + 1;
         quedasPorCheckpoint.set(checkpointAtual, quedas);
         if (quedas >= QUEDAS_PARA_TRAVAR) travado = true;
