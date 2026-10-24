@@ -25,7 +25,7 @@ import { criarEntrada, type Entrada } from '../../input/index';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
-import { desenharContagemRegressiva, desenharHud } from '../../render/hud';
+import { desenharContagemRegressiva, desenharHud, desenharLegendaCarregandoCenario } from '../../render/hud';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
@@ -33,7 +33,7 @@ import { criarRastreadorPoseVisual, type RastreadorPoseVisual } from '../../rend
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
 import { desenharTerreno } from '../../render/terreno';
-import { pintorDoTema, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import { pintorDoTema, precarregarAssetsDoTema, rasterProntoParaTema, temaDeRenderDoTema } from '../../render/temas/catalogo';
 import type { PintorTema } from '../../render/temas/tipos';
 import type { Cena } from '../tipos';
 import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
@@ -101,6 +101,11 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   // Pele do tema da pista (M3 F3/F4): `defPista.tema` decide o `PintorTema`/`DefTema` (`render/temas/catalogo.ts`).
   const pintorTema: PintorTema = pintorDoTema(defPista.tema);
   const parallax: Parallax = criarParallax(opcoes.documento, pintorTema, temaDeRenderDoTema(defPista.tema));
+  // Dispara o preload do raster desta pista AO MONTAR (fire-and-forget, nunca trava um tick): cobre TREINO direto
+  // do menu, que pula `selecao-pista.ts` -- o único lugar que disparava isto antes do polimento "Pixar no
+  // gameplay". Enquanto o cache não assenta, `pintorTema` cai sozinho no vetorial (filosofia de sempre); a
+  // contagem abaixo mostra uma legenda nesse meio tempo, mas o relógio dela nunca espera por isto.
+  void precarregarAssetsDoTema(defPista.tema, opcoes.documento);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
@@ -234,6 +239,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       if (!contagemConcluida) {
         const { texto, pulso } = textoDaContagem(ticksContagem + alpha);
         desenharContagemRegressiva(ctx, texto, pulso);
+        if (!rasterProntoParaTema(defPista.tema)) desenharLegendaCarregandoCenario(ctx);
       }
     },
     destruir() {

@@ -29,7 +29,7 @@ import { alturaEm } from '../../pista/consulta';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
-import { desenharContagemRegressiva, desenharHud } from '../../render/hud';
+import { desenharContagemRegressiva, desenharHud, desenharLegendaCarregandoCenario } from '../../render/hud';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
@@ -38,7 +38,7 @@ import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
 import { desenharRivais, type RivalVisual } from '../../render/rivais';
 import { desenharTerreno } from '../../render/terreno';
-import { pintorDoTema, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import { pintorDoTema, precarregarAssetsDoTema, rasterProntoParaTema, temaDeRenderDoTema } from '../../render/temas/catalogo';
 import type { PintorTema } from '../../render/temas/tipos';
 import { criarSomManobras } from '../../audio/som-manobras';
 import { criarMusicaAdaptativa } from '../../audio/musica-adaptativa';
@@ -99,6 +99,9 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   const camera: Camera = criarCamera(0, 0);
   const pintorTema: PintorTema = pintorDoTema(defPista.tema);
   const parallax: Parallax = criarParallax(opcoes.documento, pintorTema, temaDeRenderDoTema(defPista.tema));
+  // Mesmo preload fire-and-forget de `ui/cenas/descida.ts` -- cobre CAMPEONATO direto do menu, que também pula
+  // `selecao-pista.ts`. Nunca trava um tick; o `pintorTema` cai sozinho no vetorial enquanto o cache não assenta.
+  void precarregarAssetsDoTema(defPista.tema, opcoes.documento);
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
@@ -205,6 +208,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       if (!contagemConcluida) {
         const { texto, pulso } = textoDaContagem(ticksContagem + alpha);
         desenharContagemRegressiva(ctx, texto, pulso);
+        if (!rasterProntoParaTema(defPista.tema)) desenharLegendaCarregandoCenario(ctx);
       }
     },
     destruir() {

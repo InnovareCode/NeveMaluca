@@ -16,12 +16,13 @@
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import { ALTURA, LARGURA } from '../../core/constantes';
 import { seno } from '../../core/trig';
+import { PISTA_MORRO_DO_PINHAO, obterPistaDeDados } from '../../data/pistas';
 import { REGRAS_SAVE } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
 import { criarParallax, type Parallax } from '../../render/parallax';
-import { pintorDoTema, precarregarAssetsParqueRaster, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import { pintorDoTema, precarregarAssetsDoTema, precarregarAssetsParqueRaster, temaDeRenderDoTema } from '../../render/temas/catalogo';
 import { criarCamadaEstatica, desenharBotaoBala, desenharFlocos, type CamadaEstatica } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import type { Cena } from '../tipos';
@@ -39,6 +40,11 @@ export interface OpcoesCenaMenu {
   readonly aoPista?: (() => void) | undefined;
   /** Id do personagem em destaque no pelotão (hero, maior/na frente); sem ele, mostra a `capi`. */
   readonly obterPersonagemAtivo?: (() => string) | undefined;
+  /** Pista ativa do save; sem ela, nada extra é pré-carregado. Dispara o preload do raster DELA (além do
+   * `parque` da key art, abaixo) desde já -- TREINO/CAMPEONATO pulam `selecao-pista.ts` e, até o polimento
+   * "Pixar no gameplay", só `descida.ts`/`corrida.ts` disparavam isto, já tarde demais pro 1º quadro deles. O
+   * menu dá o maior tempo de folga possível (o jogador ainda vai navegar/decidir aqui). */
+  readonly obterPistaAtiva?: (() => string) | undefined;
   /** Catálogo pro pelotão (hero + 5 ao redor); sem ele, cai no elenco inteiro de `data/regras-save.ts`. */
   readonly catalogoPersonagens?: readonly string[] | undefined;
 }
@@ -142,6 +148,12 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
   void precarregarAssetsParqueRaster(doc).then(() => {
     parallaxPronto = criarParallax(doc, pintorDoTema('parque'), temaDeRenderDoTema('parque'));
   });
+  // Pista ativa: preload cedo (fire-and-forget), não pro cenário do PRÓPRIO menu (sempre `parque`, acima) -- pro
+  // TREINO/CAMPEONATO que o jogador pode abrir a qualquer momento a partir daqui.
+  if (opcoes.obterPistaAtiva) {
+    const temaDaAtiva = (obterPistaDeDados(opcoes.obterPistaAtiva()) ?? PISTA_MORRO_DO_PINHAO).tema;
+    void precarregarAssetsDoTema(temaDaAtiva, doc);
+  }
   let derivaXm = 0;
 
   // Elenco do pelotão (hero + 5): melhor esforço, cada sprite cai no fallback de cápsula se ainda não carregou.

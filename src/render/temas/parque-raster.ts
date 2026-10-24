@@ -197,6 +197,13 @@ export function precarregarAssetsParqueRaster(doc?: Document): Promise<boolean> 
   return promessaCarregamento;
 }
 
+/** Síncrono, sem esperar a promessa (polimento "corrida em campeonato": Pixar no gameplay): o raster já está
+ * decodificado NESTE instante? Usado pela legenda "carregando cenário..." da contagem regressiva -- nunca pela
+ * lógica de tick, que não espera por isto (ver `render/hud.ts: desenharLegendaCarregandoCenario`). */
+export function assetsParqueRasterProntos(): boolean {
+  return cache !== null;
+}
+
 /** Só para teste/limpeza entre cenários de e2e: força esquecer o cache carregado. */
 export function _esquecerAssetsParqueRasterParaTeste(): void {
   cache = null;

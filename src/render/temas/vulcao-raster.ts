@@ -260,6 +260,11 @@ export function precarregarAssetsVulcaoRaster(doc?: Document): Promise<boolean> 
   return promessaCarregamento;
 }
 
+/** Síncrono, sem esperar a promessa (mesmo papel de `assetsParqueRasterProntos` em `parque-raster.ts`). */
+export function assetsVulcaoRasterProntos(): boolean {
+  return cache !== null;
+}
+
 /** Só para teste/limpeza entre cenários de e2e: força esquecer o cache carregado. */
 export function _esquecerAssetsVulcaoRasterParaTeste(): void {
   cache = null;

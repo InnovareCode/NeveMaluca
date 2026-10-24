@@ -128,6 +128,24 @@ export function desenharContagemRegressiva(ctx: CanvasRenderingContext2D, texto:
   ctx.restore();
 }
 
+/** Legenda discreta sob a contagem (polimento "Pixar no gameplay", corrida em campeonato): a cena chama isto
+ * enquanto `render/temas/catalogo.ts: rasterProntoParaTema` for falso -- some sozinha assim que o cache do tema
+ * fica pronto, no meio da própria contagem. NUNCA atrasa o relógio: os ticks da contagem são os mesmos de
+ * sempre, só o desenho muda enquanto o raster não chegou (ver comentário em `ui/cenas/descida.ts`). */
+export function desenharLegendaCarregandoCenario(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 18px Barlow, sans-serif';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = COR_CONTORNO;
+  ctx.strokeText('carregando cenário...', LARGURA / 2, ALTURA / 2 + 72);
+  ctx.fillStyle = COR_TEXTO;
+  ctx.fillText('carregando cenário...', LARGURA / 2, ALTURA / 2 + 72);
+  ctx.restore();
+}
+
 /** Medidor de combo (plano §3.5/M2): xMULT + soma acumulada, e a janela de ligação como barra que esvazia. */
 function desenharBarraCombo(ctx: CanvasRenderingContext2D, combo: ComboLeitura): void {
   if (!combo.ativo) return;

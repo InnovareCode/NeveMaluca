@@ -17,6 +17,11 @@ const COR_CONTORNO = '#0b1a33';
 const MARGEM_BORDA_PX = 30;
 const RAIO_AVATAR_PX = 15;
 const RAIO_AVATAR_SETA_PX = 13;
+/** Dois rivais na pista com centros mais perto que isto (px lógicos, tela) contam como "colados": a plaquinha de
+ * nome de qualquer um dos dois sairia por cima da do outro (ou do anel dele), então nenhum dos dois mostra nome
+ * -- só o anel+avatar, que já diferencia pela cor/rosto. Sem isto, no início de uma corrida (pelotão fechado) os
+ * nomes empilham/atravessam uns aos outros e ficam ilegíveis. */
+const LIMIAR_COLADO_PX = 58;
 
 export interface RivalVisual {
   readonly id: string;
@@ -64,8 +69,10 @@ function desenharAvatarCircular(ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.stroke();
 }
 
-/** Rival visível na pista: anel colorido no chão + nome numa plaquinha acima do avatar. */
-function desenharRivalNaPista(ctx: CanvasRenderingContext2D, xTela: number, yTela: number, rival: RivalVisual): void {
+/** Rival visível na pista: anel colorido no chão + avatar; a plaquinha de nome só aparece quando `mostrarNome`
+ * for true (false quando está "colado" a outro rival na tela -- ver `LIMIAR_COLADO_PX`, nomes se sobrepondo são
+ * piores que não mostrar nome nenhum). */
+function desenharRivalNaPista(ctx: CanvasRenderingContext2D, xTela: number, yTela: number, rival: RivalVisual, mostrarNome: boolean): void {
   ctx.save();
 
   // Anel no chão, marcando onde o rival está (indicador, não a física/pose completa do piloto real).
@@ -77,13 +84,15 @@ function desenharRivalNaPista(ctx: CanvasRenderingContext2D, xTela: number, yTel
 
   desenharAvatarCircular(ctx, xTela, yTela - 34, RAIO_AVATAR_PX, rival);
 
-  ctx.font = '700 13px Barlow, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = COR_CONTORNO;
-  ctx.strokeText(rival.nome, xTela, yTela - 54);
-  ctx.fillStyle = COR_TEXTO;
-  ctx.fillText(rival.nome, xTela, yTela - 54);
+  if (mostrarNome) {
+    ctx.font = '700 13px Barlow, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = COR_CONTORNO;
+    ctx.strokeText(rival.nome, xTela, yTela - 54);
+    ctx.fillStyle = COR_TEXTO;
+    ctx.fillText(rival.nome, xTela, yTela - 54);
+  }
 
   ctx.restore();
 }
@@ -124,12 +133,22 @@ function desenharRivalForaDeTela(ctx: CanvasRenderingContext2D, xTela: number, r
   ctx.restore();
 }
 
-/** Desenha todos os `rivais`: dentro da margem da tela, anel+nome; fora, seta+rosto+distância. */
+/** Desenha todos os `rivais`: dentro da margem da tela, anel+avatar (+ nome se não estiver colado a outro rival,
+ * ver `LIMIAR_COLADO_PX`); fora, seta+rosto+distância (esses nunca colidem entre si -- cada lado da borda tem no
+ * máximo uma seta por altura `ALTURA * 0.42`, sempre a mesma). */
 export function desenharRivais(ctx: CanvasRenderingContext2D, camera: EstadoCamera, rivais: readonly RivalVisual[]): void {
-  for (const rival of rivais) {
+  const pontos = rivais.map((rival) => {
     const pt = mundoParaTela(rival.xM, rival.yM, camera, PX_POR_METRO);
-    const dentroDaTela = pt.x >= MARGEM_BORDA_PX && pt.x <= LARGURA - MARGEM_BORDA_PX;
-    if (dentroDaTela) desenharRivalNaPista(ctx, pt.x, pt.y, rival);
-    else desenharRivalForaDeTela(ctx, pt.x, rival);
-  }
+    return { x: pt.x, y: pt.y, dentroDaTela: pt.x >= MARGEM_BORDA_PX && pt.x <= LARGURA - MARGEM_BORDA_PX };
+  });
+
+  rivais.forEach((rival, i) => {
+    const p = pontos[i]!;
+    if (!p.dentroDaTela) {
+      desenharRivalForaDeTela(ctx, p.x, rival);
+      return;
+    }
+    const colado = pontos.some((q, j) => j !== i && q.dentroDaTela && Math.hypot(p.x - q.x, p.y - q.y) < LIMIAR_COLADO_PX);
+    desenharRivalNaPista(ctx, p.x, p.y, rival, !colado);
+  });
 }

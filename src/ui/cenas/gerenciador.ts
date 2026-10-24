@@ -177,6 +177,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoPersonagem: () => irPara('selecao'),
           aoPista: () => irPara('selecao-pista'),
           obterPersonagemAtivo,
+          obterPistaAtiva,
         });
       case 'selecao':
         return criarCenaSelecao({
