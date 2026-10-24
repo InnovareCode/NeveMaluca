@@ -70,11 +70,19 @@ async function boot(): Promise<void> {
     aoErro: (e) => mostrarErro(textoDoErro(e)),
   });
 
-  // pausas por motivo: o laço só anda sem nenhum motivo ativo
+  // pausas por motivo: o laço só anda sem nenhum motivo ativo. Além de mudo (`laco.pausar`), a perda de foco
+  // agora também abre o menu de pausa DE VERDADE (feedback do dono: trocar de app/aba não pode devolver o
+  // jogador rodando sem ele perceber) -- `cena.aoPausarAutomatico` só faz algo se houver uma corrida rolando.
   observarFoco(window, {
-    aoPerderFoco: () => laco.pausar('foco'),
+    aoPerderFoco: () => {
+      laco.pausar('foco');
+      cena.aoPausarAutomatico?.();
+    },
     aoGanharFoco: () => laco.retomar('foco'),
-    aoOcultar: () => laco.pausar('oculta'),
+    aoOcultar: () => {
+      laco.pausar('oculta');
+      cena.aoPausarAutomatico?.();
+    },
     aoMostrar: () => laco.retomar('oculta'),
   });
   if (document.hidden) laco.pausar('oculta');

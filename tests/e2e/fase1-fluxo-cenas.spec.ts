@@ -85,8 +85,19 @@ test.describe('Fase 1: Fluxo de Cenas e Telas', () => {
       });
     }).toBe('menu');
 
-    // 6. No Menu, clica no botão Treino (em 960x540 lógicos: centro x=130, y=224)
+    // 6. No Menu, clica no botão Treino (em 960x540 lógicos: centro x=130, y=224) -- passa pela seleção de
+    // personagem antes de correr (feedback do dono), não vai direto pro jogo.
     await page.mouse.click(caixa.x + 130 * escalaX, caixa.y + 224 * escalaY);
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const g = (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve;
+        return g.cena.cenaAtual();
+      });
+    }).toBe('selecao');
+
+    // Escolhe o card 0 (primeira coluna, primeira linha = 'capi'): centro x=150, y=150
+    await page.mouse.click(caixa.x + 150 * escalaX, caixa.y + 150 * escalaY);
 
     // Confere que a cena mudou para 'jogo'
     await expect.poll(async () => {

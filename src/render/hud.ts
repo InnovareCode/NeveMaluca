@@ -314,6 +314,55 @@ export function desenharBotaoItem(ctx: CanvasRenderingContext2D, dados: DadosBot
   ctx.restore();
 }
 
+// --- Botão de pausa (feedback do dono, playtest iPhone: "durante a partida não dá pra pausar") ---
+
+const LADO_BOTAO_PAUSA = 72;
+const MARGEM_BOTAO_PAUSA = 20;
+
+/** Canto SUPERIOR esquerdo, abaixo do velocímetro/posição (que ocupam só até y~78 nesse canto) — medido no
+ *  iPhone (webkit-se, `playwright.config.ts`) pra não sobrepor NADA: nem o resto do HUD (pontos/combo/barra de
+ *  progresso ficam nos outros cantos/centro), nem o botão de tela cheia do DOM (`platform/tela-cheia-ui.ts:
+ *  #btn-tela-cheia`, `position: fixed; top/right: 8px`, SEMPRE visível durante o jogo -- ninguém chama
+ *  `definirVisivel(false)`). Esse botão fica ANCORADO AO VIEWPORT, não ao canvas; num aparelho onde o canvas
+ *  quase enche a tela (iPhone real), o canto SUPERIOR DIREITO do canvas cai embaixo dele — um toque ali abre
+ *  tela cheia, não a pausa (achado real rodando `tests/e2e/pausa.spec.ts` no projeto `webkit-se`, não suposição
+ *  de CSS). Por isso o botão de pausa foi para o canto OPOSTO. 72px lógicos: no iPhone em paisagem (canvas
+ *  escalado a ~0,65x do lógico, `platform/escala.ts`), isso cobre o alvo de toque de ~44pt da Apple HIG — mesmo
+ *  raciocínio de `LADO_BOTAO_ITEM`. `ui/cenas/descida.ts` e `corrida.ts` repassam este MESMO retângulo pro toque
+ *  (`input/toque.ts: OpcoesToque.botaoPausa`), igual ao botão de item: um retângulo só, nunca duplicado entre
+ *  desenho e hit-test. */
+export const RETANGULO_BOTAO_PAUSA = {
+  x: MARGEM_BOTAO_PAUSA,
+  y: 92,
+  w: LADO_BOTAO_PAUSA,
+  h: LADO_BOTAO_PAUSA,
+} as const;
+
+/** Ícone de pausa (duas barras) num círculo translúcido — mesmo estilo visual do botão de item, sempre visível
+ *  (nunca "some": é o único jeito de pausar por toque). */
+export function desenharBotaoPausa(ctx: CanvasRenderingContext2D): void {
+  const r = RETANGULO_BOTAO_PAUSA;
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const raio = r.w / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, raio, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(11, 26, 51, 0.55)';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COR_CONTORNO;
+  ctx.stroke();
+
+  const barraW = raio * 0.22;
+  const barraH = raio * 0.9;
+  ctx.fillStyle = COR_TEXTO;
+  ctx.fillRect(cx - barraW * 1.5, cy - barraH / 2, barraW, barraH);
+  ctx.fillRect(cx + barraW * 0.5, cy - barraH / 2, barraW, barraH);
+  ctx.restore();
+}
+
 // --- Feedback dos eventos de item (plano §I5: "feedback dos eventosCorrida") ---
 
 const CAPACIDADE_FEEDBACK_ITENS = 4;

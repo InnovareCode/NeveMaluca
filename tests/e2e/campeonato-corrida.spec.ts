@@ -48,8 +48,15 @@ test.describe('Campeonato (corrida em campeonato, C2b)', () => {
     const escalaX = caixa.width / 960;
     const escalaY = caixa.height / 540;
 
-    // Botão CAMPEONATO (posição que era MODOS): x 20..240, y 252..292 -> centro (130, 272)
+    // Botão CAMPEONATO (posição que era MODOS): x 20..240, y 252..292 -> centro (130, 272). Passa pela seleção
+    // de personagem antes de correr (feedback do dono) -- não vai direto pro campeonato.
     await page.mouse.click(caixa.x + 130 * escalaX, caixa.y + 272 * escalaY);
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
+      .toBe('selecao');
+
+    // Escolhe o card 0 (primeira coluna, primeira linha = 'capi'): x 70..330, y 112..262 -> centro (150, 150)
+    await page.mouse.click(caixa.x + 150 * escalaX, caixa.y + 150 * escalaY);
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('campeonato');

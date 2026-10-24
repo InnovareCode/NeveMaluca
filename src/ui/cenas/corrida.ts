@@ -41,11 +41,13 @@ import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
 import {
   desenharBotaoItem,
+  desenharBotaoPausa,
   desenharContagemRegressiva,
   desenharHud,
   desenharLegendaCarregandoCenario,
   criarSistemaFeedbackItens,
   RETANGULO_BOTAO_ITEM,
+  RETANGULO_BOTAO_PAUSA,
   type SistemaFeedbackItens,
 } from '../../render/hud';
 import { desenharEntidadesItens, desenharEscudo, desenharAvisoAlvo, type EntidadeItemVisual } from '../../render/itens';
@@ -89,6 +91,8 @@ export interface OpcoesCenaCorrida {
   readonly documento?: Document | undefined;
   readonly aoTerminar?: ((resultado: ResultadoCorrida) => void) | undefined;
   readonly aoPausar?: (() => void) | undefined;
+  /** Mesma semântica de `ui/cenas/descida.ts: OpcoesCenaDescida.aoChegada` (plano C-D6). */
+  readonly aoChegada?: (() => void) | undefined;
   readonly audio?: AudioDestravavel | undefined;
   readonly save?: SaveV1 | undefined;
   /** Id do personagem escolhido (seleção de personagem, UI); sem ele, o jogador é a `capi`. */
@@ -140,7 +144,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   // dois lados, pra nunca desalinhar hitbox e ícone (ver cabeçalho de `RETANGULO_BOTAO_ITEM`).
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, {
     teclado: { aoPausar: opcoes.aoPausar },
-    toque: { botaoItem: RETANGULO_BOTAO_ITEM },
+    toque: { botaoItem: RETANGULO_BOTAO_ITEM, botaoPausa: RETANGULO_BOTAO_PAUSA, aoPausar: opcoes.aoPausar },
   });
   const camera: Camera = criarCamera(0, 0);
   const pintorTema: PintorTema = pintorDoTema(defPista.tema);
@@ -225,6 +229,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       }
       if (escudoJogadorTicks > 0) escudoJogadorTicks -= 1;
       if (leitura.jogador.fase === 'chegou') {
+        opcoes.aoChegada?.();
         confete.estourar();
         // finalizar() deixa os rivais que faltam correrem (própria IA) até o fim/teto e fecha o pódio na hora.
         resultadoPendente = corrida.finalizar();
@@ -294,6 +299,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         totalCorredores,
       });
       desenharBotaoItem(ctx, { item: leitura.itemJogador ?? null, roleta: leitura.roleta ?? null }, leitura.jogador.tick);
+      desenharBotaoPausa(ctx);
       feedbackItens.desenhar(ctx);
       if (!contagemConcluida) {
         const { texto, pulso } = textoDaContagem(ticksContagem + alpha);

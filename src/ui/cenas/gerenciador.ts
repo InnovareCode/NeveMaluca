@@ -65,6 +65,10 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
 
   let cenaAtual: Cena | null = null;
   let idAtual: IdCenaFluxo = opcoes.cenaInicial ?? 'abertura';
+  // Fluxo "escolha o personagem antes de correr" (feedback do dono): setado só quando TREINO/CAMPEONATO leva à
+  // seleção; a entrada "PERSONAGEM" do menu (navegação livre, sem destino) deixa isto em `null` -- nesse caso
+  // `aoEscolher` só persiste e fica na tela (comportamento de sempre, ver `ui/cenas/selecao.ts`).
+  let proximaCenaAposSelecao: 'jogo' | 'campeonato' | null = null;
 
   /** Grava a config no save (um único ponto de escrita na Fase 1). */
   function persistirConfig(): void {
@@ -209,6 +213,23 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
     // `main.ts`) mostra o cartão "como ativar" pelo teclado/tecla F; aqui não há o que fazer no canvas.
   };
 
+  /** Monta a cena de Opções de verdade com `aoVoltar` escolhido por quem chama -- reusada pelo `case 'opcoes'`
+   *  (volta ao menu) E pelo menu de pausa de `jogo.ts`/`campeonato.ts` (volta pra pausa), plano "CONFIGURAÇÕES
+   *  reaproveita a cena de opções existente". Único lugar que monta `criarCenaOpcoes`, pra nunca desalinhar os
+   *  callbacks de save das duas entradas. */
+  function montarOpcoes(aoVoltar: () => void): Cena {
+    return criarCenaOpcoes({
+      canvas: opcoes.canvas,
+      janela,
+      obterControles: () => opcoes.save.cfg.controles,
+      obterAudioLigado: () => opcoes.save.cfg.som > 0 || opcoes.save.cfg.musica > 0,
+      aoAlternarControles: alternarControles,
+      aoAlternarAudio: alternarAudio,
+      aoTelaCheia: acionarTelaCheia,
+      aoVoltar,
+    });
+  }
+
   /** Constrói a cena do fluxo pedido, já desligando a anterior. */
   function construirCena(id: IdCenaFluxo): Cena {
     const canvas = opcoes.canvas;
@@ -225,10 +246,22 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           canvas,
           janela,
           documento: doc,
-          aoJogar: () => irPara('jogo'),
-          aoModos: () => irPara('campeonato'),
+          // TREINO/CAMPEONATO passam pela seleção de personagem antes de correr (feedback do dono): quem clicou
+          // decide o DESTINO depois de escolher; a entrada dedicada "PERSONAGEM" (abaixo) não tem destino --
+          // continua só trocando o ativo, como sempre.
+          aoJogar: () => {
+            proximaCenaAposSelecao = 'jogo';
+            irPara('selecao');
+          },
+          aoModos: () => {
+            proximaCenaAposSelecao = 'campeonato';
+            irPara('selecao');
+          },
           aoOpcoes: () => irPara('opcoes'),
-          aoPersonagem: () => irPara('selecao'),
+          aoPersonagem: () => {
+            proximaCenaAposSelecao = null;
+            irPara('selecao');
+          },
           aoPista: () => irPara('selecao-pista'),
           obterPersonagemAtivo,
           obterPistaAtiva,
@@ -240,8 +273,20 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           documento: doc,
           catalogo: REGRAS_SAVE.personagens,
           obterPersonagemAtivo,
-          aoEscolher: selecionarPersonagem,
-          aoVoltar: () => irPara('menu'),
+          aoEscolher: (idPersonagem) => {
+            selecionarPersonagem(idPersonagem);
+            // Veio de TREINO/CAMPEONATO: escolheu -> corre direto. Veio da entrada "PERSONAGEM" (navegação
+            // livre): fica na tela, pra poder comparar outros cards antes de VOLTAR (comportamento de sempre).
+            if (proximaCenaAposSelecao) {
+              const destino = proximaCenaAposSelecao;
+              proximaCenaAposSelecao = null;
+              irPara(destino);
+            }
+          },
+          aoVoltar: () => {
+            proximaCenaAposSelecao = null;
+            irPara('menu');
+          },
         });
       case 'selecao-pista':
         return criarCenaSelecaoPista({
@@ -254,19 +299,10 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoVoltar: () => irPara('menu'),
         });
       case 'opcoes':
-        return criarCenaOpcoes({
-          canvas,
-          janela,
-          obterControles: () => opcoes.save.cfg.controles,
-          obterAudioLigado: () => opcoes.save.cfg.som > 0 || opcoes.save.cfg.musica > 0,
-          aoAlternarControles: alternarControles,
-          aoAlternarAudio: alternarAudio,
-          aoTelaCheia: acionarTelaCheia,
-          aoVoltar: () => irPara('menu'),
-        });
+        return montarOpcoes(() => irPara('menu'));
       case 'jogo':
-        // `criarCenaJogo` já gerencia descida -> resultado -> descida internamente; injetamos o "voltar ao menu"
-        // como atalho para o jogador não ficar preso na corrida. O `aoPausar` fica no main.ts (Esc/pausa).
+        // `criarCenaJogo` já gerencia descida -> resultado -> descida internamente, e o próprio menu de pausa
+        // (Esc/P, botão do HUD) por cima -- `criarTelaOpcoes` é o CONFIGURAÇÕES de dentro da pausa.
         return criarCenaJogo({
           canvas,
           janela,
@@ -278,6 +314,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           pista: obterPistaAtiva(),
           fantasma: obterFantasma(obterPistaAtiva()),
           aoResultado: registrarResultadoDescida,
+          criarTelaOpcoes: montarOpcoes,
         });
       case 'campeonato':
         // Campeonato completo (plano "corrida em campeonato" §C5b/C8b): as 5 pistas em sequência, com
@@ -295,6 +332,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoRegistrarResultadoCampeonato: registrarResultadoCampeonato,
           aoComprarUpgrade: comprarUpgradeCampeonato,
           obterEvolucao,
+          criarTelaOpcoes: montarOpcoes,
         });
       default: {
         const nunca: never = id;
@@ -327,6 +365,11 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
     },
     destruir() {
       cenaAtual?.destruir?.();
+    },
+    // Repassa a perda de foco/visibilidade pra cena de verdade (main.ts chama isto além de `laco.pausar`): só
+    // `jogo.ts`/`campeonato.ts` fazem algo com isto (abrem o menu de pausa se houver uma corrida rolando).
+    aoPausarAutomatico() {
+      cenaAtual?.aoPausarAutomatico?.();
     },
     irPara,
     cenaAtual: () => idAtual,

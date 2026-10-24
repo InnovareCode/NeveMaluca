@@ -26,7 +26,7 @@ import { desenharItensCamada, desenharKickers, desenharObstaculosAltos, criarSis
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
-import { desenharContagemRegressiva, desenharHud, desenharLegendaCarregandoCenario } from '../../render/hud';
+import { desenharBotaoPausa, desenharContagemRegressiva, desenharHud, desenharLegendaCarregandoCenario, RETANGULO_BOTAO_PAUSA } from '../../render/hud';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
 import { desenharPiloto } from '../../render/piloto';
@@ -75,6 +75,11 @@ export interface OpcoesCenaDescida {
   readonly documento?: Document | undefined;
   readonly aoTerminar?: ((resultado: ResultadoDescida) => void) | undefined;
   readonly aoPausar?: (() => void) | undefined;
+  /** Chamado UMA vez, no tick em que `fase` vira 'chegou' (feedback do dono, plano C-D6: "reinicia só antes de
+   *  cruzar a chegada") -- ANTES de `aoTerminar` (que só dispara depois da comemoração). Quem compõe esta cena
+   *  (`ui/cenas/jogo.ts`) usa isto pra desligar o botão REINICIAR do menu de pausa assim que o jogador cruzou,
+   *  mesmo durante a comemoração. */
+  readonly aoChegada?: (() => void) | undefined;
   /** Instância de áudio já destravável (de main.ts); sem ela a cena roda muda (testes/preview sem som). */
   readonly audio?: AudioDestravavel | undefined;
   /** Save, só para ler o volume (`cfg.som`) ao vivo. */
@@ -102,7 +107,10 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   // Física do personagem ESCOLHIDO (plano M3 §A.3): `configDoPersonagem('capi')` devolve `CONFIG_PADRAO` bit a
   // bit, então nenhuma descida da Capi muda de comportamento com esta troca (golden `m3-congelamento-capi.test.ts`).
   const motor: MotorDescida = criarDescida(pista, configDoPersonagem(opcoes.personagem ?? 'capi'), { camada });
-  const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
+  const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, {
+    teclado: { aoPausar: opcoes.aoPausar },
+    toque: { botaoPausa: RETANGULO_BOTAO_PAUSA, aoPausar: opcoes.aoPausar },
+  });
   const camera: Camera = criarCamera(0, 0);
   // Pele do tema da pista (M3 F3/F4): `defPista.tema` decide o `PintorTema`/`DefTema` (`render/temas/catalogo.ts`).
   const pintorTema: PintorTema = pintorDoTema(defPista.tema);
@@ -205,6 +213,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       somManobras?.atualizar(leitura);
       musicaAdaptativa?.atualizar(leitura);
       if (leitura.fase === 'chegou') {
+        opcoes.aoChegada?.();
         confete.estourar();
         const replay: ReplayV1 = {
           v: 1,
@@ -249,6 +258,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
         combo: leitura.combo,
         progressoJogador: leitura.piloto.x / pista.chegadaX,
       });
+      desenharBotaoPausa(ctx);
       if (!contagemConcluida) {
         const { texto, pulso } = textoDaContagem(ticksContagem + alpha);
         desenharContagemRegressiva(ctx, texto, pulso);

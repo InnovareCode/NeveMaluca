@@ -59,8 +59,13 @@ test.describe('Seleção de Pista', () => {
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('menu');
 
-    // Entra no Jogo (centro do botão Treino: x=130, y=224) sem lançar erro, já com a pista escolhida
+    // Entra no Jogo (centro do botão Treino: x=130, y=224) -- passa pela seleção de personagem (feedback do
+    // dono), escolhe o card 0 ('capi') e confere que entra sem erro, já com a pista escolhida
     await clicarLogico(130, 224);
+    await expect.poll(() =>
+      page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
+    ).toBe('selecao');
+    await clicarLogico(150, 150);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

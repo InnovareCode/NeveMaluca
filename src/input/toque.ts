@@ -25,6 +25,10 @@
  * o botão viraria agachar (2º dedo), e o 1º toque do jogo inteiro viraria pulo (qualquer lugar da tela pula). Sem
  * `opcoes.botaoItem` (treino/descida solo, que nunca chamam isto), o comportamento é idêntico a antes do I4b.
  *
+ * `botaoPausa` (feedback do dono, playtest iPhone): mesma ideia do `botaoItem` acima, mas mais simples — não tem
+ * "segurar" nem borda consumível, é um toque = um callback (`opcoes.aoPausar`, espelhando o `aoPausar` do
+ * teclado em `teclado.ts`). Checado ANTES até do `botaoItem`: pausar nunca pode virar pulo/agachar/item.
+ *
  * Risco R6 (plano): no Chrome do iPhone, um deslize que nasce rente à borda pode voltar a página mesmo com
  * `touch-action: none` (gesto de sistema fora do alcance do toque da página). Mitigação AQUI: `preventDefault`
  * sempre (nos dois dedos), e a faixa `margemBordaPx` perto das bordas não conta como "segurar" um lado no 1º
@@ -53,6 +57,9 @@ export interface OpcoesToque {
   readonly janelaGestoMs?: number;
   readonly margemBordaPx?: number;
   readonly botaoItem?: RetanguloLogico;
+  /** Zona do botão de pausa (ver cabeçalho do arquivo); sem `aoPausar`, a zona não tem efeito. */
+  readonly botaoPausa?: RetanguloLogico;
+  readonly aoPausar?: (() => void) | undefined;
 }
 
 /** Converte client{X,Y} do evento para o espaço lógico (960x540) — mesma conta de `ui/interacao.ts:
@@ -92,6 +99,8 @@ export function criarEntradaToque(alvo: AlvoToque, opcoes: OpcoesToque = {}): En
   const janela = opcoes.janelaGestoMs ?? JANELA_GESTO_PADRAO_MS;
   const margem = opcoes.margemBordaPx ?? MARGEM_BORDA_PADRAO_PX;
   const botaoItem = opcoes.botaoItem;
+  const botaoPausa = opcoes.botaoPausa;
+  const aoPausar = opcoes.aoPausar;
 
   let ponteiroId: number | null = null;
   let ativo = false;
@@ -110,6 +119,12 @@ export function criarEntradaToque(alvo: AlvoToque, opcoes: OpcoesToque = {}): En
 
   const aoDescer = (ev: Event): void => {
     const e = ev as PointerEvent;
+    // Checado ANTES de tudo (até do botão de item): pausar é um tap simples, sem disputar slot de ponteiro.
+    if (botaoPausa && aoPausar && dentroDoRetangulo(pontoLogicoDoEvento(e, alvo), botaoPausa)) {
+      e.preventDefault();
+      aoPausar();
+      return;
+    }
     // Checado ANTES de qualquer outra coisa: um toque dentro do botão de item nunca vira pulo (1º dedo) nem
     // agachar (2º dedo), mesmo sendo o primeiro toque na tela — ver cabeçalho do arquivo.
     if (botaoItem && ponteiroItemId === null && e.pointerId !== ponteiroId && e.pointerId !== ponteiroAgacharId) {

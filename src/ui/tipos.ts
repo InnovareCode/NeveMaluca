@@ -12,4 +12,11 @@ export interface Cena {
   desenhar(ctx: Ctx, alpha: number): void;
   /** Liberação opcional de ouvintes de eventos da cena ao desmontar. */
   destruir?(): void;
+  /**
+   * A janela perdeu o foco/visibilidade (feedback do dono: "a pausa automática" deve ABRIR o menu de pausa, não
+   * só deixar o laço mudo por baixo — `platform/foco.ts` já cobre o laço; isto é o que falta pra UI). Só
+   * `ui/cenas/jogo.ts`/`campeonato.ts` implementam de verdade (abrem a pausa se uma corrida estiver rolando);
+   * o resto das cenas ignora (nada a pausar: menu/opções/seleção já são "paradas" por natureza).
+   */
+  aoPausarAutomatico?(): void;
 }

@@ -59,8 +59,13 @@ test.describe('Seleção de Personagem', () => {
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('menu');
 
-    // Entra no Jogo (centro do botão Treino: x=130, y=224) sem lançar erro
+    // Entra no Jogo (centro do botão Treino: x=130, y=224) -- passa pela seleção de novo (feedback do dono),
+    // escolhe 'bandeira' outra vez e confere que entra sem lançar erro
     await clicarLogico(130, 224);
+    await expect.poll(() =>
+      page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
+    ).toBe('selecao');
+    await clicarLogico(480, 180);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

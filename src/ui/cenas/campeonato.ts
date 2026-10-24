@@ -27,6 +27,7 @@ import { criarCenaAberturaCampeonato } from './abertura-campeonato';
 import { criarCenaCorrida } from './corrida';
 import { criarCenaFinalCampeonato } from './final-campeonato';
 import { criarCenaOficina } from './oficina-campeonato';
+import { criarControladorPausa, type ControladorPausa } from './pausa';
 import { criarCenaPodio } from './podio';
 import { criarCenaStandings } from './standings-campeonato';
 
@@ -44,7 +45,6 @@ export interface OpcoesCenaCampeonato {
   readonly canvas: AlvoToque;
   readonly janela?: AlvoTeclado | undefined;
   readonly documento?: Document | undefined;
-  readonly aoPausar?: (() => void) | undefined;
   readonly aoMenu?: (() => void) | undefined;
   readonly audio?: AudioDestravavel | undefined;
   readonly save?: SaveV1 | undefined;
@@ -57,10 +57,15 @@ export interface OpcoesCenaCampeonato {
   readonly aoComprarUpgrade?: ((personagem: IdPersonagem) => Evolucao) | undefined;
   /** Lido a cada quadro pela oficina (nunca cacheado): reflete compras na hora. */
   readonly obterEvolucao?: (() => Evolucao) | undefined;
+  /** Monta a cena de Opções de verdade (gerenciador.ts); mesma semântica de `ui/cenas/jogo.ts: OpcoesCenaJogo.criarTelaOpcoes`. */
+  readonly criarTelaOpcoes?: ((aoVoltar: () => void) => Cena) | undefined;
 }
 
 export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
   let atual: Cena | null = null;
+  let telaConfig: Cena | null = null;
+  // Plano C-D6 ("reinicia só antes de cruzar"): vale só pela etapa/corrida ATUAL, reseta a cada `montarCorrida`.
+  let jaChegouEtapa = false;
   const personagemEscolhido = opcoes.personagem ?? 'capi';
 
   // Semente derivada do relógio (não é `Math.random`, proibido em `src/`; mesmo espírito do "desafio do dia"
@@ -78,6 +83,29 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
   function obterEvolucao(): Evolucao {
     return opcoes.obterEvolucao?.() ?? opcoes.save?.evolucao ?? EVOLUCAO_VAZIA;
   }
+
+  const pausa: ControladorPausa = criarControladorPausa({
+    canvas: opcoes.canvas,
+    janela: opcoes.janela,
+    podeReiniciar: () => !jaChegouEtapa,
+    aoContinuar: () => undefined,
+    aoReiniciar: () => {
+      atual = montarCorrida();
+    },
+    aoAbrirConfiguracoes: () => {
+      if (!opcoes.criarTelaOpcoes) return;
+      pausa.suspender();
+      telaConfig = opcoes.criarTelaOpcoes(() => {
+        telaConfig?.destruir?.();
+        telaConfig = null;
+        pausa.retomar();
+      });
+    },
+    // "Voltar ao menu" no meio do campeonato NÃO corrompe o save (plano C-D6): o `EstadoCampeonato` só é
+    // gravado em `aoRegistrarResultadoCampeonato`, ao CRUZAR a chegada -- sair antes disso deixa o save como
+    // estava (retoma na mesma etapa, `iniciarOuRetomarCampeonato` em `gerenciador.ts`).
+    aoConfirmarSaidaAoMenu: () => opcoes.aoMenu?.(),
+  });
 
   function montarAbertura(): Cena {
     atual?.destruir?.();
@@ -98,6 +126,7 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
 
   function montarCorrida(): Cena {
     atual?.destruir?.();
+    jaChegouEtapa = false;
     const pista = PISTAS_ORDENADAS[estado.etapa];
     if (!pista) {
       atual = montarFinal();
@@ -107,7 +136,10 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
       canvas: opcoes.canvas,
       janela: opcoes.janela,
       documento: opcoes.documento,
-      aoPausar: opcoes.aoPausar,
+      aoPausar: () => pausa.abrir(),
+      aoChegada: () => {
+        jaChegouEtapa = true;
+      },
       audio: opcoes.audio,
       save: opcoes.save,
       personagem: idJogador,
@@ -198,13 +230,28 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
   return {
     id: 'campeonato',
     atualizar() {
+      if (telaConfig) {
+        telaConfig.atualizar();
+        return;
+      }
+      if (pausa.pausado) return; // congela a corrida por baixo (abertura/pódio/standings/oficina/final nunca pausam)
       atual?.atualizar();
     },
     desenhar(ctx, alpha) {
+      if (telaConfig) {
+        telaConfig.desenhar(ctx, alpha);
+        return;
+      }
       atual?.desenhar(ctx, alpha);
+      pausa.desenhar(ctx);
     },
     destruir() {
       atual?.destruir?.();
+      telaConfig?.destruir?.();
+      pausa.destruir();
+    },
+    aoPausarAutomatico() {
+      if (!telaConfig && atual?.id === 'corrida') pausa.abrir();
     },
   };
 }

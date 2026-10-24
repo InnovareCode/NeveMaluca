@@ -573,8 +573,13 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     for (let i = 0; i < 20; i += 1) gerenciador.atualizar();
     expect(gerenciador.cenaAtual()).toBe('menu');
 
-    // No menu, toca em Treino (x: 20..240, y: 204..244)
+    // No menu, toca em Treino (x: 20..240, y: 204..244): passa pela seleção de personagem antes de correr
+    // (feedback do dono) -- não vai direto pro jogo.
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
+    expect(gerenciador.cenaAtual()).toBe('selecao');
+
+    // Escolhe o card 0 (primeira coluna, primeira linha = 'capi'): x 70..330, y 112..262
+    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
   });
 
@@ -644,8 +649,11 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     janela.disparar('Escape');
     expect(gerenciador.cenaAtual()).toBe('menu');
 
-    // Entra no jogo: a cena de descida recebe o personagem escolhido (sem lançar erro na composição)
+    // Entra no jogo: TREINO passa pela seleção de novo (feedback do dono) -- escolhe 'bandeira' outra vez e
+    // confere que a cena de descida recebe o personagem escolhido (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
+    expect(gerenciador.cenaAtual()).toBe('selecao');
+    canvas.disparar('pointerdown', { clientX: 450, clientY: 150 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();
@@ -677,8 +685,11 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     janela.disparar('Escape');
     expect(gerenciador.cenaAtual()).toBe('menu');
 
-    // Entra no jogo: a cena de descida recebe a pista escolhida (sem lançar erro na composição)
+    // Entra no jogo: TREINO passa pela seleção de personagem (feedback do dono) antes de chegar na descida, que
+    // recebe a pista escolhida (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
+    expect(gerenciador.cenaAtual()).toBe('selecao');
+    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();
