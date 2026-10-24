@@ -5,6 +5,12 @@ produção desde a integração — `main.ts` agora monta `criarCenaJogo`) e `ce
 (descida jogável com o motor/pista REAIS da Vega, resultado, e a composta que liga as duas). Atlas já plugou
 `criarCenaJogo` em `main.ts` no lugar de `criarCenaBoot`.
 
+**C2b (plano "corrida em campeonato"):** `cenas/{corrida,podio,campeonato}.ts` -- mesmo padrão de
+`{descida,resultado,jogo}.ts`, mas dirigindo `corrida/criarCorrida` (jogador + 5 rivais de IA) em vez do motor
+solo. `cenas/contagem.ts` tem a contagem "3-2-1-JÁ" compartilhada pelas duas descidas (solo e corrida). O botão
+CAMPEONATO do menu (`gerenciador.ts`: `aoModos`) já liga em `criarCenaCampeonato`; por ora roda UMA corrida
+(a pista ativa), sem etapas/standings (C5a/C5b, ainda não existe).
+
 **Responsabilidade (plano §3.1):** cenas (`ui/cenas/*`: título, descida, resultado), menus e a persistência de
 interface. É a camada que junta o resto.
 

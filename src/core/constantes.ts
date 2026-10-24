@@ -51,6 +51,9 @@ export const CANAL_RNG = {
   ui: 2,
   audio: 3,
   falas: 4,
+  /** Camada de jogo (`pista/camada-jogo.ts`, C3): canal PRÓPRIO, para itens/kickers nunca puxar os mesmos números
+   *  da escolha de trechos do gerador (que usa `criarRng(def.semente)` direto, sem canal) nem de outro canal. */
+  camada: 5,
 } as const;
 
 // --- Limites de dado externo (replay, save). Nunca confiar no que vem de fora. ---

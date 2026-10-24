@@ -7,6 +7,19 @@
  * `core/laco.ts` é a ÚNICA fonte de ticks por quadro: este módulo não lê relógio, não agenda nada, só conta o próprio
  * `tick` no estado a cada `processar()`. Determinístico: nada de `Math.random/Date/performance`, só `core/trig.ts` para
  * ângulo (nunca `Math.sin/cos/atan2/pow`). Hash do estado (`hashEstado`) é o que prova determinismo entre rodadas.
+ *
+ * Camada de jogo (plano `docs/plano-corrida-campeonato.md` §Arquitetura, C3): `opcoes.camada` (`CamadaJogo`) só é
+ * lida quando presente — SEM `camada` (todo chamador de treino), nenhum destes 3 pontos muda 1 bit do resultado:
+ *   1. kicker: pular com `piloto.x` dentro de uma zona de `camada.kickers` soma `impulsoMs` ao impulso do pulo
+ *      (mesma fórmula de `bonusRampa`, só mais um termo).
+ *   2. coleta: a cada tick, um círculo em volta do piloto contra `camada.itens` ainda não coletados (`EventoDescida`
+ *      `'coleta'`, `LeituraDescida.coletados`).
+ *   3. turbo de pouso (plano C-D7): só em `opcoes.modo === 'corrida'` — ao pousar bem (não "torto"), soma ao `p.v`
+ *      (e ao teto de velocidade por alguns ticks, `estado.turboVel`, que decai e zera num tombo) uma fração dos
+ *      pontos daquele voo. `hashEstado()` continua sem estes dois estados novos DE PROPÓSITO: o golden da Capi
+ *      (`m3-congelamento-capi.test.ts`) roda sem `camada`/em modo `'treino'`, onde eles nunca saem de zero/vazio —
+ *      incluí-los no hash mudaria a FORMA do valor hasheado (mais uma chave) e quebraria o golden sem nenhuma
+ *      mudança de física real; a prova de determinismo do modo corrida é o `ResultadoCorrida` (`corrida/corrida.ts`).
  */
 import type {
   EventoDescida,
@@ -55,6 +68,13 @@ import {
   TRILHO_PONTOS_POR_PASSO,
 } from '../data/manobras';
 
+/** Turbo de pouso (plano C-D7, só em `modo === 'corrida'`): fração dos pontos do voo que vira velocidade extra. */
+const TURBO_MS_POR_PONTO = 0.01;
+/** Teto do bônus de velocidade acumulado (soma de pousos em sequência sem cair), m/s. */
+const TURBO_TETO_EXTRA_MS = 12;
+/** Decaimento do bônus por tick no chão/trilho (razão < 1, aplicado sempre, mesmo em 0): meia-vida ~69 ticks (~1,15 s). */
+const TURBO_DECAIMENTO_POR_TICK = 0.99;
+
 interface EstadoPiloto {
   x: number;
   y: number;
@@ -94,6 +114,12 @@ interface EstadoDescida {
   arGrab: Grab | null;
   /** Ticks deslizando no trilho atual (reset ao entrar no trilho). */
   trilhoTicks: number;
+  // C3 — camada de jogo (plano corrida-campeonato §Arquitetura): zero/vazio quando `opcoes.camada` está ausente.
+  /** Índices JÁ coletados de `opcoes.camada.itens` (nunca reaparecem, mesmo padrão de `bonecosAtingidos`). */
+  itensColetados: ReadonlySet<number>;
+  coletados: number;
+  /** Bônus de velocidade do turbo de pouso (plano C-D7), só em `modo === 'corrida'`; decai a cada tick, zera num tombo. */
+  turboVel: number;
 }
 
 export interface MotorDescida {
@@ -166,7 +192,7 @@ function leituraDe(estado: EstadoDescida, eventos: readonly EventoDescida[]): Le
     pontos: estado.pontos,
     distancia: estado.distancia,
     distanciaTotal: 0,
-    coletados: 0,
+    coletados: estado.coletados,
     eventos,
   };
 }
@@ -174,13 +200,21 @@ function leituraDe(estado: EstadoDescida, eventos: readonly EventoDescida[]): Le
 /**
  * Cria o motor para uma pista já gerada. `semente` é reservado (M2: canais de RNG de manobra), não usado no M1a.
  *
- * `opcoes` (plano corrida-campeonato, C0): `camada` (coletáveis/kickers desta rodada) e `modo` ainda não mudam
- * NADA do cálculo — são aceitos e guardados para C3 (turbo de pouso)/C6 (replay) usarem depois. Por isso omitir
- * `opcoes` (como todo chamador faz hoje) é, por construção, o comportamento de sempre: golden da Capi intacto.
+ * `opcoes` (plano corrida-campeonato, C0/C3): `camada` (coletáveis/kickers desta rodada, lida pelo motor desde C3 —
+ * ver comentário no topo do arquivo) e `modo` (turbo de pouso só em `'corrida'`). Omitir `opcoes` (como todo
+ * chamador de treino faz hoje) é, por construção, o comportamento de sempre: golden da Capi intacto.
  */
 export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_PADRAO, opcoes: OpcoesDescida = {}): MotorDescida {
   if (pista.alturas.length < 2) throw new ErroDeContrato('contrato-invalido', 'PistaGerada precisa de ao menos 2 amostras de altura');
   const modo: ModoDescida = opcoes.modo ?? 'treino';
+  const camada = opcoes.camada;
+
+  /** Impulso extra do kicker cujo `[x, x+largura]` cobre `x` (0 sem `camada`/sem kicker ali: ver comentário no topo). */
+  function impulsoKickerEm(x: number): number {
+    if (camada === undefined) return 0;
+    for (const k of camada.kickers) if (x >= k.x && x <= k.x + k.largura) return k.impulsoMs;
+    return 0;
+  }
 
   const anguloInicial = inclinacaoGrausEm(pista, 0);
 
@@ -217,6 +251,9 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     arTicksGrab: 0,
     arGrab: null,
     trilhoTicks: 0,
+    itensColetados: new Set<number>(),
+    coletados: 0,
+    turboVel: 0,
   };
 
   function respawn(est: EstadoDescida): void {
@@ -237,6 +274,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     est.arTicksGrab = 0;
     est.arGrab = null;
     est.trilhoTicks = 0;
+    est.turboVel = 0; // cair custa caro (plano C-D7): o tombo zera o bônus de velocidade do turbo de pouso.
     est.fase = 'descendo';
   }
 
@@ -256,8 +294,12 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     else if (p.velAngular > alvo) p.velAngular = Math.max(alvo, p.velAngular - config.giroAcelGrausPorTick2);
   }
 
-  /** Commita as manobras do voo (ar, mortal, grab) no combo e emite os eventos. `perfeito` aplica o bônus de estilo. */
-  function commitarVoo(eventos: EventoDescida[], perfeito: boolean): void {
+  /**
+   * Commita as manobras do voo (ar, mortal, grab) no combo e emite os eventos. `perfeito` aplica o bônus de estilo.
+   * Devolve a soma dos pontos DESTE voo (pré-combo, mesmos valores dos eventos de manobra) — só para o turbo de
+   * pouso (C-D7) saber "quanto esse voo valeu"; não é o que fecha a pontuação (isso é `fecharCombo`).
+   */
+  function commitarVoo(eventos: EventoDescida[], perfeito: boolean): number {
     const p = estado.piloto;
     const bonus = perfeito ? 1 + BONUS_ESTILO_PERFEITO : 1;
     const feitas: ManobraFeita[] = [];
@@ -273,6 +315,24 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     for (const m of feitas) eventos.push({ tipo: 'manobra', id: m.id, pontos: adicionarManobra(estado.combo, m) });
     estado.arTicksGrab = 0;
     estado.arGrab = null;
+    return feitas.reduce((soma, m) => soma + m.pontos, 0);
+  }
+
+  /**
+   * Turbo de pouso (plano C-D7): só em `modo === 'corrida'`. `pontosVoo` vem de `commitarVoo` (0 = voo sem
+   * manobra = sem turbo, por construção: "manobrar tem que compensar", não qualquer pulo). Soma ao `p.v` AGORA
+   * (sente-se na hora) e ao teto (`estado.turboVel`, decai no chão/trilho) para a velocidade não ser clampada de
+   * volta no tick seguinte.
+   */
+  function aplicarTurboDePouso(pontosVoo: number): void {
+    if (modo !== 'corrida' || pontosVoo <= 0) return;
+    const ganho = Math.min(TURBO_TETO_EXTRA_MS - estado.turboVel, pontosVoo * TURBO_MS_POR_PONTO);
+    if (ganho <= 0) return;
+    estado.turboVel += ganho;
+    const p = estado.piloto;
+    p.v += ganho;
+    p.vx = p.v * cosseno(p.angulo);
+    p.vy = p.v * seno(p.angulo);
   }
 
   /** Commita a manobra de trilho (por tempo) no combo e emite o evento. */
@@ -328,7 +388,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
       if (cmd.pulo) {
         const foiTrilho = p.modo === 'trilho';
         const bonusRampa = p.angulo > 0 ? p.angulo * config.fatorRampaMsPorGrau : 0;
-        const impulso = config.impulsoPuloMs + bonusRampa;
+        const impulso = config.impulsoPuloMs + bonusRampa + impulsoKickerEm(p.x);
         const vxBase = p.v * cosseno(p.angulo);
         const vyBase = p.v * seno(p.angulo);
         p.vx = vxBase + impulso * -seno(p.angulo);
@@ -348,7 +408,11 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
         const aceleracao = -config.gravidadeMs2 * config.fatorEmbalo * seno(p.angulo) - atrito * p.v - config.arrasto * p.v * p.v;
         p.v = p.v + aceleracao * PASSO_S;
         if (p.v < config.velocidadeMinimaChaoMs) p.v = config.velocidadeMinimaChaoMs;
-        if (p.v > config.velocidadeMaxMs) p.v = config.velocidadeMaxMs;
+        // Turbo de pouso (C-D7): só em modo 'corrida' o teto sobe com `estado.turboVel` (ganho em cada pouso bom,
+        // decaindo aqui a cada tick de chão/trilho); em 'treino' é SEMPRE `config.velocidadeMaxMs` (golden intacto).
+        if (modo === 'corrida') estado.turboVel *= TURBO_DECAIMENTO_POR_TICK;
+        const tetoVelocidade = modo === 'corrida' ? config.velocidadeMaxMs + estado.turboVel : config.velocidadeMaxMs;
+        if (p.v > tetoVelocidade) p.v = tetoVelocidade;
         const novoX = p.x + p.v * cosseno(p.angulo) * PASSO_S;
 
         if (p.modo === 'trilho' && p.trilhoAtual !== null && novoX > p.trilhoAtual.x1) {
@@ -409,7 +473,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.modo = 'trilho';
           p.trilhoAtual = trilhoAlvo;
           // commitarVoo lê o estado do voo (ticksNoAr) ANTES de zerar — senão o aéreo pontua 0.
-          commitarVoo(eventos, false);
+          aplicarTurboDePouso(commitarVoo(eventos, false));
           p.ticksNoAr = 0;
           p.grab = null;
           estado.trilhoTicks = 0;
@@ -431,12 +495,29 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           p.modo = 'chao';
           estado.ultimaQualidadePouso = qualidade;
           // commitarVoo lê p.ticksNoAr / estado.arTicksGrab do voo que ACABOU — tem que vir ANTES de zerar o ar.
-          commitarVoo(eventos, qualidade === 'perfeito');
+          const pontosDoVoo = commitarVoo(eventos, qualidade === 'perfeito');
+          if (qualidade !== 'torto') aplicarTurboDePouso(pontosDoVoo); // cair ("torto") nunca turbina.
           if (qualidade === 'torto') fecharCombo(eventos);
           else if (estado.combo.ativo) abrirJanela(estado.combo);
           p.ticksNoAr = 0;
           p.grab = null;
           eventos.push({ tipo: 'pouso', qualidade, queda: vImpacto < 0 ? -vImpacto : vImpacto });
+        }
+      }
+    }
+
+    // Coleta de itens da camada de jogo (C3): círculo (x, y) ao redor do piloto, contra os ainda não coletados.
+    // Sem `camada` (todo chamador de treino), este laço nem roda — `coletados` fica 0, como sempre foi.
+    if (camada !== undefined) {
+      for (let i = 0; i < camada.itens.length; i++) {
+        if (estado.itensColetados.has(i)) continue;
+        const item = camada.itens[i] as (typeof camada.itens)[number];
+        const dx = p.x - item.x;
+        const dy = p.y - item.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= item.raio) {
+          estado.itensColetados = new Set(estado.itensColetados).add(i);
+          estado.coletados++;
+          eventos.push({ tipo: 'coleta', item: item.tipo });
         }
       }
     }

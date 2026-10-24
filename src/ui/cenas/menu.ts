@@ -9,9 +9,9 @@
  * CAMPEONATO é NOVO). Contrato de callbacks e POSIÇÃO de cada botão ficam EXATAMENTE como antes (`aoJogar`/
  * `aoModos`/`aoOpcoes`/`aoPersonagem`/`aoPista`, mesmas coordenadas): só o RÓTULO visual muda -- os testes de
  * `ui-cenas-fase1.test.ts` e os e2e (`fase1-fluxo-cenas`, `selecao-pista`, `selecao-personagem`) clicam por
- * posição, sem conhecer texto. Única mudança de comportamento: o botão de CAMPEONATO (posição que era "MODOS")
- * fica INERTE sem `aoModos` -- nunca mais cai de volta em `aoJogar` (campeonato ainda não existe, C2a/C5a; cair
- * em silêncio na descida solo seria mentir pro jogador). Mesmo padrão "fica inerte" de `aoPersonagem`/`aoPista`.
+ * posição, sem conhecer texto. O botão de CAMPEONATO (posição que era "MODOS") liga a `ui/cenas/campeonato.ts`
+ * desde a C2b (`gerenciador.ts`: `aoModos: () => irPara('campeonato')`); sem `aoModos` (testes que não usam o
+ * recurso) fica inerte, nunca cai de volta em `aoJogar` -- mesmo padrão "fica inerte" de `aoPersonagem`/`aoPista`.
  */
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import { ALTURA, LARGURA } from '../../core/constantes';
@@ -284,7 +284,6 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
         corTopo: botaoHover === 'modos' ? '#4da2ff' : '#2a7de1',
         corBase: botaoHover === 'modos' ? '#1f6fd0' : '#144d8f',
         aoVivo: botaoHover === 'modos',
-        etiqueta: 'EM BREVE',
       });
 
       desenharBotaoBala(ctx, {

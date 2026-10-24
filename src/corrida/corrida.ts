@@ -13,6 +13,7 @@
 import type {
   CamadaJogo,
   ComandoDescida,
+  DefPista,
   IdPersonagem,
   LeituraCorrida,
   LeituraDescida,
@@ -25,11 +26,19 @@ import type {
 import { TETO_TICKS_REPLAY } from '../core/constantes';
 import { ErroDeContrato } from '../core/erros';
 import { configDoPersonagem, criarDescida, type MotorDescida } from '../descida/index';
+import { gerarCamadaJogo } from '../pista/index';
+import { flocosDaCorrida } from '../data/evolucao';
 import { PERFIS_IA, criarIA, type PerfilIA } from './ia';
 import { criarAcumuladorResumo } from './resumo';
 
 export interface OpcoesCorrida {
   readonly pista: PistaGerada;
+  /**
+   * `DefPista` da pista acima (plano §Arquitetura, C3): só para gerar a camada de jogo automaticamente
+   * (`gerarCamadaJogo(pista, def)`) quando `camada` não é informado explicitamente. Nenhuma pista oficial roda
+   * sem camada — quem quiser treino "cru" (sem coletáveis/kicker/turbo) usa `descida/motor.ts` direto, não `corrida/`.
+   */
+  readonly def?: DefPista;
   readonly camada?: CamadaJogo;
   readonly semente: number;
   readonly participantes: readonly ParticipanteCorrida[];
@@ -67,12 +76,14 @@ function posicoesDe(corredores: readonly Corredor[]): readonly IdPersonagem[] {
 }
 
 export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
-  const jogador = opcoes.participantes.find((p) => p.piloto.tipo === 'jogador');
-  if (jogador === undefined) {
+  const participanteJogador = opcoes.participantes.find((p) => p.piloto.tipo === 'jogador');
+  if (participanteJogador === undefined) {
     throw new ErroDeContrato('contrato-invalido', 'criarCorrida: precisa de exatamente um participante com piloto.tipo === "jogador"');
   }
+  const idJogador = participanteJogador.id; // alias fora do `if`: TS não propaga a narrow de `undefined` em closures.
 
-  const opcoesMotor: OpcoesDescida = { modo: 'corrida', ...(opcoes.camada !== undefined ? { camada: opcoes.camada } : {}) };
+  const camada = opcoes.camada ?? (opcoes.def !== undefined ? gerarCamadaJogo(opcoes.pista, opcoes.def) : undefined);
+  const opcoesMotor: OpcoesDescida = { modo: 'corrida', ...(camada !== undefined ? { camada } : {}) };
   const resumoJogador = criarAcumuladorResumo();
 
   const corredores: Corredor[] = opcoes.participantes.map((p): Corredor => {
@@ -106,13 +117,17 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
   function resultadoDe(): ResultadoCorrida {
     const ticks: Record<IdPersonagem, number> = {};
     for (const c of corredores) ticks[c.id] = c.tickChegada ?? c.leitura.tick;
-    return {
+    const parcial: ResultadoCorrida = {
       pista: opcoes.pista.id,
       ordem: posicoesDe(corredores),
       ticks,
       resumoJogador: resumoJogador.fechar(),
-      // C6 (Cronos, `aplicarEvolucao`/economia): conversão de pontos/manobras/pódio em flocos ainda não existe.
       flocosGanhos: 0,
+    };
+    return {
+      ...parcial,
+      // `data/evolucao.ts` (Cronos): pontos da descida + bônus de pódio, 0 se o jogador não concluiu.
+      flocosGanhos: flocosDaCorrida(parcial, idJogador),
     };
   }
 

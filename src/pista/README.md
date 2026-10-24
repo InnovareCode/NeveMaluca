@@ -10,6 +10,10 @@ do Morro continua travado em `tests/unit/pista-gerador.test.ts`).
 **Responsabilidade (plano §3.4, contrato C5):** gerador **puro** da pista. Semente + `DefPista` = `PistaGerada`
 (perfil de altura a cada 0,5 m em `Float64Array`, objetos, trilhos, checkpoints, chegada e hash).
 
+**C3 (marco corrida em campeonato):** `camada-jogo.ts` (`gerarCamadaJogo(pista, def)`) é a camada de JOGO por cima
+do terreno (kickers, coletáveis, pórtico) — NUNCA toca `alturas`/`objetos`/`trilhos`/hash da `PistaGerada`; canal de
+RNG próprio (`rngDoCanal(semente, 'camada')`), nunca o fluxo de `criarRng(def.semente)` direto do gerador.
+
 **Importa de:** `core/`, `data/`.
 
 **Regras:** determinístico. Sem `Math.random`, `Date`, `performance`, nem `Math.sin/cos/atan2/pow/exp` (usar

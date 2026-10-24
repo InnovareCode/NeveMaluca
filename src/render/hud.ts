@@ -17,6 +17,26 @@ export interface DadosHud {
    * valor, a barra não desenha (compat com quem ainda chama `desenharHud` sem este campo).
    */
   readonly progressoJogador?: number | undefined;
+  /**
+   * Um marcador por RIVAL na barra de progresso (plano "corrida em campeonato" §C2b: "a barra... agora com os 6
+   * rostos"), além do marcador do jogador (sempre o último, por cima). Sem valor, a barra mostra só o jogador
+   * (compat com `ui/cenas/descida.ts`, que não tem rivais).
+   */
+  readonly rivaisProgresso?: readonly MarcaCorredorHud[] | undefined;
+  /**
+   * Posição do jogador NESTA corrida (1º..Nº) e o total de corredores (plano §C2b: "'2º/6' grande no HUD").
+   * Sem os dois, não desenha (compat com a descida solo).
+   */
+  readonly posicaoJogador?: number | undefined;
+  readonly totalCorredores?: number | undefined;
+}
+
+/** Um marcador de rival na barra de progresso: cor sempre; `imagem` (thumbnail do sprite, já carregado) é opcional
+ *  -- sem ela, cai no ponto colorido de sempre (fallback, nunca trava por sprite ainda não carregado). */
+export interface MarcaCorredorHud {
+  readonly fracao: number;
+  readonly cor: string;
+  readonly imagem?: CanvasImageSource | null | undefined;
 }
 
 const COR_TEXTO = '#f4f9ff';
@@ -32,21 +52,26 @@ const LARGURA_BARRA_PROGRESSO = 480;
 const ALTURA_BARRA_PROGRESSO = 10;
 const Y_BARRA_PROGRESSO = 14;
 
-/** Uma marca na barra de progresso (hoje só o jogador; o C2b empilha aqui os 5 rivais com rosto/cor por personagem). */
+/** Uma marca na barra de progresso: cor sempre; `imagem` (thumbnail, já carregado) opcional -- sem ela, ponto colorido. */
 interface MarcaProgresso {
   readonly fracao: number;
   readonly cor: string;
   readonly raio: number;
+  readonly imagem?: CanvasImageSource | null | undefined;
 }
 
-/** Barra linear 0..1 ao longo da pista, pensada desde já para receber os 6 rostos (plano §C1/C2b): hoje desenha
- *  só a marca do jogador num array de 1 — o C2b só PREENCHE este array, sem mudar a função. */
-function desenharBarraProgresso(ctx: CanvasRenderingContext2D, fracaoJogador: number): void {
+/** Barra linear 0..1 ao longo da pista (plano §C1/C2b): a marca do jogador (sempre, por cima) + uma por rival
+ *  (`rivais`, vazio na descida solo). Cada marca é o thumbnail do sprite do personagem (se já carregado) recortado
+ *  em círculo, ou um ponto colorido de fallback -- nunca trava por sprite ainda não carregado. */
+function desenharBarraProgresso(ctx: CanvasRenderingContext2D, fracaoJogador: number, rivais: readonly MarcaCorredorHud[]): void {
   const x = LARGURA / 2 - LARGURA_BARRA_PROGRESSO / 2;
   const y = Y_BARRA_PROGRESSO;
   const fracao = Math.max(0, Math.min(1, fracaoJogador));
 
-  const marcas: readonly MarcaProgresso[] = [{ fracao, cor: COR_BARRA_PROGRESSO_PREENCHIMENTO, raio: 7 }];
+  const marcas: readonly MarcaProgresso[] = [
+    ...rivais.map((r): MarcaProgresso => ({ fracao: r.fracao, cor: r.cor, raio: 5, imagem: r.imagem })),
+    { fracao, cor: COR_BARRA_PROGRESSO_PREENCHIMENTO, raio: 7 },
+  ];
 
   ctx.fillStyle = COR_BARRA_PROGRESSO_FUNDO;
   ctx.fillRect(x, y, LARGURA_BARRA_PROGRESSO, ALTURA_BARRA_PROGRESSO);
@@ -60,10 +85,22 @@ function desenharBarraProgresso(ctx: CanvasRenderingContext2D, fracaoJogador: nu
 
   for (const m of marcas) {
     const mx = x + LARGURA_BARRA_PROGRESSO * Math.max(0, Math.min(1, m.fracao));
+    const my = y + ALTURA_BARRA_PROGRESSO / 2;
+    if (m.imagem) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(mx, my, m.raio, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(m.imagem, mx - m.raio, my - m.raio, m.raio * 2, m.raio * 2);
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.arc(mx, my, m.raio, 0, Math.PI * 2);
+      ctx.fillStyle = m.cor;
+      ctx.fill();
+    }
     ctx.beginPath();
-    ctx.arc(mx, y + ALTURA_BARRA_PROGRESSO / 2, m.raio, 0, Math.PI * 2);
-    ctx.fillStyle = m.cor;
-    ctx.fill();
+    ctx.arc(mx, my, m.raio, 0, Math.PI * 2);
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = COR_CONTORNO;
     ctx.stroke();
@@ -142,7 +179,18 @@ export function desenharHud(ctx: CanvasRenderingContext2D, dados: DadosHud): voi
   desenharBarraCombo(ctx, dados.combo);
 
   if (dados.progressoJogador !== undefined) {
-    desenharBarraProgresso(ctx, dados.progressoJogador);
+    desenharBarraProgresso(ctx, dados.progressoJogador, dados.rivaisProgresso ?? []);
+  }
+
+  if (dados.posicaoJogador !== undefined && dados.totalCorredores !== undefined) {
+    ctx.textAlign = 'left';
+    ctx.font = 'italic 900 34px "Barlow Condensed", Impact, sans-serif';
+    const texto = `${dados.posicaoJogador}º/${dados.totalCorredores}`;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = COR_CONTORNO;
+    ctx.strokeText(texto, 16, 78);
+    ctx.fillStyle = COR_TEXTO;
+    ctx.fillText(texto, 16, 78);
   }
 
   if (dados.fase === 'chegou') {

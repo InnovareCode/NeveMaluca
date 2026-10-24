@@ -24,6 +24,7 @@ import type { Ctx } from '../../platform/canvas';
 import { alternarTelaCheia, situacaoDaTelaCheia, type AlvoTelaCheia } from '../../platform/tela-cheia';
 import type { Cena } from '../tipos';
 import { criarCenaAbertura } from './abertura';
+import { criarCenaCampeonato } from './campeonato';
 import type { ResultadoDescida } from './descida';
 import { criarCenaJogo } from './jogo';
 import { criarCenaMenu } from './menu';
@@ -32,7 +33,7 @@ import { criarCenaSelecao } from './selecao';
 import { criarCenaSelecaoPista } from './selecao-pista';
 
 /** Nome de cada cena do fluxo, para depuração/testes (o `id` que `Cena` já carrega). */
-export type IdCenaFluxo = 'abertura' | 'menu' | 'jogo' | 'opcoes' | 'selecao' | 'selecao-pista';
+export type IdCenaFluxo = 'abertura' | 'menu' | 'jogo' | 'campeonato' | 'opcoes' | 'selecao' | 'selecao-pista';
 
 export interface OpcoesGerenciador {
   readonly canvas: AlvoToque;
@@ -171,6 +172,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           janela,
           documento: doc,
           aoJogar: () => irPara('jogo'),
+          aoModos: () => irPara('campeonato'),
           aoOpcoes: () => irPara('opcoes'),
           aoPersonagem: () => irPara('selecao'),
           aoPista: () => irPara('selecao-pista'),
@@ -221,6 +223,19 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           pista: obterPistaAtiva(),
           fantasma: obterFantasma(obterPistaAtiva()),
           aoResultado: registrarResultadoDescida,
+        });
+      case 'campeonato':
+        // Por ora roda UMA corrida na pista ativa (plano "corrida em campeonato" §C2b); o fluxo de campeonato
+        // completo com várias etapas (C5a/C5b) troca o `aoMenu` abaixo por "próxima etapa", sem mudar mais nada.
+        return criarCenaCampeonato({
+          canvas,
+          janela,
+          documento: doc,
+          aoMenu: () => irPara('menu'),
+          audio: opcoes.audio,
+          save: opcoes.save,
+          personagem: obterPersonagemAtivo(),
+          pista: obterPistaAtiva(),
         });
       default: {
         const nunca: never = id;

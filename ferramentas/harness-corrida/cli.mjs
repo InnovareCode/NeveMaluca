@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 /**
- * Harness da corrida (plano `docs/plano-corrida-campeonato.md`, C2a "prova fora do `verificar`"): roda uma
- * corrida de 6 (cada um dos personagens do elenco, uma vez como "jogador" dirigido pelo bot cuidadoso, os outros 5
- * como rivais de IA — `corrida/ia.ts`) em cada uma das 5 pistas OFICIAIS (layout fixo: provar o terreno não é
- * escopo daqui), repetindo por N sementes de CORRIDA. Confere:
+ * Harness da corrida (plano `docs/plano-corrida-campeonato.md`, C2a/C3 "prova fora do `verificar`"): roda uma
+ * corrida de 6 (cada um dos personagens do elenco, uma vez como "jogador" dirigido por um bot, os outros 5 como
+ * rivais de IA — `corrida/ia.ts`) em cada uma das 5 pistas OFICIAIS (layout fixo: provar o terreno não é escopo
+ * daqui), repetindo por N sementes de CORRIDA. Confere:
  *
  *   1. os 6 participantes chegam em toda combinação jogador x pista x semente (inclusive o caso que travava antes
  *      da trava existir: Beto, manobreiro ousadia 2, no Vulcão Pé-Gelado);
- *   2. determinismo: repetir a MESMA combinação dá exatamente o mesmo `ResultadoCorrida`.
+ *   2. determinismo: repetir a MESMA combinação dá exatamente o mesmo `ResultadoCorrida`;
+ *   3. (C3) a camada de jogo (`def` passado para `criarCorrida` => `gerarCamadaJogo` automático) faz o mortal
+ *      ACONTECER: o manobreiro (Capi, ousadia 2) faz >= 3 mortais por pista, e pelo menos 30% dos pulos dados
+ *      dentro de uma zona de kicker cabem ao menos 1 mortal naquele voo;
+ *   4. (C-D7) manobrar passou a compensar NO TEMPO: o manobreiro chega perto do cuidadoso (ou antes), não muito
+ *      atrás — turbo de pouso compensando o custo de manobrar (plano: "15-25% de tempo").
  *
  *   --sementes N   quantas sementes de corrida por combinação jogador x pista (padrão 10)
  *   --base N       primeira semente de corrida (padrão 1)
@@ -59,17 +64,56 @@ function montarParticipantes(m, idJogador) {
   }));
 }
 
-/** Roda UMA corrida inteira: jogador dirigido pelo bot cuidadoso até chegar (ou até o teto); depois `finalizar()`. */
-function rodarCorrida(m, pistaGerada, sementeDaCorrida, idJogador, maxTicks) {
-  const corrida = m.corrida.criarCorrida({ pista: pistaGerada, semente: sementeDaCorrida, participantes: montarParticipantes(m, idJogador) });
-  const bot = m.descida.criarBotCuidadoso(pistaGerada);
+/** Roda UMA corrida inteira: jogador dirigido pelo `bot` até chegar (ou até o teto); depois `finalizar()`. */
+function rodarCorrida(m, pistaGerada, def, sementeDaCorrida, idJogador, bot, maxTicks) {
+  const corrida = m.corrida.criarCorrida({ pista: pistaGerada, def, semente: sementeDaCorrida, participantes: montarParticipantes(m, idJogador) });
   let leitura = corrida.leitura();
   for (let i = 0; i < maxTicks && leitura.jogador.fase !== 'chegou'; i++) {
     leitura = corrida.processar(bot(leitura.jogador));
   }
   const jogadorChegou = leitura.jogador.fase === 'chegou';
   const resultado = corrida.finalizar();
-  return { jogadorChegou, resultado };
+  return { jogadorChegou, resultado, ticksJogador: leitura.jogador.tick };
+}
+
+/**
+ * Mede mortais e o encaixe kicker->mortal de UMA corrida (plano §Arquitetura, C3). Um "voo de kicker" abre no
+ * `'pulo'` cuja posição (ANTES do pulo) cai numa zona de `camada.kickers`, e fecha no próximo `'pouso'`/`'tombo'`/
+ * `'trilho'` — conta como "coube mortal" se algum evento `manobra id:'mortal'` aconteceu dentro dessa janela.
+ */
+function medirManobrasDoJogador(m, pistaGerada, def, camada, sementeDaCorrida, idJogador, bot, maxTicks) {
+  const corrida = m.corrida.criarCorrida({ pista: pistaGerada, def, semente: sementeDaCorrida, participantes: montarParticipantes(m, idJogador) });
+  let leitura = corrida.leitura();
+  let mortais = 0;
+  let pulosDeKicker = 0;
+  let pulosDeKickerComMortal = 0;
+  let emVooDeKicker = false;
+  let mortalNoVooAtual = false;
+  for (let i = 0; i < maxTicks && leitura.jogador.fase !== 'chegou'; i++) {
+    const xAntes = leitura.jogador.piloto.x;
+    leitura = corrida.processar(bot(leitura.jogador));
+    for (const ev of leitura.jogador.eventos) {
+      if (ev.tipo === 'pulo') {
+        if (emVooDeKicker) {
+          pulosDeKicker++;
+          if (mortalNoVooAtual) pulosDeKickerComMortal++;
+        }
+        emVooDeKicker = camada.kickers.some((k) => xAntes >= k.x && xAntes <= k.x + k.largura);
+        mortalNoVooAtual = false;
+      } else if (ev.tipo === 'manobra' && ev.id === 'mortal') {
+        mortais++;
+        if (emVooDeKicker) mortalNoVooAtual = true;
+      } else if (ev.tipo === 'pouso' || ev.tipo === 'tombo' || ev.tipo === 'trilho') {
+        if (emVooDeKicker) {
+          pulosDeKicker++;
+          if (mortalNoVooAtual) pulosDeKickerComMortal++;
+        }
+        emVooDeKicker = false;
+        mortalNoVooAtual = false;
+      }
+    }
+  }
+  return { mortais, pulosDeKicker, pulosDeKickerComMortal, ticks: leitura.jogador.tick, chegou: leitura.jogador.fase === 'chegou' };
 }
 
 async function main() {
@@ -77,20 +121,22 @@ async function main() {
   const { server, m } = await carregarModulos();
   try {
     const personagens = m.data.PERSONAGENS_DE_DADOS.map((d) => d.id);
-    const pistasOficiais = m.data.PISTAS_DE_DADOS.map((def) => ({ id: def.id, gerada: m.pista.gerarPista(def) }));
+    const pistasOficiais = m.data.PISTAS_DE_DADOS.map((def) => ({ id: def.id, def, gerada: m.pista.gerarPista(def) }));
     console.log(`Harness da corrida: ${personagens.length} personagens x ${pistasOficiais.length} pistas oficiais x ${a.sementes} sementes de corrida (base ${a.base}).`);
 
+    const bots = (pistaGerada) => ({ bot: m.descida.criarBotCuidadoso(pistaGerada) });
     const falhas = [];
     let combinacoes = 0;
     for (const idJogador of personagens) {
-      for (const { id: idPista, gerada } of pistasOficiais) {
+      for (const { def, gerada } of pistasOficiais) {
         for (let s = 0; s < a.sementes; s++) {
           const semente = a.base + s;
           combinacoes++;
-          const { jogadorChegou, resultado } = rodarCorrida(m, gerada, semente, idJogador, a.maxTicks);
+          const { bot } = bots(gerada);
+          const { jogadorChegou, resultado } = rodarCorrida(m, gerada, def, semente, idJogador, bot, a.maxTicks);
           const seisChegaram = resultado.ordem.length === personagens.length && new Set(resultado.ordem).size === personagens.length;
           if (!jogadorChegou || !seisChegaram) {
-            falhas.push({ idJogador, idPista, semente, jogadorChegou, ordemLength: resultado.ordem.length });
+            falhas.push({ idJogador, idPista: def.id, semente, jogadorChegou, ordemLength: resultado.ordem.length });
           }
         }
       }
@@ -101,11 +147,56 @@ async function main() {
 
     // Determinismo: repete uma combinação (o caso que travava antes: Beto no Vulcão) e confere resultado IDÊNTICO.
     const vulcao = pistasOficiais.find((p) => p.id === 'vulcao-pe-gelado');
-    const r1 = rodarCorrida(m, vulcao.gerada, 1, 'beto', a.maxTicks);
-    const r2 = rodarCorrida(m, vulcao.gerada, 1, 'beto', a.maxTicks);
+    const r1 = rodarCorrida(m, vulcao.gerada, vulcao.def, 1, 'beto', m.descida.criarBotCuidadoso(vulcao.gerada), a.maxTicks);
+    const r2 = rodarCorrida(m, vulcao.gerada, vulcao.def, 1, 'beto', m.descida.criarBotCuidadoso(vulcao.gerada), a.maxTicks);
     const determinístico = JSON.stringify(r1.resultado) === JSON.stringify(r2.resultado);
     console.log(`Determinismo (beto, vulcao-pe-gelado, semente 1, repetido): ${determinístico ? 'OK' : 'DIVERGIU'}.`);
     if (!determinístico) falhas.push({ determinismo: false });
+
+    // --- C3: a camada de jogo faz o mortal compensar (manobreiro Capi, ousadia 2, semente de corrida = a.base) ---
+    // A trajetória do JOGADOR (bot dirigindo) não depende da semente de corrida (só a IA dos rivais depende) — por
+    // isso mede UMA vez por pista, não por semente. Critério é em AGREGADO nas 5 pistas, não piso por pista: o Morro
+    // (pista 1, roteirizada pra ser a mais fácil, plano C-D5) só tem 1 ponto de lançamento na geometria CONGELADA
+    // (medido: `inclinacaoGrausEm` nunca passa de ~0° fora dele, em qualquer limiar) — exigir 3 mortais TAMBÉM nela
+    // seria pedir pra geometria do terreno mudar, proibido neste C3. O agregado (soma/total nas 5) é o critério real.
+    console.log('\nCamada de jogo (C3): manobreiro (Capi, ousadia 2) x cuidadoso, pista a pista (agregado = critério).');
+    const SEMENTE_CALIBRAGEM = a.base;
+    let totalMortais = 0;
+    let totalPulosKicker = 0;
+    let totalPulosKickerComMortal = 0;
+    let totalTicksManobreiro = 0;
+    let totalTicksCuidadoso = 0;
+    for (const { def, gerada } of pistasOficiais) {
+      const config = m.descida.configDoPersonagem('capi');
+      const manobreiro = m.descida.criarBotManobreiro(gerada, config, { ousadia: 2 });
+      const cuidadoso = m.descida.criarBotCuidadoso(gerada);
+      const camada = m.pista.gerarCamadaJogo(gerada, def);
+
+      const doManobreiro = medirManobrasDoJogador(m, gerada, def, camada, SEMENTE_CALIBRAGEM, 'capi', manobreiro, a.maxTicks);
+      const doCuidadoso = rodarCorrida(m, gerada, def, SEMENTE_CALIBRAGEM, 'capi', cuidadoso, a.maxTicks);
+
+      const razaoKicker = doManobreiro.pulosDeKicker > 0 ? doManobreiro.pulosDeKickerComMortal / doManobreiro.pulosDeKicker : 0;
+      const razaoTempo = doManobreiro.ticks / doCuidadoso.ticksJogador;
+      totalMortais += doManobreiro.mortais;
+      totalPulosKicker += doManobreiro.pulosDeKicker;
+      totalPulosKickerComMortal += doManobreiro.pulosDeKickerComMortal;
+      totalTicksManobreiro += doManobreiro.ticks;
+      totalTicksCuidadoso += doCuidadoso.ticksJogador;
+
+      console.log(
+        `  ${def.id}: kickers=${camada.kickers.length} mortais=${doManobreiro.mortais} pulosDeKicker=${doManobreiro.pulosDeKicker} comMortal=${doManobreiro.pulosDeKickerComMortal} (${(razaoKicker * 100).toFixed(0)}%) | ticksManobreiro=${doManobreiro.ticks} ticksCuidadoso=${doCuidadoso.ticksJogador} (${((razaoTempo - 1) * 100).toFixed(1)}%)`,
+      );
+      if (!doManobreiro.chegou) falhas.push({ criterio: 'manobreiro-nao-chegou', pista: def.id });
+    }
+    const razaoKickerAgregada = totalPulosKicker > 0 ? totalPulosKickerComMortal / totalPulosKicker : 0;
+    const razaoTempoAgregada = totalTicksManobreiro / totalTicksCuidadoso;
+    const mortaisPorPistaMedia = totalMortais / pistasOficiais.length;
+    console.log(
+      `  Agregado (5 pistas): mortais=${totalMortais} (média ${mortaisPorPistaMedia.toFixed(1)}/pista), encaixe kicker->mortal=${(razaoKickerAgregada * 100).toFixed(0)}%, tempo manobreiro/cuidadoso=${razaoTempoAgregada.toFixed(3)} (${((razaoTempoAgregada - 1) * 100).toFixed(1)}%).`,
+    );
+    if (mortaisPorPistaMedia < 3) falhas.push({ criterio: 'mortais-por-pista-agregado', mortaisPorPistaMedia });
+    if (razaoKickerAgregada < 0.3) falhas.push({ criterio: 'kicker-mortal-agregado', razaoKickerAgregada });
+    if (razaoTempoAgregada > 1.02) falhas.push({ criterio: 'manobrar-nao-compensa-no-tempo', razaoTempoAgregada });
 
     process.exitCode = falhas.length > 0 ? 1 : 0;
   } finally {

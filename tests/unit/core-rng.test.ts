@@ -89,13 +89,14 @@ describe('estado serializável', () => {
 });
 
 describe('canais separados (plano §3.3)', () => {
-  it('lógica = semente; visual +1, ui +2, áudio +3, falas +4; canais diferentes dão sequências diferentes', () => {
-    expect(CANAL_RNG).toEqual({ logica: 0, visual: 1, ui: 2, audio: 3, falas: 4 });
+  it('lógica = semente; visual +1, ui +2, áudio +3, falas +4, camada +5; canais diferentes dão sequências diferentes', () => {
+    expect(CANAL_RNG).toEqual({ logica: 0, visual: 1, ui: 2, audio: 3, falas: 4, camada: 5 });
     expect(rngDoCanal(100, 'logica').proximo()).toBe(criarRng(100).proximo());
     expect(rngDoCanal(100, 'visual').proximo()).toBe(criarRng(101).proximo());
     expect(rngDoCanal(100, 'falas').proximo()).toBe(criarRng(104).proximo());
-    const primeiros = (['logica', 'visual', 'ui', 'audio', 'falas'] as const).map((c) => rngDoCanal(100, c).proximo());
-    expect(new Set(primeiros).size).toBe(5);
+    expect(rngDoCanal(100, 'camada').proximo()).toBe(criarRng(105).proximo());
+    const primeiros = (['logica', 'visual', 'ui', 'audio', 'falas', 'camada'] as const).map((c) => rngDoCanal(100, c).proximo());
+    expect(new Set(primeiros).size).toBe(6);
   });
 
   it('consumir o canal visual não muda o canal da lógica (o replay não depende de quantas partículas o render criou)', () => {

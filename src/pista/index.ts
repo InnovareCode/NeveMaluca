@@ -2,3 +2,4 @@
 export * from './catalogo';
 export * from './consulta';
 export * from './gerador';
+export * from './camada-jogo';

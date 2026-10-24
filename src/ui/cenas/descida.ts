@@ -39,6 +39,7 @@ import type { Cena } from '../tipos';
 import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
 import { configDoPersonagem, criarDescida, criarReprodutorFantasma, VERSAO_MOTOR, type MotorDescida, type ReprodutorFantasma } from '../../descida/index';
 import { exigirPistaValida } from '../../pista/index';
+import { TICKS_CONTAGEM, textoDaContagem } from './contagem';
 import { criarSomManobras } from '../../audio/som-manobras';
 import { criarMusicaAdaptativa } from '../../audio/musica-adaptativa';
 import type { AudioDestravavel } from '../../audio/index';
@@ -54,26 +55,14 @@ export interface ResultadoDescida {
   readonly replay?: ReplayV1 | undefined;
 }
 
-// Contagem "3-2-1-JÁ" (plano "corrida em campeonato" §C1), ~0,83 s por número + ~0,5 s no "JÁ!": roda ANTES do
-// motor, só na cena -- nunca chama `entrada.obterComando()`/`motor.processar()` nesta janela, então não grava
-// tick nenhum no replay antes da corrida de fato começar.
-const TICKS_POR_NUMERO = 50;
-const TICKS_JA = 30;
 /**
  * Exportada para quem dirige a cena por um motor "sombra" em testes (`ui-descida-*.test.ts`): o sombra precisa
  * ficar OCIOSO pelos mesmos ticks (sem tickar nem despachar tecla), senão desalinha do motor real da cena -- que
- * só começa a consumir `entrada.obterComando()` depois da contagem -- e os bots saem de sincronia.
+ * só começa a consumir `entrada.obterComando()` depois da contagem -- e os bots saem de sincronia. Valor vem de
+ * `./contagem` (§C2b: mesma contagem "3-2-1-JÁ" compartilhada com `corrida.ts`).
  */
-export const TICKS_CONTAGEM_DESCIDA = TICKS_POR_NUMERO * 3 + TICKS_JA;
+export const TICKS_CONTAGEM_DESCIDA = TICKS_CONTAGEM;
 const TOTAL_TICKS_CONTAGEM = TICKS_CONTAGEM_DESCIDA;
-
-/** Texto e "pulso" (0=acabou de trocar, perto de 1=tamanho de repouso) da contagem em `t` ticks (fração incluída, p/ interpolar). */
-function textoDaContagem(t: number): { texto: string; pulso: number } {
-  if (t < TICKS_POR_NUMERO) return { texto: '3', pulso: t / TICKS_POR_NUMERO };
-  if (t < TICKS_POR_NUMERO * 2) return { texto: '2', pulso: (t - TICKS_POR_NUMERO) / TICKS_POR_NUMERO };
-  if (t < TICKS_POR_NUMERO * 3) return { texto: '1', pulso: (t - TICKS_POR_NUMERO * 2) / TICKS_POR_NUMERO };
-  return { texto: 'JÁ!', pulso: (t - TICKS_POR_NUMERO * 3) / TICKS_JA };
-}
 
 // ~2 s de comemoração (confete + pose 'celeb', já ativa pela última leitura) antes de ir para o resultado: o
 // motor fica CONGELADO neste intervalo (nunca mais `processar`), então não entra tick extra no replay/resultado.

@@ -316,14 +316,42 @@ export interface ReplayV1 {
 export const MODOS_DESCIDA = ['treino', 'corrida'] as const;
 export type ModoDescida = (typeof MODOS_DESCIDA)[number];
 
+/** Coletável da camada de jogo (plano §Arquitetura, C3): círculo em `(x, y)` de raio `raio`, metros. `dourado` é
+ *  mais raro (1 por pista) e fica fora da linha óbvia — ensina a explorar o arco de um kicker, não só seguir o chão. */
+export interface ItemCamada {
+  readonly tipo: 'floco' | 'dourado';
+  readonly x: number;
+  readonly y: number;
+  readonly raio: number;
+}
+
+/** Zona de impulso extra no chão/trilho (plano §Arquitetura, C3): pular com `piloto.x` dentro de `[x, x+largura]`
+ *  soma `impulsoMs` ao impulso normal do pulo (mesma fórmula de `fatorRampaMsPorGrau`), sem tocar a física de base —
+ *  é inofensivo por omissão (sem `camada`/sem kicker ali, o pulo é exatamente o de sempre). */
+export interface KickerCamada {
+  readonly x: number;
+  readonly largura: number;
+  readonly impulsoMs: number;
+}
+
 /**
- * Camada de jogo por cima do terreno gerado (coletáveis, kickers, obstáculos altos, pórtico — plano §Arquitetura,
- * C3, AINDA NÃO IMPLEMENTADA). Reservada aqui só para `criarDescida` já nascer com a forma final do parâmetro;
- * `motor.ts` aceita o campo e o ignora até C3 (omitir `camada`, como todo chamador faz hoje, é EXATAMENTE o
- * comportamento de sempre — nenhum bit muda). Alias de `ObjetoPista[]` (mesmo catálogo de `TIPOS_OBJETO`, que já
- * tem `floco`) até C3 decidir se precisa de forma própria.
+ * Camada de jogo por cima do terreno gerado (plano §Arquitetura, C3): coletáveis que ensinam a linha (chão -> arco
+ * do kicker -> trilho), kickers que estendem o ar (torna o mortal alcançável sem mexer na física da Capi),
+ * obstáculos altos (C4, agachar — vazio até lá) e o pórtico (hoje só decorativo, mesma posição que `render/chegada.ts`
+ * já desenha por conta própria em `pista.chegadaX`). `gerarPista` (M1a) NUNCA gera isto: é sobreposição pura,
+ * produzida por `pista/camada-jogo.ts` (`gerarCamadaJogo`) a partir da `PistaGerada` já congelada — o terreno em si
+ * (`alturas`/`objetos`/`trilhos`/hash) nunca muda. `motor.ts` só lê estes campos quando `OpcoesDescida.camada` é
+ * passada: omitir (como todo chamador de treino faz) é, por construção, o comportamento de sempre.
  */
-export type CamadaJogo = readonly ObjetoPista[];
+export interface CamadaJogo {
+  readonly itens: readonly ItemCamada[];
+  readonly kickers: readonly KickerCamada[];
+  /** Reservado para C4 (obstáculo alto + agachar); vazio até lá. */
+  readonly obstaculosAltos: readonly ObjetoPista[];
+  readonly porticoX: number;
+  readonly versao: string;
+  readonly hash: string;
+}
 
 /** 3º parâmetro de `criarDescida` (`descida/motor.ts`). Omitido (ou `{}`) => sem camada extra, modo `'treino'`. */
 export interface OpcoesDescida {

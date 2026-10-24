@@ -1,11 +1,12 @@
 /**
  * `criarDescida(pista, config, opcoes?)` (plano `docs/plano-corrida-campeonato.md` §Contratos, C0): o 3º parâmetro
- * é novo, mas por construção não muda NADA do resultado hoje — nem omitido, nem `{}`, nem `{modo:'treino'}`, nem
- * com uma `camada` qualquer (C3 ainda não lê isso). Prova objetiva de "nível 0 + treino = idêntico a hoje" além do
- * golden da Capi em `m3-congelamento-capi.test.ts`.
+ * é novo, mas OMITIR (nem `{}`, nem `{modo:'treino'}`, nem sem `camada`) não muda NADA do resultado hoje. Prova
+ * objetiva de "nível 0 + treino = idêntico a hoje" além do golden da Capi em `m3-congelamento-capi.test.ts`.
+ * A prova de que uma `camada` de VERDADE afeta o motor (C3: kicker, coleta, turbo de pouso) é
+ * `descida-motor-camada.test.ts` — este arquivo só prova a parte "sem camada = sem mudança".
  */
 import { describe, expect, it } from 'vitest';
-import type { ObjetoPista } from '../../src/core/contratos';
+import type { CamadaJogo } from '../../src/core/contratos';
 import { PISTA_MORRO_DO_PINHAO } from '../../src/data/pistas';
 import { criarBotCuidadoso } from '../../src/descida/bot';
 import { CONFIG_PADRAO } from '../../src/descida/constantes';
@@ -13,7 +14,8 @@ import { criarDescida } from '../../src/descida/motor';
 import { gerarPista } from '../../src/pista/gerador';
 
 const MAX_TICKS = 16200;
-const CAMADA_QUALQUER: readonly ObjetoPista[] = [{ tipo: 'floco', x: 100, largura: 1, altura: 1.5, variante: 0 }];
+/** Uma camada bem distante de qualquer coisa que o jogador vai tocar: prova que camada VAZIA de efeito = sem camada. */
+const CAMADA_SEM_EFEITO: CamadaJogo = { itens: [], kickers: [], obstaculosAltos: [], porticoX: 999999, versao: '1', hash: '0000000000000000' };
 
 /** Só o que a física/pontuação já expunha ANTES deste parâmetro novo existir — nunca `motor.modo` (ver teste dedicado). */
 function fisicaDe(opcoes?: Parameters<typeof criarDescida>[2]) {
@@ -38,12 +40,15 @@ describe('criarDescida: opcoes novo (modo/camada) não muda o resultado hoje', (
     expect(treinoExplicito).toEqual(semOpcoes);
   });
 
-  it('modo "corrida" ainda não afeta a física/pontuação (turbo de pouso é C3/C6, não C0/C2a)', () => {
-    expect(descer({ modo: 'corrida' })).toEqual(descer(undefined));
+  it('modo "corrida" agora PODE mudar a física (turbo de pouso, C3): pontos iguais, hash/ticks podem diferir', () => {
+    const treino = descer(undefined);
+    const corrida = descer({ modo: 'corrida' });
+    expect(corrida.pontos).toBe(treino.pontos); // turbo nunca muda pontuação, só velocidade.
+    expect(corrida.ticks).toBeLessThanOrEqual(treino.ticks); // turbo só ajuda a chegar, nunca atrasa.
   });
 
-  it('uma "camada" qualquer ainda não afeta nada (C3 não implementada): motor só aceita e ignora', () => {
-    expect(descer({ camada: CAMADA_QUALQUER })).toEqual(descer(undefined));
+  it('uma "camada" sem kickers/itens no caminho do bot não afeta nada (C3: sem camada = camada sem efeito)', () => {
+    expect(descer({ camada: CAMADA_SEM_EFEITO })).toEqual(descer(undefined));
   });
 
   it('motor.modo reflete o que foi pedido (padrão "treino")', () => {
