@@ -76,8 +76,11 @@ test.describe('paisagem: desenha e anda', () => {
     });
     expect(amostra.topo[2]).toBeGreaterThan(amostra.topo[0]!); // céu: mais azul que vermelho
     expect(amostra.topo[0]).toBeLessThan(100);
-    expect(amostra.baseMeio.every((v) => v > 235)).toBe(true); // terreno cinza/neve (#eef3f8)
-    expect(amostra.cores).toBeGreaterThan(10); // céu em degradê + montanhas + neve + terreno + piloto + HUD
+    // A abertura agora é a CAPA oficial escurecida (ou, nos quadros antes de decodificar, o fundo liso azul-noite) —
+    // não existe mais o chão de neve vetorial branco que este teste media (pedido do dono: nada fora do padrão
+    // Pixar). O que importa aqui é a base estar PINTADA (não transparente/preta), não a cor exata.
+    expect(amostra.baseMeio.reduce((s, v) => s + v, 0)).toBeGreaterThan(40);
+    expect(amostra.cores).toBeGreaterThan(10); // capa/degradê + neve caindo + convite
 
     // laço: ~60 ticks/s (tolerante: máquina carregada). Mede um intervalo em regime estável, não um instante —
     // medido (e2e, 2026-10-22): no 1º segundo após o boot a cena de descida ainda está "aquecendo" (1ª criação

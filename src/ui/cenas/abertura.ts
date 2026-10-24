@@ -2,7 +2,9 @@
  * Cena de Abertura (Splash) do Neve Maluca.
  *
  * Requisitos atendidos:
- *  1. Logo animado NEVE MALUCA (efeito de entrada e flutuação senoidal suave, usando `core/trig`).
+ *  1. Logo animado NEVE MALUCA sobre a CAPA oficial (`capa.webp` + `logo.webp`, os mesmos do menu via `menu-capa.ts`),
+ *     com entrada e flutuação senoidal suave (`core/trig`). Enquanto a capa não decodifica: só fundo liso + neve
+ *     (nunca cenário vetorial — pedido do dono: tudo no padrão Pixar).
  *  2. Partículas de neve caindo determinísticas (`ui/desenho.ts`).
  *  3. Transição suave (fade out para fade in no menu) ao clicar/tocar, apertar tecla ou após 3s (~180 ticks).
  */
@@ -13,6 +15,7 @@ import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
 import { criarCamadaEstatica, desenharFlocos, type CamadaEstatica } from '../desenho';
 import type { Cena } from '../tipos';
+import { assetsMenuCapaProntos, precarregarAssetsMenuCapa } from './menu-capa';
 
 export interface OpcoesCenaAbertura {
   readonly canvas: AlvoToque;
@@ -26,37 +29,30 @@ export interface OpcoesCenaAbertura {
 const TICKS_SPLASH = 180;
 const TICKS_FADE = 20;
 
-const COR_CEU_TOPO = '#1b4b8a';
-const COR_CEU_BASE = '#70aae0';
-const COR_NEVE = '#f4f9ff';
+const COR_CEU_TOPO = '#0b1a33';
+const COR_CEU_BASE = '#1f3f86';
 const COR_CONTORNO = '#0b1a33';
+/** Logo centralizado na abertura: ~58% da largura (818x433 de origem: razão 1,889). */
+const LOGO_W = LARGURA * 0.58;
+const LOGO_H = LOGO_W / 1.889;
 
+/** Fundo de espera (só os quadros antes de `capa.webp` decodificar): gradiente liso, sem fingir cenário. */
 function pintarCenarioFixo(ctx: Ctx): void {
   const grad = ctx.createLinearGradient(0, 0, 0, ALTURA);
   grad.addColorStop(0, COR_CEU_TOPO);
   grad.addColorStop(1, COR_CEU_BASE);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, LARGURA, ALTURA);
+}
 
-  ctx.fillStyle = '#9dc6eb';
-  ctx.beginPath();
-  ctx.moveTo(0, ALTURA);
-  ctx.lineTo(0, ALTURA * 0.72);
-  ctx.lineTo(LARGURA * 0.35, ALTURA * 0.55);
-  ctx.lineTo(LARGURA * 0.7, ALTURA * 0.68);
-  ctx.lineTo(LARGURA, ALTURA * 0.58);
-  ctx.lineTo(LARGURA, ALTURA);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = COR_NEVE;
-  ctx.beginPath();
-  ctx.moveTo(0, ALTURA);
-  ctx.lineTo(0, ALTURA * 0.85);
-  ctx.quadraticCurveTo(LARGURA * 0.45, ALTURA * 0.78, LARGURA, ALTURA * 0.82);
-  ctx.lineTo(LARGURA, ALTURA);
-  ctx.closePath();
-  ctx.fill();
+/** Capa cobrindo os 960x540 lógicos (sem distorcer), escurecida pra o logo e o convite saltarem. */
+function desenharCapa(ctx: Ctx, img: HTMLImageElement): void {
+  const escala = Math.max(LARGURA / img.naturalWidth, ALTURA / img.naturalHeight);
+  const w = img.naturalWidth * escala;
+  const h = img.naturalHeight * escala;
+  ctx.drawImage(img, (LARGURA - w) / 2, (ALTURA - h) / 2, w, h);
+  ctx.fillStyle = 'rgba(11, 26, 51, 0.45)';
+  ctx.fillRect(0, 0, LARGURA, ALTURA);
 }
 
 export function criarCenaAbertura(opcoes: OpcoesCenaAbertura): Cena {
@@ -90,6 +86,8 @@ export function criarCenaAbertura(opcoes: OpcoesCenaAbertura): Cena {
 
   opcoes.canvas.addEventListener('pointerdown', aoTocar);
   janela?.addEventListener('keydown', aoTeclar);
+  // Mesma capa do menu: começa a carregar já na abertura, então o menu abre sem espera.
+  void precarregarAssetsMenuCapa();
 
   return {
     id: 'abertura',
@@ -107,13 +105,18 @@ export function criarCenaAbertura(opcoes: OpcoesCenaAbertura): Cena {
       }
     },
     desenhar(ctx: Ctx, alpha: number) {
-      if (!cenario && doc) {
-        cenario = criarCamadaEstatica(doc, pintarCenarioFixo);
-      }
-      if (cenario) {
-        cenario.desenhar(ctx);
+      const assets = assetsMenuCapaProntos();
+      if (assets) {
+        desenharCapa(ctx, assets.capa);
       } else {
-        pintarCenarioFixo(ctx);
+        if (!cenario && doc) {
+          cenario = criarCamadaEstatica(doc, pintarCenarioFixo);
+        }
+        if (cenario) {
+          cenario.desenhar(ctx);
+        } else {
+          pintarCenarioFixo(ctx);
+        }
       }
 
       const t = ticks + alpha;
@@ -121,38 +124,18 @@ export function criarCenaAbertura(opcoes: OpcoesCenaAbertura): Cena {
       // Partículas de neve caindo
       desenharFlocos(ctx, 35, t);
 
-      // Logo Animado NEVE MALUCA
-      const progressoEntrada = Math.min(1, t / 25);
-      const oscilacao = seno((t * 3.6) % 360) * 5;
-      const escalaLogo = (0.78 + 0.22 * progressoEntrada) * (1 + 0.02 * seno((t * 2.4) % 360));
+      // Logo animado (a arte oficial; sem ela ainda, nada de título improvisado)
+      if (assets) {
+        const progressoEntrada = Math.min(1, t / 25);
+        const oscilacao = seno((t * 3.6) % 360) * 5;
+        const escalaLogo = (0.78 + 0.22 * progressoEntrada) * (1 + 0.02 * seno((t * 2.4) % 360));
 
-      ctx.save();
-      ctx.translate(LARGURA / 2, ALTURA * 0.42 + oscilacao);
-      ctx.scale(escalaLogo, escalaLogo);
-
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.lineJoin = 'round';
-
-      // Sombra
-      ctx.font = 'italic 900 108px "Barlow Condensed", Impact, sans-serif';
-      ctx.fillStyle = 'rgba(11, 26, 51, 0.45)';
-      ctx.fillText('NEVE MALUCA', 6, 10);
-
-      // Contorno espesso
-      ctx.lineWidth = 14;
-      ctx.strokeStyle = COR_CONTORNO;
-      ctx.strokeText('NEVE MALUCA', 0, 0);
-
-      // Gradiente de preenchimento
-      const textoGrad = ctx.createLinearGradient(0, -50, 0, 50);
-      textoGrad.addColorStop(0, '#ffffff');
-      textoGrad.addColorStop(0.5, '#eaf5ff');
-      textoGrad.addColorStop(1, '#9cd5ff');
-      ctx.fillStyle = textoGrad;
-      ctx.fillText('NEVE MALUCA', 0, 0);
-
-      ctx.restore();
+        ctx.save();
+        ctx.translate(LARGURA / 2, ALTURA * 0.42 + oscilacao);
+        ctx.scale(escalaLogo, escalaLogo);
+        ctx.drawImage(assets.logo, -LOGO_W / 2, -LOGO_H / 2, LOGO_W, LOGO_H);
+        ctx.restore();
+      }
 
       // Indicador interativo
       if (t > 15) {
@@ -164,9 +147,9 @@ export function criarCenaAbertura(opcoes: OpcoesCenaAbertura): Cena {
         ctx.lineJoin = 'round';
         ctx.lineWidth = 5;
         ctx.strokeStyle = COR_CONTORNO;
-        ctx.strokeText('toque ou aperte ESPAÇO para entrar', LARGURA / 2, ALTURA * 0.72);
+        ctx.strokeText('toque ou aperte ESPAÇO para entrar', LARGURA / 2, ALTURA * 0.8);
         ctx.fillStyle = '#f4f9ff';
-        ctx.fillText('toque ou aperte ESPAÇO para entrar', LARGURA / 2, ALTURA * 0.72);
+        ctx.fillText('toque ou aperte ESPAÇO para entrar', LARGURA / 2, ALTURA * 0.8);
         ctx.restore();
       }
 
