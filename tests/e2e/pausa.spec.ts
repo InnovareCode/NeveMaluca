@@ -59,7 +59,7 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('selecao');
-    await clicarLogico(150, 150);
+    await clicarLogico(105, 386); // miniatura 0 ('capi')
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('jogo');
@@ -181,7 +181,7 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     const clicarLogico = (x: number, y: number) => page.mouse.click(caixa.x + x * escalaX, caixa.y + y * escalaY);
 
     await clicarLogico(130, 224); // TREINO
-    await clicarLogico(150, 150); // seleciona 'capi'
+    await clicarLogico(105, 386); // miniatura 0 ('capi')
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('jogo');

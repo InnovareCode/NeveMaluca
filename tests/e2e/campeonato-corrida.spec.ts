@@ -55,8 +55,8 @@ test.describe('Campeonato (corrida em campeonato, C2b)', () => {
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('selecao');
 
-    // Escolhe o card 0 (primeira coluna, primeira linha = 'capi'): x 70..330, y 112..262 -> centro (150, 150)
-    await page.mouse.click(caixa.x + 150 * escalaX, caixa.y + 150 * escalaY);
+    // Escolhe a miniatura 0 ('capi'): x 35..175, y 340..432 -> centro (105, 386)
+    await page.mouse.click(caixa.x + 105 * escalaX, caixa.y + 386 * escalaY);
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('campeonato');

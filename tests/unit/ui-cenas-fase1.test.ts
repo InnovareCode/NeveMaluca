@@ -339,12 +339,12 @@ describe('Fase 1: Tela de Seleção de Personagem', () => {
       aoVoltar: () => undefined,
     });
 
-    // Card 0: x 70..330, y 112..262 (ver selecao.ts)
-    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
+    // Miniatura 0 ('capi'): x 35..175, y 340..432, centro (105, 386) (ver selecao.ts)
+    canvas.disparar('pointerdown', { clientX: 105, clientY: 386 });
     expect(aoEscolher).toHaveBeenCalledWith('capi');
 
-    // Card 3 (segunda linha, primeira coluna): mesma coluna, linha 1 => y 128+150+16=278..428
-    canvas.disparar('pointerdown', { clientX: 150, clientY: 320 });
+    // Miniatura 3 ('beto'): x 485..625, y 340..432, centro (555, 386)
+    canvas.disparar('pointerdown', { clientX: 555, clientY: 386 });
     expect(aoEscolher).toHaveBeenCalledWith('beto');
 
     cena.destruir?.();
@@ -364,8 +364,8 @@ describe('Fase 1: Tela de Seleção de Personagem', () => {
       aoVoltar,
     });
 
-    // Botão Voltar: x 380..580, y 452..498
-    canvas.disparar('pointerdown', { clientX: 480, clientY: 470 });
+    // Botão VOLTAR: x 40..200, y 454..498, centro (120, 476)
+    canvas.disparar('pointerdown', { clientX: 120, clientY: 476 });
     expect(aoVoltar).toHaveBeenCalledTimes(1);
 
     janela.disparar('Escape');
@@ -578,8 +578,8 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(gerenciador.cenaAtual()).toBe('selecao');
 
-    // Escolhe o card 0 (primeira coluna, primeira linha = 'capi'): x 70..330, y 112..262
-    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
+    // Escolhe a miniatura 0 ('capi'): x 35..175, y 340..432, centro (105, 386)
+    canvas.disparar('pointerdown', { clientX: 105, clientY: 386 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
   });
 
@@ -639,8 +639,8 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     canvas.disparar('pointerdown', { clientX: 130, clientY: 468 });
     expect(gerenciador.cenaAtual()).toBe('selecao');
 
-    // Escolhe o card 1 (segunda coluna, primeira linha = 'bandeira'): x 350..610, y 112..262
-    canvas.disparar('pointerdown', { clientX: 450, clientY: 150 });
+    // Escolhe a miniatura 1 ('bandeira'): x 185..325, y 340..432, centro (255, 386)
+    canvas.disparar('pointerdown', { clientX: 255, clientY: 386 });
     expect(save.personagemAtivo).toBe('bandeira');
     expect(armazenamentoMap.has('neve-maluca-v1')).toBe(true);
     expect((JSON.parse(armazenamentoMap.get('neve-maluca-v1') as string) as { personagemAtivo?: string }).personagemAtivo).toBe('bandeira');
@@ -653,7 +653,7 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     // confere que a cena de descida recebe o personagem escolhido (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(gerenciador.cenaAtual()).toBe('selecao');
-    canvas.disparar('pointerdown', { clientX: 450, clientY: 150 });
+    canvas.disparar('pointerdown', { clientX: 255, clientY: 386 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();
@@ -689,7 +689,7 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     // recebe a pista escolhida (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(gerenciador.cenaAtual()).toBe('selecao');
-    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
+    canvas.disparar('pointerdown', { clientX: 105, clientY: 386 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();

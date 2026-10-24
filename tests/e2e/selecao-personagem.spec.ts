@@ -38,8 +38,8 @@ test.describe('Seleção de Personagem', () => {
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao');
 
-    // Escolhe o 2º card (coluna 2, linha 1 = 'bandeira'; card em x 350..610, y 112..262 -> centro x=480, y=180)
-    await clicarLogico(480, 180);
+    // Escolhe a 2ª miniatura ('bandeira'; x 185..325, y 340..432 -> centro x=255, y=386)
+    await clicarLogico(255, 386);
 
     const escolhido = await page.evaluate(
       () => (window as unknown as { __neve: { save: { dados: { personagemAtivo?: string } } } }).__neve.save.dados.personagemAtivo,
@@ -65,7 +65,7 @@ test.describe('Seleção de Personagem', () => {
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao');
-    await clicarLogico(480, 180);
+    await clicarLogico(255, 386);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

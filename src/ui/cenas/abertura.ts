@@ -8,8 +8,10 @@
  *  2. Partículas de neve caindo determinísticas (`ui/desenho.ts`).
  *  3. Transição suave (fade out para fade in no menu) ao clicar/tocar, apertar tecla ou após 3s (~180 ticks).
  */
+import { carregarSpritePersonagem } from '../../assets/index';
 import { ALTURA, LARGURA } from '../../core/constantes';
 import { seno } from '../../core/trig';
+import { REGRAS_SAVE } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
@@ -88,6 +90,15 @@ export function criarCenaAbertura(opcoes: OpcoesCenaAbertura): Cena {
   janela?.addEventListener('keydown', aoTeclar);
   // Mesma capa do menu: começa a carregar já na abertura, então o menu abre sem espera.
   void precarregarAssetsMenuCapa();
+
+  // Elenco inteiro (6): precarrega aqui pro maior lead time possível antes da tela de Seleção de Personagem --
+  // pedido do dono: zero cápsula genérica, nem por instantes (`[[gating-cena-por-promise-quebra-testes-sincronos]]`
+  // -- cacheado por id em `assets/index.ts`, não duplica o fetch quando `menu.ts`/`selecao.ts` chamarem de novo).
+  for (const id of REGRAS_SAVE.personagens) {
+    void carregarSpritePersonagem(id).catch(() => {
+      // fallback silencioso: cada tela decide o que mostrar sem sprite (esqueleto translúcido, nunca cápsula marrom)
+    });
+  }
 
   return {
     id: 'abertura',

@@ -65,7 +65,7 @@ test.describe('Seleção de Pista', () => {
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao');
-    await clicarLogico(150, 150);
+    await clicarLogico(105, 386); // miniatura 0 ('capi')
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

@@ -96,8 +96,8 @@ test.describe('Fase 1: Fluxo de Cenas e Telas', () => {
       });
     }).toBe('selecao');
 
-    // Escolhe o card 0 (primeira coluna, primeira linha = 'capi'): centro x=150, y=150
-    await page.mouse.click(caixa.x + 150 * escalaX, caixa.y + 150 * escalaY);
+    // Escolhe a miniatura 0 ('capi'): centro x=105, y=386
+    await page.mouse.click(caixa.x + 105 * escalaX, caixa.y + 386 * escalaY);
 
     // Confere que a cena mudou para 'jogo'
     await expect.poll(async () => {

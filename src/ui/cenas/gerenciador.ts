@@ -273,6 +273,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           documento: doc,
           catalogo: REGRAS_SAVE.personagens,
           obterPersonagemAtivo,
+          obterEvolucao,
           aoEscolher: (idPersonagem) => {
             selecionarPersonagem(idPersonagem);
             // Veio de TREINO/CAMPEONATO: escolheu -> corre direto. Veio da entrada "PERSONAGEM" (navegação
