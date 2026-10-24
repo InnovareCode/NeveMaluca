@@ -252,7 +252,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
         desenharPiloto(ctx, leituraFantasma, camLeitura, spriteFantasma);
         ctx.restore();
       }
-      desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto, visualPiloto.poseVisual(leitura.piloto.pose));
+      desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto, visualPiloto.poseVisual(leitura.piloto.pose), visualPiloto.escalaVisual());
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.tick);
       popupsManobra.desenhar(ctx, camLeitura);
       avisosObstaculo.desenhar(ctx, pista, camLeitura);

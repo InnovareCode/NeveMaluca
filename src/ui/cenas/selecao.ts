@@ -83,9 +83,13 @@ const PAINEL_W = 500;
 const PAINEL_H = 250;
 
 const PALCO_CX = 215;
-const PALCO_BASE_Y = 310;
-const PALCO_ALTURA = 220;
-const PALCO_HALO_R = 140;
+// Folga de verdade acima da fita de miniaturas (`MINI_Y`, abaixo): o personagem (e o monte de neve sob os pés)
+// termina bem antes de 340 -- antes a prancha encostava/sumia atrás do topo dos cards (feedback do dono).
+const PALCO_BASE_Y = 298;
+const PALCO_ALTURA = 192;
+const PALCO_HALO_R = 122;
+const MONTE_RX = PALCO_ALTURA * 0.56;
+const MONTE_RY = 15;
 
 const MINI_Y = 340;
 const MINI_W = 140;
@@ -246,9 +250,50 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   opcoes.canvas.addEventListener('pointermove', aoMover);
   janela?.addEventListener('keydown', aoTeclar);
 
+  /** Monte de neve sob os pés: sombra de contato + corpo em gradiente (volume, não um disco liso) + brilho no
+   *  topo + alguns glints -- antes era uma elipse translúcida lisa, que contra o fundo escuro lia como "disco
+   *  cinza chapado" (feedback do dono). Determinístico (sem `Math.random`, proibido em `src/`). */
+  function desenharMonteDeNeve(ctx: Ctx, cx: number, cy: number, rx: number, ry: number): void {
+    ctx.save();
+    ctx.fillStyle = 'rgba(4, 12, 26, 0.32)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + ry * 0.5, rx * 0.88, ry * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const grad = ctx.createRadialGradient(cx - rx * 0.15, cy - ry * 0.6, rx * 0.08, cx, cy, rx);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.55, '#eaf4ff');
+    grad.addColorStop(1, '#bfdcf5');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(cx - rx * 0.18, cy - ry * 0.35, rx * 0.3, ry * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    for (const [fx, fy] of [
+      [-0.45, -0.1],
+      [0.3, 0.2],
+      [0.05, -0.4],
+    ] as const) {
+      ctx.beginPath();
+      ctx.arc(cx + rx * fx, cy + ry * fy, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function desenharPalco(ctx: Ctx, id: string, t: number): void {
     const sprite = sprites.get(id);
+    // Pose de destaque (manobra) se existir, senão a "de pé" -- mas a ESCALA sempre pela altura de `ride0` (igual
+    // a `render/piloto.ts: ALTURA_ALVO_M`), nunca pela altura da pose atual: `star` tem padding de enquadramento
+    // diferente de `ride0`, então escalar por ela faria o personagem "mudar de tamanho" ao trocar de pose/id.
     const quadro = sprite ? (sprite.obterQuadro('star') ?? sprite.obterQuadro('ride0')) : null;
+    const referencia = sprite?.obterQuadro('ride0')?.dados ?? quadro?.dados;
     const pulso = 1 + 0.015 * seno((t * 2.2) % 360);
 
     ctx.save();
@@ -259,20 +304,14 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
     ctx.fillRect(PALCO_CX - PALCO_HALO_R, PALCO_BASE_Y - PALCO_ALTURA * 0.4 - PALCO_HALO_R, PALCO_HALO_R * 2, PALCO_HALO_R * 2);
     ctx.restore();
 
-    // Monte de neve sob os pés -- assenta o personagem no palco.
-    ctx.save();
-    ctx.fillStyle = 'rgba(244, 249, 255, 0.5)';
-    ctx.beginPath();
-    ctx.ellipse(PALCO_CX, PALCO_BASE_Y + 6, PALCO_ALTURA * 0.62, 22, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    desenharMonteDeNeve(ctx, PALCO_CX, PALCO_BASE_Y + 4, MONTE_RX, MONTE_RY);
 
     ctx.save();
     ctx.translate(PALCO_CX, PALCO_BASE_Y);
     ctx.scale(pulso, pulso);
-    if (quadro) {
+    if (quadro && referencia) {
       const d = quadro.dados;
-      const escala = PALCO_ALTURA / d.altura;
+      const escala = PALCO_ALTURA / referencia.altura;
       const [ancoraX, ancoraY] = d.contato ?? d.pivo;
       ctx.drawImage(quadro.imagem, -ancoraX * escala, -ancoraY * escala, d.largura * escala, d.altura * escala);
     } else {

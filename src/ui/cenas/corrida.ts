@@ -26,7 +26,7 @@ import type { AlvoToque } from '../../input/toque';
 // Import por arquivo (não o barril '../../input'): mesmo motivo de `descida.ts` (ver comentário lá).
 import { criarEntrada, type Entrada } from '../../input/index';
 import { exigirPistaValida, gerarCamadaJogo } from '../../pista/index';
-import { alturaEm } from '../../pista/consulta';
+import { alturaEm, inclinacaoGrausEm } from '../../pista/consulta';
 import {
   desenharItensCamada,
   desenharKickers,
@@ -274,7 +274,9 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
           nome: nomeDoPersonagem(r.id),
           cor: corDoPersonagem(r.id),
           xM,
-          yM: alturaEm(pista, xM) + 0.9, // leve offset: ancora o anel/avatar perto do "corpo", não dos "pés"
+          yM: alturaEm(pista, xM), // pés no chão -- `desenharPiloto` ancora pelo contato/pivô do sprite, igual ao jogador
+          anguloGraus: inclinacaoGrausEm(pista, xM),
+          emTombo: r.fase === 'tombo',
           distanciaRelativaM: r.distancia - leitura.jogador.distancia,
           sprite: sprites.get(r.id) ?? null,
         };
@@ -287,7 +289,14 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       });
 
       turboPouso.desenhar(ctx, camLeitura); // ANTES do piloto: o flash fica atrás, nunca cobre o sprite
-      desenharPiloto(ctx, leitura.jogador.piloto, camLeitura, sprites.get(idJogador) ?? null, visualPiloto.poseVisual(leitura.jogador.piloto.pose));
+      desenharPiloto(
+        ctx,
+        leitura.jogador.piloto,
+        camLeitura,
+        sprites.get(idJogador) ?? null,
+        visualPiloto.poseVisual(leitura.jogador.piloto.pose),
+        visualPiloto.escalaVisual()
+      );
       if (escudoJogadorTicks > 0) desenharEscudo(ctx, camLeitura, leitura.jogador.piloto.x, leitura.jogador.piloto.y, leitura.jogador.tick);
       if (leitura.alvoNoJogador) desenharAvisoAlvo(ctx, camLeitura, leitura.jogador.piloto.x, leitura.jogador.piloto.y, leitura.jogador.tick);
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.jogador.tick);

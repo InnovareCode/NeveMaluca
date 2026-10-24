@@ -7,6 +7,7 @@ import type { QuadroCarregado, SpritePersonagem } from '../assets/index';
 import { PX_POR_METRO } from '../core/constantes';
 import type { IdPose, PilotoLeitura } from '../core/contratos';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
+import type { FatorEstica } from './pose-visual';
 
 export const COR_POR_MODO: Readonly<Record<PilotoLeitura['modo'], string>> = {
   chao: '#2a7de1',
@@ -17,6 +18,16 @@ export const COR_POR_MODO: Readonly<Record<PilotoLeitura['modo'], string>> = {
 
 const RAIO_CORPO_M = 0.35;
 const COMPRIMENTO_PRANCHA_M = 1.3;
+/** Escala do sprite no mundo: destaque visual ao personagem no mobile sem perder a amplitude (feedback do dono,
+ *  2026-10-24: "aumenta um pouco pra ficar mais nítido" -- era 1.85). */
+const ALTURA_ALVO_M = 2.05;
+/** Pose usada só pra MEDIR a altura de referência (nunca desenhada aqui) -- toda pose escala por ESTE número, não
+ *  pelo próprio `d.altura` dela (feedback do dono: "o personagem muda de tamanho ao cair/levar batida"). Cada
+ *  recorte de pose tem padding de enquadramento diferente (braços abertos, giro, queda) -- escalar cada uma pelo
+ *  seu próprio pixel-altura faz o CORPO aparentar tamanhos diferentes entre poses mesmo sendo o msm personagem.
+ *  Usando sempre a altura de `ride0` (a pose "de pé" do rig), o corpo fica do mesmo tamanho em qualquer pose; só o
+ *  enquadramento ao redor varia, que é invisível (canvas transparente). */
+const POSE_REFERENCIA_ESCALA: IdPose = 'ride0';
 
 function desenharCapsulaFallback(ctx: CanvasRenderingContext2D, modo: PilotoLeitura['modo'], escala: number): void {
   ctx.strokeStyle = '#1b2733';
@@ -45,7 +56,9 @@ export function desenharPiloto(
    * ajuste de RENDER (`render/pose-visual.ts`), o motor nunca sabe disso. Sem este parâmetro, usa `piloto.pose`
    * (mesmo comportamento de sempre — quem chama sem ele não muda nada).
    */
-  poseOverride?: IdPose
+  poseOverride?: IdPose,
+  /** Estica-e-amassa deste quadro (`render/pose-visual.ts: escalaVisual()`); sem ele, 1:1 (comportamento de sempre). */
+  estica?: FatorEstica
 ): void {
   const centro = mundoParaTela(piloto.x, piloto.y, camera, PX_POR_METRO);
   const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
@@ -54,15 +67,18 @@ export function desenharPiloto(
   ctx.save();
   ctx.translate(centro.x, centro.y);
   ctx.rotate(anguloCanvasRad);
+  // Só chama `ctx.scale` quando há de fato estica/amassa (1:1 é no-op): evita uma chamada de canvas a mais todo
+  // quadro no caminho comum, e mocks de `Ctx` de teste que não implementam `scale` continuam funcionando.
+  if (estica && (estica.sx !== 1 || estica.sy !== 1)) ctx.scale(estica.sx, estica.sy);
 
   const pose = poseOverride ?? piloto.pose;
   const quadro: QuadroCarregado | null = sprite ? sprite.obterQuadro(pose) : null;
 
   if (quadro) {
     const d = quadro.dados;
-    // Escala do sprite no mundo: 1.85m no canvas dá destaque visual ao personagem no mobile sem perder a amplitude
-    const ALTURA_ALVO_M = 1.85;
-    const escalaSprite = (ALTURA_ALVO_M * escala) / d.altura;
+    // Altura de referência: SEMPRE a de `ride0`, nunca a da pose atual (ver comentário de `POSE_REFERENCIA_ESCALA`).
+    const referencia = sprite?.obterQuadro(POSE_REFERENCIA_ESCALA)?.dados ?? d;
+    const escalaSprite = (ALTURA_ALVO_M * escala) / referencia.altura;
 
     // Ponto de ancoragem: no chão usa o contato exato da base da prancha; no ar usa o pivô de rotação
     // Compensação sutil de 1.5px para apoiar perfeitamente sobre o contorno de 2px da neve
