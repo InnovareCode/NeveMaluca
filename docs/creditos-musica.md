@@ -2,7 +2,9 @@
 
 Escolhidas pelo dono em 2026-10-24 (todas a opção "A" da pesquisa). Baixadas em 2026-10-24 do CDN do Pixabay, a partir da
 página de cada faixa. Arquivos em `public/assets/musica/`, renomeados pelo id de música da pista (`data/pistas.ts`),
-com volume normalizado (loudnorm I=-18 LUFS) e reencodados em MP3 128 kbps / 44,1 kHz. Originais em `arte-fonte/musicas/`
+com volume normalizado em DUAS passadas (loudnorm linear, alvo I=-18 LUFS, TP=-1,5) e reencodados em MP3 128 kbps / 44,1 kHz.
+Medido depois com ebur128: todas entre -18,3 e -18,4 LUFS (pedido do dono: mesmo nível entre as músicas). Faixa nova
+tem que passar pelo mesmo processo e ser medida antes de entrar. Originais em `arte-fonte/musicas/`
 (gitignored).
 
 **Licença:** [Pixabay Content License](https://pixabay.com/service/license-summary/) — uso comercial permitido, sem
