@@ -63,6 +63,9 @@ import { pintorDoTema, precarregarAssetsDoTema, rasterProntoParaTema, temaDeRend
 import type { PintorTema } from '../../render/temas/tipos';
 import { criarSomManobras } from '../../audio/som-manobras';
 import { criarMusicaAdaptativa } from '../../audio/musica-adaptativa';
+import { criarSomDescida } from '../../audio/som-descida';
+import { criarSomItens } from '../../audio/som-itens';
+import { criarSomContagem } from '../../audio/som-contagem';
 import type { AudioDestravavel } from '../../audio/index';
 import type { SaveV1 } from '../../meta/tipos';
 import type { Cena } from '../tipos';
@@ -170,8 +173,14 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   let escudoJogadorTicks = 0;
   const rngAudio = opcoes.audio ? rngDoCanal(pista.semente, 'audio') : null;
   const somManobras = opcoes.audio && rngAudio ? criarSomManobras(opcoes.audio, rngAudio, { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 }) : null;
+  const somDescida = opcoes.audio && rngAudio ? criarSomDescida(opcoes.audio, rngAudio, { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 }) : null;
   const musicaAdaptativa =
     opcoes.audio && rngAudio ? criarMusicaAdaptativa(opcoes.audio, rngAudio, { obterVolumeMusica: () => opcoes.save?.cfg.musica ?? 1 }) : null;
+  // EventoCorrida (caixa/uso/acerto/bloqueio/desvio) só existe NESTA cena (`corrida/itens.ts`, I2) -- `descida.ts`
+  // (treino) nunca tem itens, por isso `som-itens.ts` não é instanciado lá.
+  const somItens =
+    opcoes.audio && rngAudio ? criarSomItens(opcoes.audio, rngAudio, idJogador, { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 }) : null;
+  const somContagem = opcoes.audio ? criarSomContagem(opcoes.audio, { obterVolumeSom: () => opcoes.save?.cfg.som ?? 1 }) : null;
 
   // Sprites dos 6 (jogador + rivais): melhor esforço -- cada um cai no fallback (cápsula/ponto colorido) até carregar.
   const sprites = new Map<string, SpritePersonagem>();
@@ -206,6 +215,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       }
       if (!contagemConcluida) {
         ticksContagem += 1;
+        somContagem?.atualizar(ticksContagem);
         if (ticksContagem >= TICKS_CONTAGEM) contagemConcluida = true;
         return;
       }
@@ -221,7 +231,9 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       turboPouso.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       visualPiloto.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       somManobras?.atualizar(leitura.jogador);
+      somDescida?.atualizar(leitura.jogador);
       musicaAdaptativa?.atualizar(leitura.jogador);
+      somItens?.atualizar(leitura.eventosCorrida ?? []);
       feedbackItens.atualizar(leitura.eventosCorrida ?? [], idJogador);
       for (const ev of leitura.eventosCorrida ?? []) {
         if (ev.tipo === 'item-usado' && ev.id === idJogador && ev.item === 'escudo') escudoJogadorTicks = PARAMETROS_ESCUDO_ITEM.ticks;
