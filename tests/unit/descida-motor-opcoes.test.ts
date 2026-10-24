@@ -15,7 +15,7 @@ import { gerarPista } from '../../src/pista/gerador';
 
 const MAX_TICKS = 16200;
 /** Uma camada bem distante de qualquer coisa que o jogador vai tocar: prova que camada VAZIA de efeito = sem camada. */
-const CAMADA_SEM_EFEITO: CamadaJogo = { itens: [], kickers: [], obstaculosAltos: [], porticoX: 999999, versao: '1', hash: '0000000000000000' };
+const CAMADA_SEM_EFEITO: CamadaJogo = { itens: [], kickers: [], obstaculosAltos: [], caixas: [], porticoX: 999999, versao: '1', hash: '0000000000000000' };
 
 /** Só o que a física/pontuação já expunha ANTES deste parâmetro novo existir — nunca `motor.modo` (ver teste dedicado). */
 function fisicaDe(opcoes?: Parameters<typeof criarDescida>[2]) {

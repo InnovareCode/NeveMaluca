@@ -135,6 +135,11 @@ export function criarSistemaPopupsManobra(): SistemaPopupsManobra {
           abrir(nomeDoFechamentoDeCombo(ev.mult, tick), `x${ev.mult}  +${ev.total}`, COR_COMBO_FECHADO, piloto.x, piloto.y + 1.0, VIDA_COMBO_TICKS, 30);
         } else if (ev.tipo === 'combo-perdido') {
           abrir(nomeDoComboPerdido(tick), '', COR_COMBO_PERDIDO, piloto.x, piloto.y + 0.6, VIDA_MANOBRA_TICKS, 22);
+        } else if (ev.tipo === 'obstaculo-rente') {
+          // C4 (plano corrida-campeonato): bônus de passar agachado BEM rente a um obstáculo alto -- só existe
+          // quando `camada` está presente (treino sem camada nunca emite este evento), mesmo texto cru de sempre
+          // (sem passar pelos sinônimos do Apolo: é feedback raro e pontual, não precisa variar).
+          abrir('POR UM FIO!', `+${ev.pontos}`, COR_COMBO_FECHADO, piloto.x, piloto.y + 0.8, VIDA_MANOBRA_TICKS, 24);
         }
       }
 

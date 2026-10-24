@@ -13,7 +13,7 @@ import { criarBotCuidadoso } from '../../src/descida/bot';
 import { criarDescida } from '../../src/descida/motor';
 import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
-import { exigirPistaValida } from '../../src/pista/index';
+import { exigirPistaValida, gerarCamadaJogo } from '../../src/pista/index';
 import { TICKS_CONTAGEM } from '../../src/ui/cenas/contagem';
 import { criarCenaCorrida } from '../../src/ui/cenas/corrida';
 
@@ -51,10 +51,14 @@ const LIMITE_TICKS = 16_200;
 /** Dirige `cena` pelo bot cuidadoso (teclas reais na `janela`) até `aoTerminar` disparar, ou estoura o teto. */
 function rodarAteOFim(cena: { atualizar(): void }, janela: ReturnType<typeof criarJanelaFalsa>, obterResultado: () => ResultadoCorrida | null): void {
   const pistaSombra = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
+  // Camada de jogo (plano corrida-campeonato §C3/C4): `ui/cenas/corrida.ts` gera `camada` e passa pro
+  // `criarCorrida` -- a sombra precisa da MESMA (pura/determinística) pra não tombar num obstáculo que ela não
+  // sabia existir (os rivais de IA já são camada-aware por dentro de `criarCorrida`, só o jogador é "sombra" aqui).
+  const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_MORRO_DO_PINHAO);
   // modo 'corrida' (turbo de pouso, C-D7): mesma física do jogador real dentro de `corrida/criarCorrida` -- sem
   // isto a sombra fica mais devagar que o jogador real e o bot mistima pulos pela posição real (mais rápida).
-  const motorSombra = criarDescida(pistaSombra, configDoPersonagem('capi'), { modo: 'corrida' });
-  const bot = criarBotCuidadoso(pistaSombra);
+  const motorSombra = criarDescida(pistaSombra, configDoPersonagem('capi'), { modo: 'corrida', camada: camadaSombra });
+  const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
   let leituraSombra = motorSombra.leitura();
   let frameAnterior: InputFrame = INPUT_NEUTRO;
 

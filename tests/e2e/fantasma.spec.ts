@@ -84,7 +84,7 @@ test.describe('Fantasma (replay C6): grava na 1ª descida, injeta e reproduz na 
           const { derivarComando, INPUT_NEUTRO } = await carregar('/src/core/comandos.ts');
           const { criarDescida } = await carregar('/src/descida/motor.ts');
           const { criarBotCuidadoso } = await carregar('/src/descida/bot.ts');
-          const { exigirPistaValida } = await carregar('/src/pista/index.ts');
+          const { exigirPistaValida, gerarCamadaJogo } = await carregar('/src/pista/index.ts');
           const { PISTA_MORRO_DO_PINHAO } = await carregar('/src/data/pistas.ts');
           const { TICKS_CONTAGEM_DESCIDA } = await carregar('/src/ui/cenas/descida.ts');
 
@@ -92,8 +92,11 @@ test.describe('Fantasma (replay C6): grava na 1ª descida, injeta e reproduz na 
           neve.cena.irPara('jogo'); // ainda sem fantasma desta pista: `construirCena('jogo')` lê `obterFantasma` AGORA
 
           const pistaSombra = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
-          const motorSombra = criarDescida(pistaSombra);
-          const bot = criarBotCuidadoso(pistaSombra);
+          // Camada de jogo (plano corrida-campeonato §C3/C4): `ui/cenas/descida.ts` passa `camada` -- a sombra
+          // precisa da MESMA (pura/determinística) pra não tombar num obstáculo que ela não sabia existir.
+          const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_MORRO_DO_PINHAO);
+          const motorSombra = criarDescida(pistaSombra, undefined, { camada: camadaSombra });
+          const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
           let leituraSombra = motorSombra.leitura();
           let frameAnterior = INPUT_NEUTRO;
           const teclaDoGiro: Record<number, string | null> = { [-1]: 'ArrowLeft', 0: null, 1: 'ArrowRight' };

@@ -11,7 +11,7 @@ import { criarBotCuidadoso } from '../../src/descida/bot';
 import { criarDescida } from '../../src/descida/motor';
 import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
-import { exigirPistaValida } from '../../src/pista/index';
+import { exigirPistaValida, gerarCamadaJogo } from '../../src/pista/index';
 import { criarCenaDescida, TICKS_CONTAGEM_DESCIDA, type ResultadoDescida } from '../../src/ui/cenas/descida';
 
 function criarCanvasFalso(): AlvoToque {
@@ -53,8 +53,11 @@ describe('criarCenaDescida({ pista: "vila-chocolate" })', () => {
     const cena = criarCenaDescida({ canvas, janela, pista: 'vila-chocolate', aoTerminar: (r) => (resultado = r) });
 
     const pistaSombra = exigirPistaValida(PISTA_VILA_CHOCOLATE);
-    const motorSombra = criarDescida(pistaSombra);
-    const bot = criarBotCuidadoso(pistaSombra);
+    // Camada de jogo (plano corrida-campeonato §C3/C4): a cena real passa `camada` -- a sombra precisa da MESMA
+    // (pura/determinística) pra não tombar num obstáculo que ela não sabia existir.
+    const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_VILA_CHOCOLATE);
+    const motorSombra = criarDescida(pistaSombra, undefined, { camada: camadaSombra });
+    const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
     let leituraSombra = motorSombra.leitura();
     let frameAnterior: InputFrame = INPUT_NEUTRO;
 

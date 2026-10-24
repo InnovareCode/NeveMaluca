@@ -29,6 +29,7 @@
  *      mudança de física real; a prova de determinismo do modo corrida é o `ResultadoCorrida` (`corrida/corrida.ts`).
  */
 import type {
+  EfeitoExterno,
   EventoDescida,
   FaseDescida,
   Grab,
@@ -92,6 +93,31 @@ const TURBO_TETO_EXTRA_MS = 12;
 /** Decaimento do bônus por tick no chão/trilho (razão < 1, aplicado sempre, mesmo em 0): meia-vida ~69 ticks (~1,15 s). */
 const TURBO_DECAIMENTO_POR_TICK = 0.99;
 
+/**
+ * Itens na corrida (plano `docs/plano-itens-corrida.md` §I1): `efeitos` é o 2º parâmetro OPCIONAL de `processar`,
+ * vindo do orquestrador (`corrida/`, ainda não escrito — I2), NUNCA do próprio `ComandoDescida`. Omitido (como todo
+ * chamador de hoje faz) é, por construção, o comportamento de sempre: nenhum dos ramos abaixo roda, os 3 campos
+ * novos de `EstadoDescida` (`atordoadoTicksRestantes`/`freadaTicksRestantes`/`imaTicksRestantes`) nunca saem de
+ * zero — golden da Capi e Treino intactos (mesmo padrão de `OpcoesDescida.camada`).
+ *   - `trombada`: corte INSTANTÂNEO de velocidade (`FATOR_VELOCIDADE_TROMBADA`) + controle travado por
+ *     `TICKS_ATORDOADO_TROMBADA` ticks (giro/grab do comando são ignorados; pulo/agachar continuam normais) + perde
+ *     o combo. NUNCA reseta pro checkpoint (plano I-D7: isso é só de `'tombo'`) — por isso emite `'atingido'`, não
+ *     `'tombo'` (a trava anti-travamento da IA, I3, conta quedas por `'tombo'` e acerto de item não pode travá-la).
+ *   - `freada`: teto de velocidade reduzido a `config.velocidadeMaxMs * fator` enquanto `freadaTicksRestantes > 0`
+ *     (sem travar controle nem perder combo — mais leve que trombada, é armadilha de chão, não acerto direto).
+ *   - `turbo`: reaproveita EXATAMENTE `aplicarTurbo` (mesma função do turbo de pouso, C-D7) — "1 calibragem só".
+ *     Buff do PRÓPRIO corredor (usou o item), nunca emite `'atingido'`.
+ *   - `ima`: só guarda a janela ativa (`imaTicksRestantes`); a atração de coletáveis é lida pelo orquestrador sobre
+ *     `CamadaJogo` (I2) — inerte nesta camada, de propósito. Também buff próprio, sem `'atingido'`.
+ *
+ * `hashEstado()` continua SEM estes 3 campos novos, DE PROPÓSITO (mesmo motivo de `turboVel`/`itensColetados`, C3:
+ * acrescentar uma chave ao hash quebraria o golden mesmo com o campo zerado). O efeito de verdade entra no hash
+ * pelos campos que ele MUDA (`v`/`vx`/`vy`/combo), que já são hasheados — por isso "efeitos entra no hashEstado SÓ
+ * quando vem" vale sem precisar hashear mais nada.
+ */
+const FATOR_VELOCIDADE_TROMBADA = 0.3;
+const TICKS_ATORDOADO_TROMBADA = 40;
+
 interface EstadoPiloto {
   x: number;
   y: number;
@@ -145,11 +171,24 @@ interface EstadoDescida {
   obstaculosAltosVistos: ReadonlySet<number>;
   /** Obstáculos cujo "!" já foi emitido desde o último respawn. */
   obstaculosAvisados: ReadonlySet<number>;
+  // Itens (plano itens-corrida §I1): zero/vazio quando `processar()` nunca recebe `efeitos` — ver comentário
+  // grande no topo do arquivo sobre por que ficam FORA de `hashEstado()`. Resetam no respawn, como `turboVel`.
+  /** Ticks restantes de controle travado por trombada: giro/grab do comando são ignorados enquanto > 0. */
+  atordoadoTicksRestantes: number;
+  /** Fração de `config.velocidadeMaxMs` que vira o teto enquanto `freadaTicksRestantes > 0`. */
+  freadaFator: number;
+  freadaTicksRestantes: number;
+  /** Janela do ímã ativa (a atração em si é lida pelo orquestrador sobre `CamadaJogo`, I2). */
+  imaTicksRestantes: number;
 }
 
 export interface MotorDescida {
-  /** Avança UM tick com o comando deste tick e devolve a leitura resultante (C3). */
-  processar(cmd: ComandoDescida): LeituraDescida;
+  /**
+   * Avança UM tick com o comando deste tick e devolve a leitura resultante (C3). `efeitos` (plano itens-corrida,
+   * I1) é OPCIONAL e vem do orquestrador da corrida (`corrida/`, ainda não escrito — I2), nunca do próprio
+   * `ComandoDescida`: omitido (todo chamador de hoje), nenhum efeito roda — comportamento idêntico ao de sempre.
+   */
+  processar(cmd: ComandoDescida, efeitos?: readonly EfeitoExterno[]): LeituraDescida;
   /** Leitura atual, sem avançar (chamar antes do primeiro `processar()` devolve a fase `'contagem'`). */
   leitura(): LeituraDescida;
   /** Hash estável do estado interno completo (para provar determinismo e, no futuro, o `hashFinal` do replay C6). */
@@ -292,6 +331,10 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     turboVel: 0,
     obstaculosAltosVistos: new Set<number>(),
     obstaculosAvisados: new Set<number>(),
+    atordoadoTicksRestantes: 0,
+    freadaFator: 1,
+    freadaTicksRestantes: 0,
+    imaTicksRestantes: 0,
   };
 
   function respawn(est: EstadoDescida): void {
@@ -318,6 +361,11 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     // perto de um deles o desarmaria de graça, sem nunca precisar agachar de verdade na 2ª tentativa).
     est.obstaculosAltosVistos = new Set<number>();
     est.obstaculosAvisados = new Set<number>();
+    // Itens (I1): cair custa caro aqui também — mesmo raciocínio do `turboVel` acima.
+    est.atordoadoTicksRestantes = 0;
+    est.freadaFator = 1;
+    est.freadaTicksRestantes = 0;
+    est.imaTicksRestantes = 0;
     est.fase = 'descendo';
   }
 
@@ -362,20 +410,27 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
   }
 
   /**
-   * Turbo de pouso (plano C-D7): só em `modo === 'corrida'`. `pontosVoo` vem de `commitarVoo` (0 = voo sem
-   * manobra = sem turbo, por construção: "manobrar tem que compensar", não qualquer pulo). Soma ao `p.v` AGORA
-   * (sente-se na hora) e ao teto (`estado.turboVel`, decai no chão/trilho) para a velocidade não ser clampada de
-   * volta no tick seguinte.
+   * Soma `ms` à velocidade AGORA (sente-se na hora) e ao teto (`estado.turboVel`, decai no chão/trilho) para não
+   * ser clampada de volta no tick seguinte. Única fonte de ganho de turbo do motor — turbo de pouso (C-D7) e o
+   * item Chocolate Quente (I1, `EfeitoExterno{tipo:'turbo'}`) chamam esta MESMA função ("1 calibragem só").
    */
-  function aplicarTurboDePouso(pontosVoo: number): void {
-    if (modo !== 'corrida' || pontosVoo <= 0) return;
-    const ganho = Math.min(TURBO_TETO_EXTRA_MS - estado.turboVel, pontosVoo * TURBO_MS_POR_PONTO);
+  function aplicarTurbo(ms: number): void {
+    const ganho = Math.min(TURBO_TETO_EXTRA_MS - estado.turboVel, ms);
     if (ganho <= 0) return;
     estado.turboVel += ganho;
     const p = estado.piloto;
     p.v += ganho;
     p.vx = p.v * cosseno(p.angulo);
     p.vy = p.v * seno(p.angulo);
+  }
+
+  /**
+   * Turbo de pouso (plano C-D7): só em `modo === 'corrida'`. `pontosVoo` vem de `commitarVoo` (0 = voo sem
+   * manobra = sem turbo, por construção: "manobrar tem que compensar", não qualquer pulo).
+   */
+  function aplicarTurboDePouso(pontosVoo: number): void {
+    if (modo !== 'corrida' || pontosVoo <= 0) return;
+    aplicarTurbo(pontosVoo * TURBO_MS_POR_PONTO);
   }
 
   /** Commita a manobra de trilho (por tempo) no combo e emite o evento. */
@@ -400,7 +455,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     eventos.push({ tipo: 'combo-perdido', soma: perder(estado.combo).soma });
   }
 
-  function processarTick(cmd: ComandoDescida): readonly EventoDescida[] {
+  function processarTick(cmd: ComandoDescida, efeitos: readonly EfeitoExterno[]): readonly EventoDescida[] {
     const eventos: EventoDescida[] = [];
     const p = estado.piloto;
     estado.ultimaQualidadePouso = null;
@@ -412,10 +467,39 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     }
     if (estado.fase === 'chegou') return eventos;
 
+    // Itens (I1): aplica os efeitos externos DESTE tick antes de ler o comando (ver comentário grande no topo do
+    // arquivo). Sempre `[]` quando `processar()` é chamado sem 2º argumento — nenhum ramo abaixo roda.
+    for (const ef of efeitos) {
+      switch (ef.tipo) {
+        case 'trombada':
+          p.v *= FATOR_VELOCIDADE_TROMBADA;
+          p.vx *= FATOR_VELOCIDADE_TROMBADA;
+          p.vy *= FATOR_VELOCIDADE_TROMBADA;
+          estado.atordoadoTicksRestantes = TICKS_ATORDOADO_TROMBADA;
+          perderCombo(eventos);
+          eventos.push({ tipo: 'atingido', item: ef.item });
+          break;
+        case 'freada':
+          estado.freadaFator = ef.fator;
+          estado.freadaTicksRestantes = ef.ticks;
+          eventos.push({ tipo: 'atingido', item: ef.item });
+          break;
+        case 'turbo':
+          aplicarTurbo(ef.ms);
+          break;
+        case 'ima':
+          // Inerte nesta camada de propósito: ver comentário grande no topo do arquivo.
+          estado.imaTicksRestantes = ef.ticks;
+          break;
+      }
+    }
+    // Controle travado (trombada): giro/grab do comando são ignorados; pulo/agachar continuam normais.
+    const cmdEfetivo: ComandoDescida = estado.atordoadoTicksRestantes > 0 ? { ...cmd, giro: 0, grab: null } : cmd;
+
     const modoInicial = p.modo;
-    p.agachado = cmd.agachar;
+    p.agachado = cmdEfetivo.agachar;
     p.ticksAgachado = p.agachado ? p.ticksAgachado + 1 : 0;
-    p.grab = p.modo === 'ar' ? cmd.grab : null;
+    p.grab = p.modo === 'ar' ? cmdEfetivo.grab : null;
     if (p.modo === 'trilho') estado.trilhoTicks++;
     if (p.modo === 'ar' && p.grab !== null) {
       estado.arTicksGrab++;
@@ -429,7 +513,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
       p.giroAnterior = 0;
       p.anguloAcumulado = 0;
 
-      if (cmd.pulo) {
+      if (cmdEfetivo.pulo) {
         const foiTrilho = p.modo === 'trilho';
         const bonusRampa = p.angulo > 0 ? p.angulo * config.fatorRampaMsPorGrau : 0;
         const impulso = config.impulsoPuloMs + bonusRampa + impulsoKickerEm(p.x);
@@ -455,7 +539,10 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
         // Turbo de pouso (C-D7): só em modo 'corrida' o teto sobe com `estado.turboVel` (ganho em cada pouso bom,
         // decaindo aqui a cada tick de chão/trilho); em 'treino' é SEMPRE `config.velocidadeMaxMs` (golden intacto).
         if (modo === 'corrida') estado.turboVel *= TURBO_DECAIMENTO_POR_TICK;
-        const tetoVelocidade = modo === 'corrida' ? config.velocidadeMaxMs + estado.turboVel : config.velocidadeMaxMs;
+        let tetoVelocidade = modo === 'corrida' ? config.velocidadeMaxMs + estado.turboVel : config.velocidadeMaxMs;
+        // Freada (item, I1): teto reduzido enquanto a janela estiver ativa — nunca sobe o teto, só desce (não
+        // interage com o turbo de pouso: usa `Math.min`, o menor dos dois sempre vence).
+        if (estado.freadaTicksRestantes > 0) tetoVelocidade = Math.min(tetoVelocidade, config.velocidadeMaxMs * estado.freadaFator);
         if (p.v > tetoVelocidade) p.v = tetoVelocidade;
         const novoX = p.x + p.v * cosseno(p.angulo) * PASSO_S;
 
@@ -512,7 +599,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
       }
     } else {
       // modo === 'ar'
-      atualizarGiro(p, cmd);
+      atualizarGiro(p, cmdEfetivo);
       p.angulo = normalizarGraus(p.angulo + p.velAngular);
       p.anguloAcumulado += p.velAngular;
       p.vy -= config.gravidadeMs2 * PASSO_S;
@@ -598,7 +685,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     }
 
     // Combo: num tick de chão "puro" (não pulou nem acabou de pousar), consome a janela de ligação e fecha quando ela esgota.
-    if (estado.fase === 'descendo' && modoInicial === 'chao' && p.modo === 'chao' && !cmd.pulo) {
+    if (estado.fase === 'descendo' && modoInicial === 'chao' && p.modo === 'chao' && !cmdEfetivo.pulo) {
       tiqueJanela(estado.combo);
       if (deveFechar(estado.combo)) fecharCombo(eventos);
     }
@@ -619,16 +706,21 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
       eventos.push({ tipo: 'chegada', pontos: estado.pontos, ticks: estado.tick + 1 });
     }
 
+    // Itens (I1): conta os ticks das janelas ativas (nunca negativo). Sempre 0 aqui quando `efeitos` nunca veio.
+    if (estado.atordoadoTicksRestantes > 0) estado.atordoadoTicksRestantes--;
+    if (estado.freadaTicksRestantes > 0) estado.freadaTicksRestantes--;
+    if (estado.imaTicksRestantes > 0) estado.imaTicksRestantes--;
+
     return eventos;
   }
 
   return {
     config,
     modo,
-    processar(cmd: ComandoDescida): LeituraDescida {
+    processar(cmd: ComandoDescida, efeitos: readonly EfeitoExterno[] = []): LeituraDescida {
       estado.tick++;
       if (estado.fase === 'contagem') estado.fase = 'descendo';
-      const eventos = processarTick(cmd);
+      const eventos = processarTick(cmd, efeitos);
       return leituraDe(estado, eventos);
     },
     leitura(): LeituraDescida {

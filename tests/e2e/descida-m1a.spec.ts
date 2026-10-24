@@ -54,7 +54,7 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
       const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
       const { criarCenaDescida, TICKS_CONTAGEM_DESCIDA } = await carregar('/src/ui/cenas/descida.ts');
       const { criarCenaResultado } = await carregar('/src/ui/cenas/resultado.ts');
-      const { exigirPistaValida } = await carregar('/src/pista/index.ts');
+      const { exigirPistaValida, gerarCamadaJogo } = await carregar('/src/pista/index.ts');
       const { criarDescida } = await carregar('/src/descida/index.ts');
       const { criarBotCuidadoso } = await carregar('/src/descida/bot.ts');
       const { PISTA_MORRO_DO_PINHAO } = await carregar('/src/data/pistas.ts');
@@ -83,8 +83,11 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
       // sombra fica em lockstep exato com o motor de dentro da cena (ambos deterministas, mesma semente, mesmos
       // comandos).
       const pistaSombra = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
-      const motorSombra = criarDescida(pistaSombra);
-      const bot = criarBotCuidadoso(pistaSombra);
+      // Camada de jogo (plano corrida-campeonato §C3/C4): `ui/cenas/descida.ts` passa `camada` -- a sombra
+      // precisa da MESMA (pura/determinística) pra não tombar num obstáculo que ela não sabia existir.
+      const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_MORRO_DO_PINHAO);
+      const motorSombra = criarDescida(pistaSombra, undefined, { camada: camadaSombra });
+      const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
       let leituraSombra = motorSombra.leitura();
       let frameAnterior = INPUT_NEUTRO;
       const teclaDoGiro: Record<number, string | null> = { [-1]: 'ArrowLeft', [0]: null, [1]: 'ArrowRight' };
@@ -109,6 +112,11 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
           const teclaNova = teclaDoGiro[frame.giro];
           if (teclaAntiga) window.dispatchEvent(new KeyboardEvent('keyup', { code: teclaAntiga }));
           if (teclaNova) window.dispatchEvent(new KeyboardEvent('keydown', { code: teclaNova }));
+        }
+        // Obstáculo alto (C4): só passa agachado -- faltava este despacho (a cena agora tem `camada` de verdade,
+        // com obstáculos reais; sem isto o bot tombaria no primeiro galho).
+        if (frame.agachar !== frameAnterior.agachar) {
+          window.dispatchEvent(new KeyboardEvent(frame.agachar ? 'keydown' : 'keyup', { code: 'ArrowDown' }));
         }
 
         leituraSombra = motorSombra.processar(derivarComando(frameAnterior, frame));

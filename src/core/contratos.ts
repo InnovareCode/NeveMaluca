@@ -108,7 +108,12 @@ export type EventoDescida =
   // C4 (obstáculo alto + agachar, plano corrida-campeonato §Reaproveita): aviso ~1,5s antes (render mostra "!"),
   // e o bônus de passar agachado rente a um deles (ver `descida/motor.ts`, topo do arquivo).
   | { readonly tipo: 'aviso-obstaculo'; readonly x: number }
-  | { readonly tipo: 'obstaculo-rente'; readonly pontos: number };
+  | { readonly tipo: 'obstaculo-rente'; readonly pontos: number }
+  // Itens (plano itens-corrida §I1): corredor foi atingido por um `EfeitoExterno` negativo (trombada/freada) vindo
+  // do orquestrador. SEPARADO de `'tombo'` de propósito — a trava anti-travamento da IA (`corrida/ia.ts`, I3) conta
+  // quedas por `'tombo'`; um acerto de item NUNCA reseta pro checkpoint (plano I-D7), então nunca pode contar como
+  // queda. Só os efeitos que você SOFRE emitem este evento (turbo/ima são buffs que você mesmo ativa — sem evento).
+  | { readonly tipo: 'atingido'; readonly item: TipoItem };
 
 export type TipoEventoDescida = EventoDescida['tipo'];
 
@@ -324,6 +329,43 @@ export interface ReplayV1 {
 export const MODOS_DESCIDA = ['treino', 'corrida'] as const;
 export type ModoDescida = (typeof MODOS_DESCIDA)[number];
 
+// --- Itens na corrida (plano `docs/plano-itens-corrida.md` §Contratos, I0) ---
+// Tipos fixados aqui (sem lógica: isso é I1 em diante) para Lyra/Cronos/Íris terem o contrato real desde já. Treino
+// NUNCA tem itens (plano I-D8, recorde/fantasma comparáveis) — todo o resto deste bloco só é lido em `modo:'corrida'`.
+
+/** `'escudo'` nunca é um `EfeitoExterno` (ele BLOQUEIA um, decisão do orquestrador, I2) — aparece aqui só como o
+ *  item que o corredor pode estar carregando/usando. */
+export const TIPOS_ITEM = ['bola', 'poca', 'nuvem', 'turbo', 'escudo', 'ima'] as const;
+export type TipoItem = (typeof TIPOS_ITEM)[number];
+
+/**
+ * O que um item FAZ quando acerta/é usado (plano §Contratos): nunca entra no `ComandoDescida` (vem de fora, do
+ * orquestrador `corrida/` — I2), por isso é `EXTERNO`. `item` viaja junto para o motor poder emitir
+ * `EventoDescida{tipo:'atingido',item}` sabendo qual item foi. Convenção `Ms` = metros/segundo (mesma do resto do
+ * motor, ex. `velocidadeMaxMs`): `turbo.ms` NÃO é milissegundos.
+ *  - `trombada` (Bola de Neve / Nuvem de Granizo): corte de velocidade + controle travado + perde combo (I1).
+ *  - `freada` (Poça de Calda): teto de velocidade reduzido a `fator` por `ticks` ticks (I1).
+ *  - `turbo` (Chocolate Quente): soma `ms` à velocidade, reaproveitando EXATAMENTE a mesma calibragem do turbo de
+ *    pouso (plano C-D7) — "1 calibragem só". `ticks` é informativo (duração de UI/som); o decaimento físico é
+ *    sempre o mesmo do turbo de pouso.
+ *  - `ima` (Ímã de Flocos): janela de `ticks` ticks puxando coletáveis próximos — a atração em si é lida pelo
+ *    orquestrador sobre `CamadaJogo` (I2); o motor só guarda a janela ativa.
+ */
+export type EfeitoExterno =
+  | { readonly tipo: 'trombada'; readonly item: TipoItem }
+  | { readonly tipo: 'freada'; readonly item: TipoItem; readonly fator: number; readonly ticks: number }
+  | { readonly tipo: 'turbo'; readonly item: TipoItem; readonly ms: number; readonly ticks: number }
+  | { readonly tipo: 'ima'; readonly item: TipoItem; readonly raioM: number; readonly ticks: number };
+
+/** Um por tick da CORRIDA (plano §Contratos): a descida continua 100% pelo `ComandoDescida`; `usarItem` é a borda
+ *  separada do botão/tecla de item, resolvida pelo orquestrador (I2) — nunca pelo motor da descida direto. No
+ *  replay (`ReplayV2.versaoItens`) ocupa o bit 7 de `comandos.ts` (hoje sempre 0/reservado) — ver comentário lá. */
+export interface ComandoCorrida {
+  readonly descida: ComandoDescida;
+  /** Borda: true só no tick do aperto (mesma convenção de `ComandoDescida.pulo`). */
+  readonly usarItem: boolean;
+}
+
 /** Coletável da camada de jogo (plano §Arquitetura, C3): círculo em `(x, y)` de raio `raio`, metros. `dourado` é
  *  mais raro (1 por pista) e fica fora da linha óbvia — ensina a explorar o arco de um kicker, não só seguir o chão. */
 export interface ItemCamada {
@@ -342,6 +384,16 @@ export interface KickerCamada {
   readonly impulsoMs: number;
 }
 
+/** Caixa de item na pista (plano itens-corrida §Contratos, I0): círculo em `(x, y)` de raio `raio`, 1 espaço por
+ *  CORREDOR (plano I-D4/I-D5) — cada corredor pega cada caixa no máximo 1x; a lógica de sorteio/reaparecimento é
+ *  de `corrida/itens.ts` (I2), não de `pista/camada-jogo.ts` (que só planta as posições, igual aos outros campos
+ *  desta interface). */
+export interface CaixaCamada {
+  readonly x: number;
+  readonly y: number;
+  readonly raio: number;
+}
+
 /**
  * Camada de jogo por cima do terreno gerado (plano §Arquitetura, C3): coletáveis que ensinam a linha (chão -> arco
  * do kicker -> trilho), kickers que estendem o ar (torna o mortal alcançável sem mexer na física da Capi),
@@ -357,6 +409,8 @@ export interface CamadaJogo {
   readonly kickers: readonly KickerCamada[];
   /** C4: `tipo` sempre `'galho'` hoje (variantes visuais futuras não mudam a física). Só passa agachado. */
   readonly obstaculosAltos: readonly ObjetoPista[];
+  /** Caixas de item (plano itens-corrida, I0): `[]` até `pista/camada-jogo.ts` ganhar o posicionamento real (I2). */
+  readonly caixas: readonly CaixaCamada[];
   readonly porticoX: number;
   readonly versao: string;
   readonly hash: string;
@@ -380,15 +434,36 @@ export interface ParticipanteCorrida {
   readonly piloto: PilotoCorrida;
 }
 
-/** Projeção de UM rival na `LeituraCorrida` (plano C-D2: sem colisão, cada corredor é um motor independente). */
+/** Evento da CORRIDA (plano itens-corrida §Contratos, I0): o que o orquestrador (`corrida/`, I2) produz ao
+ *  resolver caixas/projéteis/escudos — não confundir com `EventoDescida` (do motor de CADA corredor). `id`/`de`/`em`
+ *  são sempre `IdPersonagem` do corredor envolvido. */
+export type EventoCorrida =
+  | { readonly tipo: 'item-pego'; readonly id: IdPersonagem; readonly item: TipoItem }
+  | { readonly tipo: 'item-usado'; readonly id: IdPersonagem; readonly item: TipoItem }
+  | { readonly tipo: 'acerto'; readonly de: IdPersonagem; readonly em: IdPersonagem; readonly item: TipoItem }
+  | { readonly tipo: 'bloqueado'; readonly id: IdPersonagem; readonly item: TipoItem }
+  | { readonly tipo: 'desviou'; readonly id: IdPersonagem; readonly item: TipoItem };
+
+/** Projeção de UM rival na `LeituraCorrida` (plano C-D2: sem colisão, cada corredor é um motor independente).
+ *  `item`/`escudo`/`atordoado` (plano itens-corrida, I0) são OPCIONAIS de propósito: `corrida/corrida.ts` ainda não
+ *  os popula (isso é I2) — omitidos, o contrato de hoje (C-D2/C3/C4) não muda 1 bit. */
 export interface LeituraRivalCorrida {
   readonly id: IdPersonagem;
   readonly piloto: PilotoCorrida;
   readonly fase: FaseDescida;
   readonly distancia: number;
+  /** Item carregado agora, ou `null` com o slot vazio. */
+  readonly item?: TipoItem | null;
+  /** Bolha de Gelo ativa (absorve o próximo acerto). */
+  readonly escudo?: boolean;
+  /** Controle travado por uma trombada (reflete `atordoadoTicksRestantes > 0` do motor dele). */
+  readonly atordoado?: boolean;
 }
 
-/** Leitura de UM tick da corrida inteira (plano §Contratos): o jogador em detalhe, os rivais resumidos. */
+/** Leitura de UM tick da corrida inteira (plano §Contratos): o jogador em detalhe, os rivais resumidos.
+ *  `itemJogador`/`roleta`/`entidades`/`alvoNoJogador`/`eventosCorrida` (plano itens-corrida, I0) são OPCIONAIS pela
+ *  mesma razão de `LeituraRivalCorrida.item` acima: populá-los de verdade é I2, e omitidos preservam exatamente a
+ *  `LeituraCorrida` de hoje (C2a/C3/C4). */
 export interface LeituraCorrida {
   readonly tick: number;
   readonly jogador: LeituraDescida;
@@ -396,6 +471,15 @@ export interface LeituraCorrida {
   /** Do 1º ao último lugar NESTE tick (plano C-D1: critério de desempate só se aplica ao `ResultadoCorrida` final). */
   readonly posicoes: readonly IdPersonagem[];
   readonly chegadas: readonly { readonly id: IdPersonagem; readonly tick: number }[];
+  /** Item do JOGADOR (slot único, plano I-D4), ou `null` com o slot vazio. */
+  readonly itemJogador?: TipoItem | null;
+  /** Roleta girando após pegar uma caixa (plano I-D5): `null` fora da janela de sorteio. */
+  readonly roleta?: { readonly ticksRestantes: number; readonly resultado: TipoItem } | null;
+  /** Projéteis/armadilhas/caixas visíveis neste tick, para o render desenhar sem reimplementar a física deles. */
+  readonly entidades?: readonly { readonly id: string; readonly tipo: TipoItem | 'caixa'; readonly x: number; readonly y: number }[];
+  /** O jogador é o alvo de uma Nuvem de Granizo com aviso ativo (plano I-D2: "casco azul", ~2s de aviso). */
+  readonly alvoNoJogador?: boolean;
+  readonly eventosCorrida?: readonly EventoCorrida[];
 }
 
 /** Resultado final de uma pista da corrida (plano §Contratos): pódio, duração de cada um e o que o jogador ganhou. */
@@ -406,6 +490,9 @@ export interface ResultadoCorrida {
   readonly ticks: Readonly<Record<IdPersonagem, number>>;
   readonly resumoJogador: ResumoDescida;
   readonly flocosGanhos: number;
+  /** Itens do jogador na pista (plano itens-corrida, I0); opcional pela mesma razão de `LeituraCorrida` acima —
+   *  populá-lo de verdade é I2 (`corrida/corrida.ts` ainda devolve `ResultadoCorrida` sem itens). */
+  readonly itens?: { readonly acertosDados: number; readonly acertosSofridos: number };
 }
 
 // --- Campeonato e evolução (plano §Arquitetura: `meta/campeonato.ts` e `aplicarEvolucao`, C5a/C6, Cronos) ---
@@ -456,4 +543,11 @@ export interface ReplayV2 extends Omit<ReplayV1, 'v'> {
     readonly semente: number;
     readonly rivais: readonly IdPersonagem[];
   };
+  /**
+   * Versão do formato de ITENS (plano itens-corrida §Contratos, I0): presente só em replays gravados com
+   * `ComandoCorrida.usarItem` codificado no bit 7 de `comandos.ts` (hoje sempre 0/reservado — ver comentário lá).
+   * AUSENTE = replay de antes dos itens (ou Treino, que nunca tem itens, I-D8): bit 7 é lixo-zero por construção,
+   * decodifica exatamente como sempre decodificou. A codificação real (`corrida/itens.ts`) é I2, não I0/I1.
+   */
+  readonly versaoItens?: string;
 }

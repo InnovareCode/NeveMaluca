@@ -22,6 +22,7 @@ import type { AlvoToque } from '../../input/toque';
 // resolve um barril de camada importado de outra camada como "arquivo da raiz" quando o caminho normalizado
 // cai num só segmento igual ao nome da camada — ver tests/unit/arquitetura.test.ts. Import direto evita o falso positivo.
 import { criarEntrada, type Entrada } from '../../input/index';
+import { desenharItensCamada, desenharKickers, desenharObstaculosAltos, criarSistemaAvisosObstaculo, type SistemaAvisosObstaculo } from '../../render/camada';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
@@ -38,7 +39,7 @@ import type { PintorTema } from '../../render/temas/tipos';
 import type { Cena } from '../tipos';
 import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
 import { configDoPersonagem, criarDescida, criarReprodutorFantasma, VERSAO_MOTOR, type MotorDescida, type ReprodutorFantasma } from '../../descida/index';
-import { exigirPistaValida } from '../../pista/index';
+import { exigirPistaValida, gerarCamadaJogo } from '../../pista/index';
 import { TICKS_CONTAGEM, textoDaContagem } from './contagem';
 import { criarSomManobras } from '../../audio/som-manobras';
 import { criarMusicaAdaptativa } from '../../audio/musica-adaptativa';
@@ -93,9 +94,14 @@ export interface OpcoesCenaDescida {
 export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const defPista = (opcoes.pista !== undefined && obterPistaDeDados(opcoes.pista)) || PISTA_MORRO_DO_PINHAO;
   const pista = exigirPistaValida(defPista);
+  // Camada de jogo (plano corrida-campeonato §C3/C4): kickers/coletáveis/obstáculos altos por cima do terreno,
+  // puro e determinístico (`gerarCamadaJogo(pista, defPista)`) -- TREINO ganha a mesma jogabilidade da corrida
+  // (ela não depende de `modo`, só o turbo de pouso depende; ver `descida/motor.ts`). `m3-congelamento-capi.test.ts`
+  // continua intocado: ele chama `criarDescida` direto, nunca por aqui.
+  const camada = gerarCamadaJogo(pista, defPista);
   // Física do personagem ESCOLHIDO (plano M3 §A.3): `configDoPersonagem('capi')` devolve `CONFIG_PADRAO` bit a
   // bit, então nenhuma descida da Capi muda de comportamento com esta troca (golden `m3-congelamento-capi.test.ts`).
-  const motor: MotorDescida = criarDescida(pista, configDoPersonagem(opcoes.personagem ?? 'capi'));
+  const motor: MotorDescida = criarDescida(pista, configDoPersonagem(opcoes.personagem ?? 'capi'), { camada });
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
   const camera: Camera = criarCamera(0, 0);
   // Pele do tema da pista (M3 F3/F4): `defPista.tema` decide o `PintorTema`/`DefTema` (`render/temas/catalogo.ts`).
@@ -109,6 +115,8 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
+  // "!" sobre o galho ~1,5 s antes (evento `aviso-obstaculo`, C4): mesmo pool fixo de `popupsManobra`.
+  const avisosObstaculo: SistemaAvisosObstaculo = criarSistemaAvisosObstaculo();
   // Pose visual (takeoff/wobble/grab, §C1) e confete de chegada: ambos de RENDER só, nunca entram no replay.
   const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
   const confete: SistemaConfete = criarConfete(rngVisual);
@@ -192,6 +200,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
       particulas.atualizar(leitura.piloto, leitura.eventos);
       popupsManobra.atualizar(leitura.piloto, leitura.eventos, leitura.tick);
+      avisosObstaculo.atualizar(leitura.eventos);
       visualPiloto.atualizar(leitura.piloto, leitura.eventos);
       somManobras?.atualizar(leitura);
       musicaAdaptativa?.atualizar(leitura);
@@ -215,8 +224,11 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       parallax.desenhar(ctx, camLeitura.x, leitura.tick);
       desenharTerreno(ctx, pista, camLeitura, pintorTema);
       desenharTrilhos(ctx, pista, camLeitura, pintorTema);
+      desenharKickers(ctx, pista, camada, camLeitura, leitura.tick);
       desenharObjetos(ctx, pista, camLeitura, pintorTema);
+      desenharObstaculosAltos(ctx, pista, camada, camLeitura, pintorTema);
       desenharChegada(ctx, pista, camLeitura, pintorTema);
+      desenharItensCamada(ctx, camada, camLeitura, pintorTema, leitura.tick);
       particulas.desenharSpray(ctx, camLeitura);
       if (leituraFantasma) {
         // translúcido e ANTES do piloto real: nunca deve confundir qual é o jogador de verdade
@@ -228,6 +240,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto, visualPiloto.poseVisual(leitura.piloto.pose));
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.tick);
       popupsManobra.desenhar(ctx, camLeitura);
+      avisosObstaculo.desenhar(ctx, pista, camLeitura);
       confete.desenhar(ctx);
       desenharHud(ctx, {
         velocidadeMs: leitura.piloto.velocidade,

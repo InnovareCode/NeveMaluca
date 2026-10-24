@@ -14,7 +14,7 @@ import { gerarPista } from '../../src/pista/gerador';
 const CMD_PULO: ComandoDescida = { pulo: true, giro: 0, grab: null, agachar: false };
 const CMD_NADA: ComandoDescida = { pulo: false, giro: 0, grab: null, agachar: false };
 const CMD_AGACHAR: ComandoDescida = { pulo: false, giro: 0, grab: null, agachar: true };
-const SEM_CAMADA: CamadaJogo = { itens: [], kickers: [], obstaculosAltos: [], porticoX: 0, versao: '1', hash: '0000000000000000' };
+const SEM_CAMADA: CamadaJogo = { itens: [], kickers: [], obstaculosAltos: [], caixas: [], porticoX: 0, versao: '1', hash: '0000000000000000' };
 
 describe('motor + camada: kicker estende o impulso do pulo', () => {
   it('pular dentro da zona do kicker dá MAIS força que pular sem camada (mesmo ponto da pista)', () => {

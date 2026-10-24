@@ -16,7 +16,7 @@ import { criarBotCuidadoso } from '../../src/descida/bot';
 import { criarDescida } from '../../src/descida/motor';
 import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
-import { exigirPistaValida } from '../../src/pista/index';
+import { exigirPistaValida, gerarCamadaJogo } from '../../src/pista/index';
 import { criarCenaDescida, TICKS_CONTAGEM_DESCIDA, type ResultadoDescida } from '../../src/ui/cenas/descida';
 
 function criarCanvasFalso(): AlvoToque {
@@ -107,8 +107,12 @@ function criarEDescerComBot(fantasma?: ReplayV1): { resultado: ResultadoDescida;
   const cena = criarCenaDescida({ canvas, janela, fantasma, aoTerminar: (r) => (resultado = r) });
 
   const pistaSombra = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
-  const motorSombra = criarDescida(pistaSombra);
-  const bot = criarBotCuidadoso(pistaSombra);
+  // Camada de jogo (plano corrida-campeonato §C3/C4): `ui/cenas/descida.ts` passa `camada` desde o polimento
+  // "jogabilidade na cena" -- a sombra precisa da MESMA (pura/determinística) pra não tombar num obstáculo que
+  // ela não sabia existir (ver memória `contagem-ui-sem-tick-quebra-shadow-motor-lockstep`, mesma família de bug).
+  const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_MORRO_DO_PINHAO);
+  const motorSombra = criarDescida(pistaSombra, undefined, { camada: camadaSombra });
+  const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
   let leituraSombra = motorSombra.leitura();
   let frameAnterior: InputFrame = INPUT_NEUTRO;
 

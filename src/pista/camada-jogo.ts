@@ -23,15 +23,15 @@
  * do gerador, que usa `criarRng(def.semente)` direto) e as consultas puras de `pista/consulta.ts`. Mesma semente +
  * mesma `PistaGerada` => mesma `CamadaJogo`, byte a byte (hash no fim, mesmo padrão de `gerador.ts`).
  */
-import type { CamadaJogo, DefPista, ItemCamada, KickerCamada, ObjetoPista, PistaGerada } from '../core/contratos';
+import type { CaixaCamada, CamadaJogo, DefPista, ItemCamada, KickerCamada, ObjetoPista, PistaGerada } from '../core/contratos';
 import { hashDeValor } from '../core/hash';
 import { rngDoCanal } from '../core/rng';
 import { alturaEm, inclinacaoGrausEm, trilhoEm } from './consulta';
 
-// '2' (C4): a MESMA forma de '1', mas `obstaculosAltos` deixou de ser sempre `[]` — bump só para marcar que o
-// algoritmo de geração mudou (nenhum compat-check lê este campo hoje; `ReplayV2` nunca serializa `CamadaJogo`, ela é
-// sempre regerada de `pista`+`def`, puro e determinístico — ver `criarCorrida`).
-export const VERSAO_CAMADA_JOGO = '2';
+// '3' (plano itens-corrida, I0): a MESMA forma de '2', mais `caixas` (sempre `[]` até I2 plantar as posições reais)
+// — bump só para marcar a mudança de forma (nenhum compat-check lê este campo hoje; `ReplayV2` nunca serializa
+// `CamadaJogo`, ela é sempre regerada de `pista`+`def`, puro e determinístico — ver `criarCorrida`).
+export const VERSAO_CAMADA_JOGO = '3';
 
 /** Passo do varredor de rampas, em metros: fino o bastante para não pular picos curtos (vão/kicker-duplo). */
 const PASSO_VARREDURA_M = 1;
@@ -209,7 +209,10 @@ export function gerarCamadaJogo(pista: PistaGerada, def: DefPista): CamadaJogo {
   if (douradoDaPista !== null) itens.push(douradoDaPista);
   const obstaculosAltos = obstaculosAltosDe(pista, def, kickers, rng);
 
-  const semHash = { itens, kickers, obstaculosAltos, porticoX: pista.chegadaX, versao: VERSAO_CAMADA_JOGO };
+  // `caixas` (plano itens-corrida, I0): posicionamento real é I2 — por ora sempre `[]`, mesmo bootstrap que
+  // `obstaculosAltos` teve antes do C4 (campo presente na forma, sem efeito nenhum até a lógica existir).
+  const caixas: CaixaCamada[] = [];
+  const semHash = { itens, kickers, obstaculosAltos, caixas, porticoX: pista.chegadaX, versao: VERSAO_CAMADA_JOGO };
   const hash = hashDeValor(semHash);
   return { ...semHash, hash };
 }

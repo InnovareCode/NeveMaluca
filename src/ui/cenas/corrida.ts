@@ -24,8 +24,17 @@ import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 // Import por arquivo (não o barril '../../input'): mesmo motivo de `descida.ts` (ver comentário lá).
 import { criarEntrada, type Entrada } from '../../input/index';
-import { exigirPistaValida } from '../../pista/index';
+import { exigirPistaValida, gerarCamadaJogo } from '../../pista/index';
 import { alturaEm } from '../../pista/consulta';
+import {
+  desenharItensCamada,
+  desenharKickers,
+  desenharObstaculosAltos,
+  criarSistemaAvisosObstaculo,
+  criarSistemaTurboPouso,
+  type SistemaAvisosObstaculo,
+  type SistemaTurboPouso,
+} from '../../render/camada';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
@@ -101,11 +110,17 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   }));
   const totalCorredores = participantes.length;
 
+  // Camada de jogo (plano corrida-campeonato §C3/C4): gerada AQUI (não só passando `def` a `criarCorrida`) pra a
+  // CENA também enxergar `camada.itens`/`kickers`/`obstaculosAltos` e desenhá-los -- pura e determinística
+  // (`gerarCamadaJogo`), byte a byte igual à que `criarCorrida({def})` geraria por dentro.
+  const camada = gerarCamadaJogo(pista, defPista);
+
   // Repassa `opcoes.save?.evolucao` ao núcleo (C6, Vega acabou de ligar `criarCorrida({evolucao})` ->
   // `descida/atributos.ts` -> `aplicarEvolucao`) -- sem ela, todos correm no nível 0 (idêntico à ficha, como
   // antes do C6). `exactOptionalPropertyTypes`: só inclui a chave quando há evolução de verdade.
   const corrida: Corrida = criarCorrida({
     pista,
+    camada,
     semente: pista.semente,
     participantes,
     ...(opcoes.save?.evolucao !== undefined ? { evolucao: opcoes.save.evolucao } : {}),
@@ -121,6 +136,10 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   const rngVisual = rngDoCanal(pista.semente, 'visual');
   const particulas: SistemaParticulas = criarSistemaParticulas(rngVisual);
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
+  // "!" sobre o galho (C4) + flash do turbo de pouso (C-D7, só existe em modo 'corrida' -- por isso só esta cena
+  // liga `criarSistemaTurboPouso`, nunca `descida.ts`/TREINO).
+  const avisosObstaculo: SistemaAvisosObstaculo = criarSistemaAvisosObstaculo();
+  const turboPouso: SistemaTurboPouso = criarSistemaTurboPouso();
   const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
   const confete: SistemaConfete = criarConfete(rngVisual);
   const rngAudio = opcoes.audio ? rngDoCanal(pista.semente, 'audio') : null;
@@ -169,6 +188,8 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual);
       particulas.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       popupsManobra.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, leitura.jogador.tick);
+      avisosObstaculo.atualizar(leitura.jogador.eventos);
+      turboPouso.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       visualPiloto.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       somManobras?.atualizar(leitura.jogador);
       musicaAdaptativa?.atualizar(leitura.jogador);
@@ -183,8 +204,11 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       parallax.desenhar(ctx, camLeitura.x, leitura.jogador.tick);
       desenharTerreno(ctx, pista, camLeitura, pintorTema);
       desenharTrilhos(ctx, pista, camLeitura, pintorTema);
+      desenharKickers(ctx, pista, camada, camLeitura, leitura.jogador.tick);
       desenharObjetos(ctx, pista, camLeitura, pintorTema);
+      desenharObstaculosAltos(ctx, pista, camada, camLeitura, pintorTema);
       desenharChegada(ctx, pista, camLeitura, pintorTema);
+      desenharItensCamada(ctx, camada, camLeitura, pintorTema, leitura.jogador.tick);
       particulas.desenharSpray(ctx, camLeitura);
 
       const rivaisVisuais: RivalVisual[] = leitura.rivais.map((r) => {
@@ -201,9 +225,11 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       });
       desenharRivais(ctx, camLeitura, rivaisVisuais);
 
+      turboPouso.desenhar(ctx, camLeitura); // ANTES do piloto: o flash fica atrás, nunca cobre o sprite
       desenharPiloto(ctx, leitura.jogador.piloto, camLeitura, sprites.get(idJogador) ?? null, visualPiloto.poseVisual(leitura.jogador.piloto.pose));
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.jogador.tick);
       popupsManobra.desenhar(ctx, camLeitura);
+      avisosObstaculo.desenhar(ctx, pista, camLeitura);
       confete.desenhar(ctx);
 
       const posicaoJogador = leitura.posicoes.indexOf(idJogador) + 1;

@@ -15,7 +15,7 @@ import type { AlvoTeclado } from '../../src/input/teclado';
 import type { AlvoToque } from '../../src/input/toque';
 import type { ArmazenamentoLike, SaveV1 } from '../../src/meta/tipos';
 import { saveVazio } from '../../src/meta/storage';
-import { exigirPistaValida } from '../../src/pista/index';
+import { exigirPistaValida, gerarCamadaJogo } from '../../src/pista/index';
 import { criarGerenciadorCenas } from '../../src/ui/cenas/gerenciador';
 import { TICKS_CONTAGEM_DESCIDA } from '../../src/ui/cenas/descida';
 
@@ -67,8 +67,11 @@ function descerAteRegistrar(save: SaveV1, armazenamento: ArmazenamentoLike): voi
   const gerenciador = criarGerenciadorCenas({ canvas, janela, save, armazenamento, cenaInicial: 'jogo' });
 
   const pistaSombra = exigirPistaValida(PISTA_MORRO_DO_PINHAO);
-  const motorSombra = criarDescida(pistaSombra);
-  const bot = criarBotCuidadoso(pistaSombra);
+  // Camada de jogo (plano corrida-campeonato §C3/C4): a cena real passa `camada` -- a sombra precisa da MESMA
+  // (pura/determinística) pra não tombar num obstáculo que ela não sabia existir.
+  const camadaSombra = gerarCamadaJogo(pistaSombra, PISTA_MORRO_DO_PINHAO);
+  const motorSombra = criarDescida(pistaSombra, undefined, { camada: camadaSombra });
+  const bot = criarBotCuidadoso(pistaSombra, undefined, camadaSombra.obstaculosAltos);
   let leituraSombra = motorSombra.leitura();
   let frameAnterior: InputFrame = INPUT_NEUTRO;
 

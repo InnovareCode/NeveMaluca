@@ -7,7 +7,9 @@
  *   bits 1-2   giro:  0 = 0, 1 = +1, 2 = -1 (3 é inválido)
  *   bits 3-5   grab:  0 = nenhum, 1 = cima, 2 = baixo, 3 = frente, 4 = tras (5 a 7 inválidos)
  *   bit 6      agachar
- *   bit 7      sempre 0 (reservado)
+ *   bit 7      sempre 0 (reservado — plano itens-corrida §Contratos: vai virar `ComandoCorrida.usarItem`, mas só
+ *              no byte de CORRIDA que `corrida/itens.ts` grava no `ReplayV2.versaoItens` (I2); este codificador
+ *              (`ComandoDescida` puro, V1 e V2 sem itens) continua emitindo/exigindo 0 aqui, sem mudança nenhuma)
  * Este layout faz parte do formato do replay: mudá-lo exige `ReplayV1` novo (`v: 2`).
  */
 import type { ComandoDescida, Giro, Grab, InputFrame } from './contratos';
