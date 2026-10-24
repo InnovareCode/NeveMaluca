@@ -48,11 +48,18 @@ export const OBJETIVOS_PROVISORIOS: readonly string[] = PISTAS_PROVISORIAS.flatM
 );
 
 /**
- * Versão atual do gerador de cada pista (`PistaGerada.versaoGerador`). O gerador só nasce no M1: até lá todas valem "provisoria",
- * e como ainda não há recorde gravado, trocar este texto não manda nada para `recordesAntigos`.
+ * Versão atual do gerador de cada pista (`PistaGerada.versaoGerador`). O gerador só nasce no M1: até lá todas valem "provisoria".
  */
 export const VERSAO_PROVISORIA_DA_PISTA = 'provisoria';
-export const VERSAO_DAS_PISTAS: Readonly<Record<string, string>> = Object.fromEntries(PISTAS_PROVISORIAS.map((p) => [p, VERSAO_PROVISORIA_DA_PISTA]));
+/**
+ * Física que gravou o recorde. Entra na versão comparada pelo `meta/` porque um tempo feito com outra física não compete
+ * (ex.: o pulo mais forte do `VERSAO_MOTOR` '3'): recorde de física antiga vai para `recordesAntigos`, não some.
+ * TEM que ser `f` + `VERSAO_MOTOR` (`descida/constantes.ts`; `data/` não importa `descida/`) — teste em `integracao-m0`.
+ */
+export const VERSAO_FISICA_DOS_RECORDES = 'f3';
+export const VERSAO_DAS_PISTAS: Readonly<Record<string, string>> = Object.fromEntries(
+  PISTAS_PROVISORIAS.map((p) => [p, `${VERSAO_PROVISORIA_DA_PISTA}.${VERSAO_FISICA_DOS_RECORDES}`]),
+);
 
 export const REGRAS_SAVE: RegrasDoCatalogo = {
   personagens: PERSONAGENS_PROVISORIOS,
