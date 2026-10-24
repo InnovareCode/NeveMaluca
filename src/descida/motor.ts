@@ -16,7 +16,14 @@
  *      `'coleta'`, `LeituraDescida.coletados`).
  *   3. turbo de pouso (plano C-D7): só em `opcoes.modo === 'corrida'` — ao pousar bem (não "torto"), soma ao `p.v`
  *      (e ao teto de velocidade por alguns ticks, `estado.turboVel`, que decai e zera num tombo) uma fração dos
- *      pontos daquele voo. `hashEstado()` continua sem estes dois estados novos DE PROPÓSITO: o golden da Capi
+ *      pontos daquele voo.
+ *   4. obstáculo alto (plano C4): no chão (nunca no ar — pular por cima já resolve, mesma simplificação do
+ *      obstáculo duro), tocar `camada.obstaculosAltos` SEM `cmd.agachar` tomba (causa `'obstaculo'`, igual ao
+ *      obstáculo duro); agachado, atravessa — e, se o agachar foi de ÚLTIMA hora (`LIMIAR_RENTE_TICKS`), ganha o
+ *      bônus "por um fio" (`'obstaculo-rente'`). ~`AVISO_SEGUNDOS` antes (por distância, não por tick: usa
+ *      `config.velocidadeMaxMs`, a física deste personagem), emite `'aviso-obstaculo'` 1x por obstáculo (reseta no
+ *      respawn, como `turboVel`) — é o "!" que o render mostra.
+ *      `hashEstado()` continua sem estes estados novos DE PROPÓSITO: o golden da Capi
  *      (`m3-congelamento-capi.test.ts`) roda sem `camada`/em modo `'treino'`, onde eles nunca saem de zero/vazio —
  *      incluí-los no hash mudaria a FORMA do valor hasheado (mais uma chave) e quebraria o golden sem nenhuma
  *      mudança de física real; a prova de determinismo do modo corrida é o `ResultadoCorrida` (`corrida/corrida.ts`).
@@ -30,6 +37,7 @@ import type {
   LeituraDescida,
   ModoDescida,
   ModoPiloto,
+  ObjetoPista,
   OpcoesDescida,
   PistaGerada,
   PilotoLeitura,
@@ -66,7 +74,16 @@ import {
   TETO_PONTOS,
   TRILHO_PASSO_TICKS,
   TRILHO_PONTOS_POR_PASSO,
+  ticksDeSegundos,
 } from '../data/manobras';
+
+/** Obstáculo alto (plano C4): quanto tempo ANTES o "!" aparece (distância = `config.velocidadeMaxMs * AVISO_SEGUNDOS`,
+ *  a física DESTE personagem — não um metro fixo, que seria "~1,5s" só para quem está no teto de velocidade). */
+const AVISO_SEGUNDOS = 1.5;
+/** Agachar com menos que isto de antecedência conta como "por um fio" (reflexo de última hora, não cautela). */
+const LIMIAR_RENTE_TICKS = ticksDeSegundos(0.3);
+/** Bônus do "por um fio" — pontos diretos, fora do combo (como `boneco`, não como as manobras de voo). */
+const PONTOS_OBSTACULO_RENTE = 150;
 
 /** Turbo de pouso (plano C-D7, só em `modo === 'corrida'`): fração dos pontos do voo que vira velocidade extra. */
 const TURBO_MS_POR_PONTO = 0.01;
@@ -88,6 +105,8 @@ interface EstadoPiloto {
   anguloAcumulado: number;
   grab: Grab | null;
   agachado: boolean;
+  /** Ticks CONSECUTIVOS agachado (0 quando não está); C4: agachar "rente" (pouco antes do obstáculo) pontua mais. */
+  ticksAgachado: number;
   ticksNoAr: number;
   ticksGirando: number;
   giroAnterior: Giro;
@@ -120,6 +139,12 @@ interface EstadoDescida {
   coletados: number;
   /** Bônus de velocidade do turbo de pouso (plano C-D7), só em `modo === 'corrida'`; decai a cada tick, zera num tombo. */
   turboVel: number;
+  // C4 — obstáculo alto (plano corrida-campeonato §Reaproveita): vazio quando `opcoes.camada` está ausente; ambos
+  // resetam no respawn (`x` de `camada.obstaculosAltos` como chave, mesmo padrão de `bonecosAtingidos`).
+  /** Obstáculos já RESOLVIDOS (tombou ou atravessou) desde o último respawn: nunca dispara 2x a mesma passagem. */
+  obstaculosAltosVistos: ReadonlySet<number>;
+  /** Obstáculos cujo "!" já foi emitido desde o último respawn. */
+  obstaculosAvisados: ReadonlySet<number>;
 }
 
 export interface MotorDescida {
@@ -216,6 +241,16 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     return 0;
   }
 
+  /** Obstáculo alto (C4) cujo `[x, x+largura]` cobre `x`, ou `null` (sempre `null` sem `camada`/sem um ali). */
+  function obstaculoAltoEm(x: number): ObjetoPista | null {
+    if (camada === undefined) return null;
+    for (const o of camada.obstaculosAltos) if (x >= o.x && x <= o.x + o.largura) return o;
+    return null;
+  }
+
+  /** Distância (m) à frente do piloto em que o "!" do próximo obstáculo alto aparece (física DESTE personagem). */
+  const avisoObstaculoDistanciaM = config.velocidadeMaxMs * AVISO_SEGUNDOS;
+
   const anguloInicial = inclinacaoGrausEm(pista, 0);
 
   let estado: EstadoDescida = {
@@ -233,6 +268,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
       anguloAcumulado: 0,
       grab: null,
       agachado: false,
+      ticksAgachado: 0,
       ticksNoAr: 0,
       ticksGirando: 0,
       giroAnterior: 0,
@@ -254,6 +290,8 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     itensColetados: new Set<number>(),
     coletados: 0,
     turboVel: 0,
+    obstaculosAltosVistos: new Set<number>(),
+    obstaculosAvisados: new Set<number>(),
   };
 
   function respawn(est: EstadoDescida): void {
@@ -268,6 +306,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     est.piloto.vy = est.piloto.v * seno(est.piloto.angulo);
     est.piloto.modo = 'chao';
     est.piloto.grab = null;
+    est.piloto.ticksAgachado = 0;
     est.piloto.ticksNoAr = 0;
     est.piloto.ticksGirando = 0;
     est.piloto.trilhoAtual = null;
@@ -275,6 +314,10 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     est.arGrab = null;
     est.trilhoTicks = 0;
     est.turboVel = 0; // cair custa caro (plano C-D7): o tombo zera o bônus de velocidade do turbo de pouso.
+    // C4: o respawn manda de volta pro último checkpoint — RE-ARMA os obstáculos daquele trecho (senão um tombo
+    // perto de um deles o desarmaria de graça, sem nunca precisar agachar de verdade na 2ª tentativa).
+    est.obstaculosAltosVistos = new Set<number>();
+    est.obstaculosAvisados = new Set<number>();
     est.fase = 'descendo';
   }
 
@@ -371,6 +414,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
 
     const modoInicial = p.modo;
     p.agachado = cmd.agachar;
+    p.ticksAgachado = p.agachado ? p.ticksAgachado + 1 : 0;
     p.grab = p.modo === 'ar' ? cmd.grab : null;
     if (p.modo === 'trilho') estado.trilhoTicks++;
     if (p.modo === 'ar' && p.grab !== null) {
@@ -438,11 +482,30 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
             perderCombo(eventos);
             eventos.push({ tipo: 'tombo', causa: 'obstaculo' });
           } else {
-            const boneco = bonecoDeNeveEm(pista, p.x);
-            if (boneco !== null && !estado.bonecosAtingidos.has(boneco.x)) {
-              estado.bonecosAtingidos = new Set(estado.bonecosAtingidos).add(boneco.x);
-              p.v *= config.fatorBonecoDeNeve;
-              eventos.push({ tipo: 'boneco', x: boneco.x });
+            // C4: obstáculo alto — só passa agachado. 1x por obstáculo (ver `obstaculosAltosVistos`, reseta no
+            // respawn); se o tombo acontecer aqui, o boneco de neve do MESMO tick nem é checado (igual ao duro acima).
+            const alto = obstaculoAltoEm(p.x);
+            if (alto !== null && !estado.obstaculosAltosVistos.has(alto.x)) {
+              estado.obstaculosAltosVistos = new Set(estado.obstaculosAltosVistos).add(alto.x);
+              if (!p.agachado) {
+                estado.fase = 'tombo';
+                estado.ticksTomboRestantes = config.ticksTombo;
+                estado.tombosOcorridos++;
+                perderCombo(eventos);
+                eventos.push({ tipo: 'tombo', causa: 'obstaculo' });
+              } else if (p.ticksAgachado <= LIMIAR_RENTE_TICKS) {
+                estado.pontos += PONTOS_OBSTACULO_RENTE;
+                if (estado.pontos > TETO_PONTOS) estado.pontos = TETO_PONTOS;
+                eventos.push({ tipo: 'obstaculo-rente', pontos: PONTOS_OBSTACULO_RENTE });
+              }
+            }
+            if (estado.fase !== 'tombo') {
+              const boneco = bonecoDeNeveEm(pista, p.x);
+              if (boneco !== null && !estado.bonecosAtingidos.has(boneco.x)) {
+                estado.bonecosAtingidos = new Set(estado.bonecosAtingidos).add(boneco.x);
+                p.v *= config.fatorBonecoDeNeve;
+                eventos.push({ tipo: 'boneco', x: boneco.x });
+              }
             }
           }
         }
@@ -518,6 +581,18 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           estado.itensColetados = new Set(estado.itensColetados).add(i);
           estado.coletados++;
           eventos.push({ tipo: 'coleta', item: item.tipo });
+        }
+      }
+    }
+
+    // Aviso de obstáculo alto (C4): ~`AVISO_SEGUNDOS` antes, por distância; roda em qualquer modo (chão OU ar — quem
+    // está pulando por cima também merece ver o "!" chegando). 1x por obstáculo (ver `obstaculosAvisados`).
+    if (camada !== undefined) {
+      for (const o of camada.obstaculosAltos) {
+        if (estado.obstaculosAvisados.has(o.x)) continue;
+        if (p.x < o.x && o.x - p.x <= avisoObstaculoDistanciaM) {
+          estado.obstaculosAvisados = new Set(estado.obstaculosAvisados).add(o.x);
+          eventos.push({ tipo: 'aviso-obstaculo', x: o.x });
         }
       }
     }

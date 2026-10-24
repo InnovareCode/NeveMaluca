@@ -104,7 +104,11 @@ export type EventoDescida =
   | { readonly tipo: 'coleta'; readonly item: IdItem }
   | { readonly tipo: 'boneco'; readonly x: number }
   | { readonly tipo: 'checkpoint'; readonly indice: number }
-  | { readonly tipo: 'chegada'; readonly pontos: number; readonly ticks: number };
+  | { readonly tipo: 'chegada'; readonly pontos: number; readonly ticks: number }
+  // C4 (obstáculo alto + agachar, plano corrida-campeonato §Reaproveita): aviso ~1,5s antes (render mostra "!"),
+  // e o bônus de passar agachado rente a um deles (ver `descida/motor.ts`, topo do arquivo).
+  | { readonly tipo: 'aviso-obstaculo'; readonly x: number }
+  | { readonly tipo: 'obstaculo-rente'; readonly pontos: number };
 
 export type TipoEventoDescida = EventoDescida['tipo'];
 
@@ -162,6 +166,10 @@ export const TIPOS_OBJETO = [
   'portico',
   'floco',
   'placa',
+  /** Obstáculo ALTO da camada de jogo (plano corrida-campeonato, C4): galho pendurado atravessando o caminho. Só
+   *  `CamadaJogo.obstaculosAltos` usa este tipo (nunca `PistaGerada.objetos`, que é do gerador M1a/M1). Render sem
+   *  sprite dedicado ainda cai no genérico (`Partial<Record<TipoObjeto,...>>`, nunca quebra por tipo desconhecido). */
+  'galho',
 ] as const;
 export type TipoObjeto = (typeof TIPOS_OBJETO)[number];
 
@@ -337,16 +345,17 @@ export interface KickerCamada {
 /**
  * Camada de jogo por cima do terreno gerado (plano §Arquitetura, C3): coletáveis que ensinam a linha (chão -> arco
  * do kicker -> trilho), kickers que estendem o ar (torna o mortal alcançável sem mexer na física da Capi),
- * obstáculos altos (C4, agachar — vazio até lá) e o pórtico (hoje só decorativo, mesma posição que `render/chegada.ts`
- * já desenha por conta própria em `pista.chegadaX`). `gerarPista` (M1a) NUNCA gera isto: é sobreposição pura,
- * produzida por `pista/camada-jogo.ts` (`gerarCamadaJogo`) a partir da `PistaGerada` já congelada — o terreno em si
- * (`alturas`/`objetos`/`trilhos`/hash) nunca muda. `motor.ts` só lê estes campos quando `OpcoesDescida.camada` é
- * passada: omitir (como todo chamador de treino faz) é, por construção, o comportamento de sempre.
+ * obstáculos altos (C4: só passa agachado — `pista/camada-jogo.ts`) e o pórtico (hoje só decorativo, mesma posição
+ * que `render/chegada.ts` já desenha por conta própria em `pista.chegadaX`). `gerarPista` (M1a) NUNCA gera isto: é
+ * sobreposição pura, produzida por `pista/camada-jogo.ts` (`gerarCamadaJogo`) a partir da `PistaGerada` já congelada
+ * — o terreno em si (`alturas`/`objetos`/`trilhos`/hash) nunca muda. `motor.ts` só lê estes campos quando
+ * `OpcoesDescida.camada` é passada: omitir (como todo chamador de treino faz) é, por construção, o comportamento de
+ * sempre.
  */
 export interface CamadaJogo {
   readonly itens: readonly ItemCamada[];
   readonly kickers: readonly KickerCamada[];
-  /** Reservado para C4 (obstáculo alto + agachar); vazio até lá. */
+  /** C4: `tipo` sempre `'galho'` hoje (variantes visuais futuras não mudam a física). Só passa agachado. */
   readonly obstaculosAltos: readonly ObjetoPista[];
   readonly porticoX: number;
   readonly versao: string;
@@ -405,11 +414,17 @@ export interface ResultadoCorrida {
 // `trofeus?: readonly IdPersonagem[]` e `evolucao?: Evolucao` como campos ADITIVOS (mesmo padrão dos outros campos
 // opcionais de `SaveV1`: ausente = sem campeonato em andamento / sem troféu / sem evolução, sem bump de versão).
 
-/** Uma pista já corrida dentro do campeonato em andamento (plano C-D1): a classificação é sempre DERIVADA daqui. */
+/**
+ * Uma pista já corrida dentro do campeonato em andamento (plano C-D1): a classificação é sempre DERIVADA daqui.
+ * `ordem` guarda o PÓDIO COMPLETO (1º ao último, os até 6 ids) — não só a posição do jogador — porque
+ * `meta/campeonato.ts` → `classificacao`/`situacao` precisam dos pontos de TODOS os rivais para funcionar depois
+ * de um reload no meio do campeonato (sem o pódio completo, só o jogador teria pontos recalculáveis).
+ */
 export interface PistaConcluidaCampeonato {
   readonly pista: IdPista;
-  /** Posição final do jogador nessa pista (1 = 1º lugar). */
-  readonly ordem: number;
+  /** Ordem de chegada completa desta pista (1º ao último); mesmo formato de `ResultadoCorrida.ordem`. */
+  readonly ordem: readonly IdPersonagem[];
+  /** Ticks do JOGADOR nesta pista (duração da descida dele). */
   readonly ticks: number;
 }
 

@@ -8,7 +8,7 @@
  * não um segundo HUD — expor mais do motor interno convidaria a cena a tratá-lo como um 2º jogador de verdade, que
  * não é o escopo (plano §7 só pede "correr junto").
  */
-import type { PilotoLeitura, PistaGerada, ReplayV1 } from '../core/contratos';
+import type { PilotoLeitura, PistaGerada, ReplayV1, ReplayV2 } from '../core/contratos';
 import { falha, ok, type Resultado } from '../core/erros';
 import { decodificarComandos } from '../core/replay';
 import { VERSAO_MOTOR, type ConfigDescida } from './constantes';
@@ -24,7 +24,12 @@ export interface ReprodutorFantasma {
 
 /**
  * Cria o reprodutor. `config` é a física de QUEM GRAVOU o replay (plano M3 §A.3: desde a F1, cada personagem tem a
- * sua) — sem ela o fantasma do Tio Beto rodaria com a física da Capi e sairia da pista (achado 2 do plano §0).
+ * sua, e C6: já com `aplicarEvolucao` do nível que gravou, se for `ReplayV2`) — sem ela o fantasma do Tio Beto
+ * rodaria com a física da Capi e sairia da pista (achado 2 do plano §0).
+ *
+ * `ReplayV2` (plano §Arquitetura, C6) também grava o `modo` de quem gravou — passado de volta ao motor
+ * (`criarDescida(..., { modo })`), porque o turbo de pouso (C-D7) só existe em `'corrida'`: reproduzir um replay
+ * gravado em corrida como se fosse treino faria o fantasma divergir da trajetória REAL que ele correu.
  *
  * Falha (sem lançar) se: `replay.pista`/`hashPista` não forem desta `pista` (fantasma de outra pista/versão do
  * gerador não pode rodar aqui: a física mudaria o resultado); `replay.comandos` não decodificar; ou
@@ -32,7 +37,7 @@ export interface ReprodutorFantasma {
  * só se `replay.personagem === 'capi'`, porque a física dela não mudou entre '1' e '2' (plano §A.3). Qualquer outro
  * caso falha aqui e a descida roda sem fantasma, que já é o comportamento previsto (não é erro de boot).
  */
-export function criarReprodutorFantasma(replay: ReplayV1, pista: PistaGerada, config: ConfigDescida): Resultado<ReprodutorFantasma> {
+export function criarReprodutorFantasma(replay: ReplayV1 | ReplayV2, pista: PistaGerada, config: ConfigDescida): Resultado<ReprodutorFantasma> {
   if (replay.pista !== pista.id) return falha([`fantasma: replay é da pista "${replay.pista}", esperada "${pista.id}"`]);
   if (replay.hashPista !== pista.hash) return falha(['fantasma: hashPista não bate com a pista gerada agora (versão do gerador mudou)']);
   if (replay.versaoMotor !== VERSAO_MOTOR && !(replay.versaoMotor === '1' && replay.personagem === 'capi')) {
@@ -42,7 +47,7 @@ export function criarReprodutorFantasma(replay: ReplayV1, pista: PistaGerada, co
   if (!decodificado.ok) return falha(decodificado.erros);
 
   const comandos = decodificado.valor;
-  const motor = criarDescida(pista, config);
+  const motor = criarDescida(pista, config, replay.v === 2 ? { modo: replay.modo } : {});
   let i = 0;
 
   return ok({

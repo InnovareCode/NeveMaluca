@@ -4,9 +4,10 @@
  * de `m3-congelamento-capi.test.ts` é quem prova, em uma descida inteira, que isso não regride).
  */
 import { describe, expect, it } from 'vitest';
-import type { DefPersonagem } from '../../src/core/contratos';
+import type { DefPersonagem, Evolucao } from '../../src/core/contratos';
 import { BANDEIRA, BETO, CIDINHA, PERSONAGENS_DE_DADOS, QUEQUE } from '../../src/data/personagens';
-import { aplicarAtributos, configDoPersonagem, MAPA_ATRIBUTOS, PERSONAGEM_REFERENCIA } from '../../src/descida/atributos';
+import { NIVEL_MAXIMO_EVOLUCAO } from '../../src/data/evolucao';
+import { aplicarAtributos, aplicarEvolucao, configDoPersonagem, MAPA_ATRIBUTOS, PERSONAGEM_REFERENCIA } from '../../src/descida/atributos';
 import { CONFIG_PADRAO } from '../../src/descida/constantes';
 
 describe('configDoPersonagem: a Capi é a referência (plano §A.1)', () => {
@@ -112,5 +113,49 @@ describe('aplicarAtributos: a fórmula isolada (sem depender do catálogo nem de
     for (const def of [BANDEIRA, BETO, CIDINHA, QUEQUE]) {
       expect(aplicarAtributos(def, capiDef)).toEqual(configDoPersonagem(def.id));
     }
+  });
+});
+
+describe('aplicarEvolucao (plano C-D3/C-D4/C6): upgrade entre campeonatos, camada por cima da ficha', () => {
+  it('U1: nível 0 (sem evolucao.niveis para este id) devolve a MESMA config (===, não só toEqual)', () => {
+    for (const def of PERSONAGENS_DE_DADOS) {
+      const config = configDoPersonagem(def.id);
+      expect(aplicarEvolucao(config, def, {})).toBe(config);
+      expect(aplicarEvolucao(config, def, { [def.id]: 0 })).toBe(config);
+    }
+  });
+
+  it('U1: nível de OUTRO personagem não afeta este (devolve a mesma config)', () => {
+    const config = configDoPersonagem('capi');
+    const capiDef = PERSONAGENS_DE_DADOS.find((d) => d.id === 'capi')!;
+    expect(aplicarEvolucao(config, capiDef, { beto: 5 })).toBe(config);
+  });
+
+  it('nível > 0 sobe velocidade/equilíbrio/força (pulo+embalo), NUNCA giro', () => {
+    const capiDef = PERSONAGENS_DE_DADOS.find((d) => d.id === 'capi')!;
+    const config = configDoPersonagem('capi');
+    const evoluido = aplicarEvolucao(config, capiDef, { capi: 1 });
+    expect(evoluido.velocidadeMaxMs).toBeGreaterThan(config.velocidadeMaxMs);
+    expect(evoluido.limiarPerfeitoGraus).toBeGreaterThan(config.limiarPerfeitoGraus);
+    expect(evoluido.fatorEmbalo).toBeGreaterThan(config.fatorEmbalo);
+    expect(evoluido.impulsoPuloMs).toBeGreaterThan(config.impulsoPuloMs);
+    expect(evoluido.giroVelMaxGrausPorTick).toBe(config.giroVelMaxGrausPorTick);
+    expect(evoluido.giroAcelGrausPorTick2).toBe(config.giroAcelGrausPorTick2);
+  });
+
+  it('nível MÁXIMO dá um salto maior que nível 1 (monotônico no nível)', () => {
+    const capiDef = PERSONAGENS_DE_DADOS.find((d) => d.id === 'capi')!;
+    const config = configDoPersonagem('capi');
+    const nivel1 = aplicarEvolucao(config, capiDef, { capi: 1 }).velocidadeMaxMs;
+    const nivelMax = aplicarEvolucao(config, capiDef, { capi: NIVEL_MAXIMO_EVOLUCAO }).velocidadeMaxMs;
+    expect(nivelMax).toBeGreaterThan(nivel1);
+  });
+
+  it('nível fora da faixa (save adulterado) satura no teto/piso em vez de explodir ou ficar negativo', () => {
+    const capiDef = PERSONAGENS_DE_DADOS.find((d) => d.id === 'capi')!;
+    const config = configDoPersonagem('capi');
+    const niveisAbsurdos: Evolucao['niveis'] = { capi: 999 };
+    expect(aplicarEvolucao(config, capiDef, niveisAbsurdos)).toEqual(aplicarEvolucao(config, capiDef, { capi: NIVEL_MAXIMO_EVOLUCAO }));
+    expect(aplicarEvolucao(config, capiDef, { capi: -5 })).toBe(config); // negativo cai no nível 0 (identidade).
   });
 });

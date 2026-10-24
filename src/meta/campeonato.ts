@@ -4,17 +4,21 @@
  * ele SIGNIFICA.
  *
  * `classificacao` nunca lê um total guardado: soma `pontosDaPosicao` a partir do `ordem` (ranking completo, do 1º
- * ao último) de CADA `ResultadoCorrida` recebido (plano C-D1: "a classificação é sempre derivada daqui"). Um total
- * persistido seria mais um lugar para o save mentir; o `ordem` de cada corrida já é a fonte da verdade.
+ * ao último) de CADA pista recebida (plano C-D1: "a classificação é sempre derivada daqui"). Um total persistido
+ * seria mais um lugar para o save mentir; o `ordem` de cada corrida já é a fonte da verdade.
  *
- * PENDÊNCIA (para o Atlas/dono decidir): `EstadoCampeonato.pistasConcluidas` (`core/contratos.ts`, o que o save
- * guarda) só tem a posição do JOGADOR por pista (`PistaConcluidaCampeonato.ordem: number`) — não o `ordem`
- * completo dos 6. `classificacao`/`situacao` aqui operam sobre `ResultadoCorrida[]` (o dado rico da corrida, em
- * memória durante a sessão). Fechar o app NO MEIO de um campeonato e reabrir não dá, hoje, para recalcular os
- * pontos dos 5 adversários a partir só do save — falta decidir se vale a pena persistir o `ResultadoCorrida`
- * inteiro de cada pista concluída, ou se "situacao() exata" é só-nesta-sessão por desenho.
+ * GAP RESOLVIDO (era uma pendência): `classificacao`/`situacao` aceitam qualquer lista com `.ordem` (pódio
+ * completo) — tanto `ResultadoCorrida[]` (dado rico, em memória, durante a corrida que está rolando) quanto
+ * `EstadoCampeonato.pistasConcluidas` (o que o save persiste, `PistaConcluidaCampeonato[]`, que desde C5b/C8b
+ * também guarda o `ordem` completo dos até 6, não só a posição do jogador). Por isso dá para recalcular a
+ * classificação inteira depois de um reload no meio do campeonato, só com o save.
  */
 import type { EstadoCampeonato, IdPersonagem, PistaConcluidaCampeonato, ResultadoCorrida } from '../core/contratos';
+
+/** Qualquer registro de pista com o pódio completo — `ResultadoCorrida` e `PistaConcluidaCampeonato` servem. */
+export interface PistaComOrdem {
+  readonly ordem: readonly IdPersonagem[];
+}
 
 /** 10/8/6/4/2/1 (plano C-D1), posição 1 = 1º lugar. */
 const TABELA_PONTOS: readonly number[] = [10, 8, 6, 4, 2, 1];
@@ -43,7 +47,7 @@ export function desempate(a: ClassificacaoItem, b: ClassificacaoItem): number {
  * Classificação do campeonato até aqui, derivada do `ordem` de cada `ResultadoCorrida` (nunca um total guardado).
  * `resultados` na ordem em que as pistas foram corridas — a última da lista é "a última pista" do desempate.
  */
-export function classificacao(resultados: readonly ResultadoCorrida[]): readonly ClassificacaoItem[] {
+export function classificacao(resultados: readonly PistaComOrdem[]): readonly ClassificacaoItem[] {
   const pontos = new Map<IdPersonagem, number>();
   const vitorias = new Map<IdPersonagem, number>();
   const ultimaPosicao = new Map<IdPersonagem, number>();
@@ -74,7 +78,7 @@ export type SituacaoCampeonato = (typeof SITUACOES_CAMPEONATO)[number];
  * jogador for MAIOR que o de CADA um dos adversários (plano C-D1: "vence quem tiver total > cada um dos 5" —
  * empate em pontos não é vitória), senão `'perdido'`.
  */
-export function situacao(resultados: readonly ResultadoCorrida[], jogador: IdPersonagem, totalPistas = 5): SituacaoCampeonato {
+export function situacao(resultados: readonly PistaComOrdem[], jogador: IdPersonagem, totalPistas = 5): SituacaoCampeonato {
   if (resultados.length < totalPistas) return 'andamento';
   const tabela = classificacao(resultados);
   const pontosJogador = tabela.find((c) => c.id === jogador)?.pontos ?? 0;
@@ -88,13 +92,12 @@ export function iniciarCampeonato(semente: number, personagem: IdPersonagem): Es
 }
 
 /**
- * Registra o resultado de UMA pista no `EstadoCampeonato` (avança a etapa). Só grava a posição do JOGADOR
- * (`PistaConcluidaCampeonato` — ver a pendência no topo do arquivo sobre o que isso implica entre sessões). Pura:
- * devolve um estado novo, nunca muta `estado`.
+ * Registra o resultado de UMA pista no `EstadoCampeonato` (avança a etapa): grava o pódio COMPLETO (`ordem`), não
+ * só a posição do jogador — é o que permite `classificacao`/`situacao` funcionarem depois de um reload (ver
+ * comentário no topo do arquivo). Pura: devolve um estado novo, nunca muta `estado`.
  */
 export function registrarResultado(estado: EstadoCampeonato, resultado: ResultadoCorrida, jogador: IdPersonagem): EstadoCampeonato {
-  const posicao = resultado.ordem.indexOf(jogador) + 1;
-  const pista: PistaConcluidaCampeonato = { pista: resultado.pista, ordem: posicao, ticks: resultado.ticks[jogador] ?? 0 };
+  const pista: PistaConcluidaCampeonato = { pista: resultado.pista, ordem: resultado.ordem, ticks: resultado.ticks[jogador] ?? 0 };
   const pistasConcluidas = [...estado.pistasConcluidas, pista];
   const etapa = Math.min(5, pistasConcluidas.length) as EstadoCampeonato['etapa'];
   return { ...estado, pistasConcluidas, etapa };

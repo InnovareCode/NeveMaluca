@@ -76,6 +76,13 @@ export interface OpcoesCenaCorrida {
   readonly personagem?: string | undefined;
   /** Id da pista a carregar (`data/pistas.ts`). Sem ele, ou id desconhecido, cai no `morro-do-pinhao`. */
   readonly pista?: string | undefined;
+  /**
+   * Nível roteirizado da IA desta pista (plano C-D5: "pista 1 ~0, pista 5 ~+12"), repassado a
+   * `ParticipanteCorrida.piloto.nivel` de cada rival (`ui/cenas/campeonato.ts` decide a tabela por etapa). Sem ele,
+   * nível 0 -- mesmo padrão de antes do campeonato completo existir. `corrida/ia.ts` (motor, intocado aqui) ainda
+   * não LÊ este campo: threaded agora pro dia em que a IA escalar de verdade por pista.
+   */
+  readonly nivelIA?: number | undefined;
 }
 
 export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
@@ -85,15 +92,24 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   const idJogadorPedido = opcoes.personagem ?? 'capi';
   const idJogador = PERSONAGENS_DE_DADOS.some((d) => d.id === idJogadorPedido) ? idJogadorPedido : 'capi';
 
+  const nivelIA = opcoes.nivelIA ?? 0;
   // O elenco inteiro corre (plano §C2b: jogador + 5 rivais de IA) -- mesmo padrão de `ferramentas/harness-corrida`.
   const participantes: ParticipanteCorrida[] = PERSONAGENS_DE_DADOS.map((def) => ({
     id: def.id,
     config: def,
-    piloto: def.id === idJogador ? { tipo: 'jogador' } : { tipo: 'ia', perfil: def.id, nivel: 0 },
+    piloto: def.id === idJogador ? { tipo: 'jogador' } : { tipo: 'ia', perfil: def.id, nivel: nivelIA },
   }));
   const totalCorredores = participantes.length;
 
-  const corrida: Corrida = criarCorrida({ pista, semente: pista.semente, participantes });
+  // Repassa `opcoes.save?.evolucao` ao núcleo (C6, Vega acabou de ligar `criarCorrida({evolucao})` ->
+  // `descida/atributos.ts` -> `aplicarEvolucao`) -- sem ela, todos correm no nível 0 (idêntico à ficha, como
+  // antes do C6). `exactOptionalPropertyTypes`: só inclui a chave quando há evolução de verdade.
+  const corrida: Corrida = criarCorrida({
+    pista,
+    semente: pista.semente,
+    participantes,
+    ...(opcoes.save?.evolucao !== undefined ? { evolucao: opcoes.save.evolucao } : {}),
+  });
 
   const entrada: Entrada = criarEntrada(opcoes.canvas, opcoes.janela ?? window, { teclado: { aoPausar: opcoes.aoPausar } });
   const camera: Camera = criarCamera(0, 0);

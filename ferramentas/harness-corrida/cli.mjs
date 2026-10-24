@@ -89,6 +89,9 @@ function medirManobrasDoJogador(m, pistaGerada, def, camada, sementeDaCorrida, i
   let pulosDeKickerComMortal = 0;
   let emVooDeKicker = false;
   let mortalNoVooAtual = false;
+  // C4: avisos e bônus "por um fio" do jogador (prova de que o bot de fato vê/reage aos obstáculos altos).
+  let avisosObstaculo = 0;
+  let obstaculosRente = 0;
   for (let i = 0; i < maxTicks && leitura.jogador.fase !== 'chegou'; i++) {
     const xAntes = leitura.jogador.piloto.x;
     leitura = corrida.processar(bot(leitura.jogador));
@@ -110,10 +113,22 @@ function medirManobrasDoJogador(m, pistaGerada, def, camada, sementeDaCorrida, i
         }
         emVooDeKicker = false;
         mortalNoVooAtual = false;
+      } else if (ev.tipo === 'aviso-obstaculo') {
+        avisosObstaculo++;
+      } else if (ev.tipo === 'obstaculo-rente') {
+        obstaculosRente++;
       }
     }
   }
-  return { mortais, pulosDeKicker, pulosDeKickerComMortal, ticks: leitura.jogador.tick, chegou: leitura.jogador.fase === 'chegou' };
+  return {
+    mortais,
+    pulosDeKicker,
+    pulosDeKickerComMortal,
+    avisosObstaculo,
+    obstaculosRente,
+    ticks: leitura.jogador.tick,
+    chegou: leitura.jogador.fase === 'chegou',
+  };
 }
 
 async function main() {
@@ -124,7 +139,9 @@ async function main() {
     const pistasOficiais = m.data.PISTAS_DE_DADOS.map((def) => ({ id: def.id, def, gerada: m.pista.gerarPista(def) }));
     console.log(`Harness da corrida: ${personagens.length} personagens x ${pistasOficiais.length} pistas oficiais x ${a.sementes} sementes de corrida (base ${a.base}).`);
 
-    const bots = (pistaGerada) => ({ bot: m.descida.criarBotCuidadoso(pistaGerada) });
+    // C4: `obstaculosAltos` vem da MESMA camada que `criarCorrida({def})` gera por dentro (pura/determinística) —
+    // sem passar pro bot externo, ele nunca agacha e trava toda combinação em algum "galho" (ver cli.mjs §topo).
+    const bots = (pistaGerada, def) => ({ bot: m.descida.criarBotCuidadoso(pistaGerada, {}, m.pista.gerarCamadaJogo(pistaGerada, def).obstaculosAltos) });
     const falhas = [];
     let combinacoes = 0;
     for (const idJogador of personagens) {
@@ -132,7 +149,7 @@ async function main() {
         for (let s = 0; s < a.sementes; s++) {
           const semente = a.base + s;
           combinacoes++;
-          const { bot } = bots(gerada);
+          const { bot } = bots(gerada, def);
           const { jogadorChegou, resultado } = rodarCorrida(m, gerada, def, semente, idJogador, bot, a.maxTicks);
           const seisChegaram = resultado.ordem.length === personagens.length && new Set(resultado.ordem).size === personagens.length;
           if (!jogadorChegou || !seisChegaram) {
@@ -147,8 +164,10 @@ async function main() {
 
     // Determinismo: repete uma combinação (o caso que travava antes: Beto no Vulcão) e confere resultado IDÊNTICO.
     const vulcao = pistasOficiais.find((p) => p.id === 'vulcao-pe-gelado');
-    const r1 = rodarCorrida(m, vulcao.gerada, vulcao.def, 1, 'beto', m.descida.criarBotCuidadoso(vulcao.gerada), a.maxTicks);
-    const r2 = rodarCorrida(m, vulcao.gerada, vulcao.def, 1, 'beto', m.descida.criarBotCuidadoso(vulcao.gerada), a.maxTicks);
+    const { bot: botVulcao1 } = bots(vulcao.gerada, vulcao.def);
+    const { bot: botVulcao2 } = bots(vulcao.gerada, vulcao.def);
+    const r1 = rodarCorrida(m, vulcao.gerada, vulcao.def, 1, 'beto', botVulcao1, a.maxTicks);
+    const r2 = rodarCorrida(m, vulcao.gerada, vulcao.def, 1, 'beto', botVulcao2, a.maxTicks);
     const determinístico = JSON.stringify(r1.resultado) === JSON.stringify(r2.resultado);
     console.log(`Determinismo (beto, vulcao-pe-gelado, semente 1, repetido): ${determinístico ? 'OK' : 'DIVERGIU'}.`);
     if (!determinístico) falhas.push({ determinismo: false });
@@ -166,11 +185,13 @@ async function main() {
     let totalPulosKickerComMortal = 0;
     let totalTicksManobreiro = 0;
     let totalTicksCuidadoso = 0;
+    let totalObstaculosAltos = 0;
+    let totalRentes = 0;
     for (const { def, gerada } of pistasOficiais) {
       const config = m.descida.configDoPersonagem('capi');
-      const manobreiro = m.descida.criarBotManobreiro(gerada, config, { ousadia: 2 });
-      const cuidadoso = m.descida.criarBotCuidadoso(gerada);
       const camada = m.pista.gerarCamadaJogo(gerada, def);
+      const manobreiro = m.descida.criarBotManobreiro(gerada, config, { ousadia: 2 }, camada.obstaculosAltos);
+      const cuidadoso = m.descida.criarBotCuidadoso(gerada, {}, camada.obstaculosAltos);
 
       const doManobreiro = medirManobrasDoJogador(m, gerada, def, camada, SEMENTE_CALIBRAGEM, 'capi', manobreiro, a.maxTicks);
       const doCuidadoso = rodarCorrida(m, gerada, def, SEMENTE_CALIBRAGEM, 'capi', cuidadoso, a.maxTicks);
@@ -182,9 +203,11 @@ async function main() {
       totalPulosKickerComMortal += doManobreiro.pulosDeKickerComMortal;
       totalTicksManobreiro += doManobreiro.ticks;
       totalTicksCuidadoso += doCuidadoso.ticksJogador;
+      totalObstaculosAltos += camada.obstaculosAltos.length;
+      totalRentes += doManobreiro.obstaculosRente;
 
       console.log(
-        `  ${def.id}: kickers=${camada.kickers.length} mortais=${doManobreiro.mortais} pulosDeKicker=${doManobreiro.pulosDeKicker} comMortal=${doManobreiro.pulosDeKickerComMortal} (${(razaoKicker * 100).toFixed(0)}%) | ticksManobreiro=${doManobreiro.ticks} ticksCuidadoso=${doCuidadoso.ticksJogador} (${((razaoTempo - 1) * 100).toFixed(1)}%)`,
+        `  ${def.id}: kickers=${camada.kickers.length} galhos=${camada.obstaculosAltos.length} mortais=${doManobreiro.mortais} pulosDeKicker=${doManobreiro.pulosDeKicker} comMortal=${doManobreiro.pulosDeKickerComMortal} (${(razaoKicker * 100).toFixed(0)}%) | ticksManobreiro=${doManobreiro.ticks} ticksCuidadoso=${doCuidadoso.ticksJogador} (${((razaoTempo - 1) * 100).toFixed(1)}%) | avisos=${doManobreiro.avisosObstaculo} rente=${doManobreiro.obstaculosRente}`,
       );
       if (!doManobreiro.chegou) falhas.push({ criterio: 'manobreiro-nao-chegou', pista: def.id });
     }
@@ -197,6 +220,13 @@ async function main() {
     if (mortaisPorPistaMedia < 3) falhas.push({ criterio: 'mortais-por-pista-agregado', mortaisPorPistaMedia });
     if (razaoKickerAgregada < 0.3) falhas.push({ criterio: 'kicker-mortal-agregado', razaoKickerAgregada });
     if (razaoTempoAgregada > 1.02) falhas.push({ criterio: 'manobrar-nao-compensa-no-tempo', razaoTempoAgregada });
+
+    // --- C4: obstáculo alto de fato existe nas 5 pistas e o manobreiro (ousadia 2, mais afoito) consegue um "por
+    // um fio" em algum lugar — se nunca aparecer, ou o bot está agachando cedo demais (sem reflexo), ou a geração
+    // não está plantando galho nenhum (ambos seriam regressão silenciosa, não "deu zero porque é raro mesmo").
+    console.log(`Obstáculo alto (C4): ${totalObstaculosAltos} galhos nas 5 pistas, ${totalRentes} "por um fio" (manobreiro).`);
+    if (totalObstaculosAltos === 0) falhas.push({ criterio: 'obstaculo-alto-nao-gerado', totalObstaculosAltos });
+    if (totalRentes === 0) falhas.push({ criterio: 'obstaculo-rente-nunca-aconteceu', totalRentes });
 
     process.exitCode = falhas.length > 0 ? 1 : 0;
   } finally {

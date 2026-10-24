@@ -11,13 +11,15 @@
  * O estado do save (audio on/off, modo de controles) mora aqui, com UM ponto de gravação (`salvarSave`),
  * conforme o comentário de C4. A tela de opções só avisa "alternou"; quem grava é este arquivo.
  */
-import type { ReplayV1 } from '../../core/contratos';
+import type { EstadoCampeonato, Evolucao, IdPersonagem, ReplayV1, ResultadoCorrida } from '../../core/contratos';
 import { validarReplayV1 } from '../../core/replay';
-import { PISTA_MORRO_DO_PINHAO } from '../../data/pistas';
+import { comprarNivel } from '../../data/evolucao';
+import { PISTA_MORRO_DO_PINHAO, PISTAS_DE_DADOS } from '../../data/pistas';
 import { REGRAS_SAVE, VERSAO_PROVISORIA_DA_PISTA } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { AudioDestravavel } from '../../audio/index';
+import { iniciarCampeonato, registrarResultado, situacao } from '../../meta/campeonato';
 import type { ArmazenamentoLike, Recorde, ReplayOpaco, SaveV1 } from '../../meta/tipos';
 import { inserirFantasma, inserirRecorde, salvarSave } from '../../meta/storage';
 import type { Ctx } from '../../platform/canvas';
@@ -111,6 +113,58 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
     aplicarSave(comFantasma);
     persistirConfig();
   }
+
+  /** Evolução entre campeonatos (plano C-D3/C-D4): carteira de flocos + nível por personagem; ausente = nunca comprou. */
+  const obterEvolucao = (): Evolucao => opcoes.save.evolucao ?? { flocos: 0, niveis: {} };
+
+  /**
+   * Inicia/retoma o campeonato (plano §C5b: "salva após cada corrida, dá pra retomar no meio"): se já existe um
+   * `EstadoCampeonato` com etapa < 5 no save, RETOMA ele (mesmo que o personagem escolhido no menu agora seja
+   * outro — continuidade de progresso vale mais que a escolha mais recente). Só começa um campeonato NOVO quando
+   * não há nenhum em andamento, ou o anterior já tinha decidido (etapa 5). Semente derivada do relógio (não
+   * `Math.random`, proibido em `src/`) — mesmo espírito do "desafio do dia" de `diario`.
+   */
+  const iniciarOuRetomarCampeonato = (personagem: string): EstadoCampeonato => {
+    const existente = opcoes.save.campeonato;
+    if (existente && existente.etapa < 5) return existente;
+    const novo = iniciarCampeonato(Date.now() >>> 0, personagem);
+    opcoes.save.campeonato = novo;
+    persistirConfig();
+    return novo;
+  };
+
+  /**
+   * Registra o pódio COMPLETO de UMA pista do campeonato (avança a etapa, credita os flocos da corrida na
+   * carteira de evolução e, se essa foi a 5ª pista e o jogador venceu, grava o troféu — plano C-D9). Único ponto
+   * de escrita desses três campos (mesma convenção de `registrarResultadoDescida`).
+   */
+  const registrarResultadoCampeonato = (resultado: ResultadoCorrida): EstadoCampeonato => {
+    const atual = opcoes.save.campeonato ?? iniciarOuRetomarCampeonato(obterPersonagemAtivo());
+    const jogador: IdPersonagem = atual.personagem;
+    const novoEstado = registrarResultado(atual, resultado, jogador);
+    opcoes.save.campeonato = novoEstado;
+
+    const evolucaoAtual = obterEvolucao();
+    opcoes.save.evolucao = { ...evolucaoAtual, flocos: evolucaoAtual.flocos + resultado.flocosGanhos };
+
+    if (novoEstado.etapa >= 5 && situacao(novoEstado.pistasConcluidas, jogador, PISTAS_DE_DADOS.length) === 'vencido') {
+      const trofeusAtuais = opcoes.save.trofeus ?? [];
+      if (!trofeusAtuais.includes(jogador)) opcoes.save.trofeus = [...trofeusAtuais, jogador];
+    }
+
+    persistirConfig();
+    return novoEstado;
+  };
+
+  /** Compra um nível de evolução do personagem (`data/evolucao.ts` → `comprarNivel`, pura); persiste se comprou. */
+  const comprarUpgradeCampeonato = (personagem: string): Evolucao => {
+    const { evolucao: novaEvolucao, comprou } = comprarNivel(obterEvolucao(), personagem);
+    if (comprou) {
+      opcoes.save.evolucao = novaEvolucao;
+      persistirConfig();
+    }
+    return opcoes.save.evolucao ?? novaEvolucao;
+  };
 
   /** Personagem ativo: escolha do jogador, ou o primeiro inicial do catálogo quando ele nunca escolheu (implícito, nunca gravado por padrão). */
   const obterPersonagemAtivo = (): string => opcoes.save.personagemAtivo ?? REGRAS_SAVE.iniciais[0] ?? 'capi';
@@ -226,8 +280,9 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoResultado: registrarResultadoDescida,
         });
       case 'campeonato':
-        // Por ora roda UMA corrida na pista ativa (plano "corrida em campeonato" §C2b); o fluxo de campeonato
-        // completo com várias etapas (C5a/C5b) troca o `aoMenu` abaixo por "próxima etapa", sem mudar mais nada.
+        // Campeonato completo (plano "corrida em campeonato" §C5b/C8b): as 5 pistas em sequência, com
+        // standings/oficina entre elas e a tela final. A pista ativa do menu NÃO entra aqui -- o campeonato
+        // sempre corre as 5 na ordem fixa de progressão, começando pela 1ª (ou retomando onde parou).
         return criarCenaCampeonato({
           canvas,
           janela,
@@ -236,7 +291,10 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           audio: opcoes.audio,
           save: opcoes.save,
           personagem: obterPersonagemAtivo(),
-          pista: obterPistaAtiva(),
+          aoIniciarCampeonato: iniciarOuRetomarCampeonato,
+          aoRegistrarResultadoCampeonato: registrarResultadoCampeonato,
+          aoComprarUpgrade: comprarUpgradeCampeonato,
+          obterEvolucao,
         });
       default: {
         const nunca: never = id;

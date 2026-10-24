@@ -13,6 +13,7 @@ import { gerarPista } from '../../src/pista/gerador';
 
 const CMD_PULO: ComandoDescida = { pulo: true, giro: 0, grab: null, agachar: false };
 const CMD_NADA: ComandoDescida = { pulo: false, giro: 0, grab: null, agachar: false };
+const CMD_AGACHAR: ComandoDescida = { pulo: false, giro: 0, grab: null, agachar: true };
 const SEM_CAMADA: CamadaJogo = { itens: [], kickers: [], obstaculosAltos: [], porticoX: 0, versao: '1', hash: '0000000000000000' };
 
 describe('motor + camada: kicker estende o impulso do pulo', () => {
@@ -110,5 +111,73 @@ describe('motor + camada: turbo de pouso (C-D7)', () => {
     while (leitura.fase === 'tombo') leitura = motor.processar(CMD_NADA);
     expect(leitura.fase).toBe('descendo');
     expect(leitura.piloto.velocidade).toBeCloseTo(CONFIG_PADRAO.velocidadeRespawnMs, 3);
+  });
+});
+
+describe('motor + camada: obstáculo alto (C4) — só passa agachado', () => {
+  const OBSTACULO: CamadaJogo = { ...SEM_CAMADA, obstaculosAltos: [{ tipo: 'galho', x: 8, largura: 2, altura: 1.3, variante: 0 }] };
+
+  it('sem agachar, tomba ao tocar o obstáculo (causa "obstaculo", igual ao obstáculo duro)', () => {
+    const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
+    const motor = criarDescida(pista, CONFIG_PADRAO, { camada: OBSTACULO });
+    let leitura = motor.leitura();
+    let tombouPorObstaculo = false;
+    for (let i = 0; i < 1000 && leitura.fase !== 'tombo'; i++) {
+      leitura = motor.processar(CMD_NADA);
+      if (leitura.eventos.some((e) => e.tipo === 'tombo' && e.causa === 'obstaculo')) tombouPorObstaculo = true;
+    }
+    expect(leitura.fase).toBe('tombo');
+    expect(tombouPorObstaculo).toBe(true);
+  });
+
+  it('agachado desde o início (cautela, sem reflexo), atravessa sem tombar e SEM o bônus "por um fio"', () => {
+    const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
+    const motor = criarDescida(pista, CONFIG_PADRAO, { camada: OBSTACULO });
+    let leitura = motor.leitura();
+    let rente = false;
+    for (let i = 0; i < 1000 && leitura.piloto.x < 11; i++) {
+      leitura = motor.processar(CMD_AGACHAR);
+      if (leitura.eventos.some((e) => e.tipo === 'obstaculo-rente')) rente = true;
+      expect(leitura.fase).not.toBe('tombo');
+    }
+    expect(leitura.piloto.x).toBeGreaterThanOrEqual(11);
+    expect(rente).toBe(false);
+  });
+
+  it('agacha só de ÚLTIMA hora (reflexo): atravessa E ganha o bônus "por um fio"', () => {
+    const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
+    const motor = criarDescida(pista, CONFIG_PADRAO, { camada: OBSTACULO });
+    let leitura = motor.leitura();
+    let rente = false;
+    for (let i = 0; i < 1000 && leitura.piloto.x < 11; i++) {
+      const quaseLa = leitura.piloto.x < 8 && 8 - leitura.piloto.x <= 0.5;
+      leitura = motor.processar(quaseLa ? CMD_AGACHAR : CMD_NADA);
+      if (leitura.eventos.some((e) => e.tipo === 'obstaculo-rente')) rente = true;
+      expect(leitura.fase).not.toBe('tombo');
+    }
+    expect(rente).toBe(true);
+  });
+
+  it('emite "aviso-obstaculo" ANTES de alcançar o obstáculo, 1x só', () => {
+    const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
+    const motor = criarDescida(pista, CONFIG_PADRAO, { camada: OBSTACULO });
+    let leitura = motor.leitura();
+    let avisos = 0;
+    for (let i = 0; i < 1000 && leitura.piloto.x < 11; i++) {
+      const xAntes = leitura.piloto.x;
+      leitura = motor.processar(CMD_AGACHAR);
+      for (const e of leitura.eventos) if (e.tipo === 'aviso-obstaculo') { avisos++; expect(xAntes).toBeLessThan(8); }
+    }
+    expect(avisos).toBe(1);
+  });
+
+  it('sem camada, nunca emite aviso/rente/tombo por obstáculo alto (comportamento de antes do C4 intacto)', () => {
+    const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
+    const motor = criarDescida(pista, CONFIG_PADRAO);
+    let leitura = motor.leitura();
+    for (let i = 0; i < 300; i++) {
+      leitura = motor.processar(CMD_NADA);
+      expect(leitura.eventos.some((e) => e.tipo === 'aviso-obstaculo' || e.tipo === 'obstaculo-rente')).toBe(false);
+    }
   });
 });

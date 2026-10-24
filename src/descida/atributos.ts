@@ -13,9 +13,10 @@
  * equilíbrio 110 — plano §A.1, "atenção à escala"). Por isso a referência entra pelo próprio catálogo, não por uma
  * constante separada.
  */
-import type { Atributo, DefPersonagem, IdPersonagem } from '../core/contratos';
+import type { Atributo, DefPersonagem, Evolucao, IdPersonagem } from '../core/contratos';
 import { ATRIBUTOS } from '../core/contratos';
 import { ErroDeContrato } from '../core/erros';
+import { ATRIBUTOS_EVOLUCAO, NIVEL_MAXIMO_EVOLUCAO, PASSO_ATRIBUTO_POR_NIVEL, type AtributoEvolucao } from '../data/evolucao';
 import { PERSONAGENS_DE_DADOS } from '../data/personagens';
 import { CONFIG_PADRAO, type ConfigDescida } from './constantes';
 
@@ -89,4 +90,44 @@ export function configDoPersonagem(
   if (!ref) throw new ErroDeContrato('contrato-invalido', `configDoPersonagem: referência "${PERSONAGEM_REFERENCIA}" não está no catálogo`);
   const def = catalogo.find((d) => d.id === id) ?? ref;
   return aplicarAtributos(def, ref, mapa, base);
+}
+
+/**
+ * Upgrade entre campeonatos (plano C-D3/C-D4/C6, `aplicarEvolucao(config, def, niveis)`): CAMADA por cima da
+ * `config` (já resolvida por `configDoPersonagem`) — nunca um 2º caminho até `ConfigDescida`, pela MESMA conta de
+ * `aplicarAtributos` (fator relativo, `data/evolucao.ts` → `PASSO_ATRIBUTO_POR_NIVEL` no lugar da diferença de
+ * ficha). Só 3 atributos de evolução (`ATRIBUTOS_EVOLUCAO`: velocidade/equilíbrio/força — giro fica FORA, plano
+ * C-D4), "força" empurra os 2 campos de `MAPA_ATRIBUTOS.pulo` + `MAPA_ATRIBUTOS.aceleracao` (pulo+embalo).
+ *
+ * Nível 0 (sem `niveis[def.id]`, como todo chamador de antes do C6) devolve a PRÓPRIA `config`, sem alocar nem
+ * passar pelo laço — IDÊNTICO por construção (plano C-D3: "no nível 0 é idêntico"), não só por o fator dar `1`.
+ */
+const ATRIBUTOS_DA_FORCA: readonly Atributo[] = ['aceleracao', 'pulo'];
+const ATRIBUTOS_DE_EVOLUCAO_PARA_MOTOR: Readonly<Record<AtributoEvolucao, readonly Atributo[]>> = {
+  velocidade: ['velocidade'],
+  equilibrio: ['equilibrio'],
+  forca: ATRIBUTOS_DA_FORCA,
+};
+
+export function aplicarEvolucao(
+  config: ConfigDescida,
+  def: DefPersonagem,
+  niveis: Evolucao['niveis'],
+  mapa: Readonly<Record<Atributo, readonly RegraAtributo[]>> = MAPA_ATRIBUTOS,
+): ConfigDescida {
+  const bruto = niveis[def.id] ?? 0;
+  const nivel = bruto < 0 ? 0 : bruto > NIVEL_MAXIMO_EVOLUCAO ? NIVEL_MAXIMO_EVOLUCAO : bruto;
+  if (nivel <= 0) return config;
+
+  const diferenca = nivel * PASSO_ATRIBUTO_POR_NIVEL;
+  let resultado = config;
+  for (const atributoEvolucao of ATRIBUTOS_EVOLUCAO) {
+    for (const atributo of ATRIBUTOS_DE_EVOLUCAO_PARA_MOTOR[atributoEvolucao]) {
+      for (const regra of mapa[atributo]) {
+        const fator = 1 + (regra.sentido * regra.ganho * diferenca) / 100;
+        resultado = { ...resultado, [regra.campo]: resultado[regra.campo] * fator };
+      }
+    }
+  }
+  return resultado;
 }

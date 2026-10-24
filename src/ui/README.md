@@ -5,11 +5,17 @@ produção desde a integração — `main.ts` agora monta `criarCenaJogo`) e `ce
 (descida jogável com o motor/pista REAIS da Vega, resultado, e a composta que liga as duas). Atlas já plugou
 `criarCenaJogo` em `main.ts` no lugar de `criarCenaBoot`.
 
-**C2b (plano "corrida em campeonato"):** `cenas/{corrida,podio,campeonato}.ts` -- mesmo padrão de
+**C2b/C5b/C8b (plano "corrida em campeonato"):** `cenas/{corrida,podio,campeonato}.ts` -- mesmo padrão de
 `{descida,resultado,jogo}.ts`, mas dirigindo `corrida/criarCorrida` (jogador + 5 rivais de IA) em vez do motor
 solo. `cenas/contagem.ts` tem a contagem "3-2-1-JÁ" compartilhada pelas duas descidas (solo e corrida). O botão
-CAMPEONATO do menu (`gerenciador.ts`: `aoModos`) já liga em `criarCenaCampeonato`; por ora roda UMA corrida
-(a pista ativa), sem etapas/standings (C5a/C5b, ainda não existe).
+CAMPEONATO do menu (`gerenciador.ts`: `aoModos`) liga em `criarCenaCampeonato`, que agora orquestra o
+**campeonato COMPLETO**: abertura (`abertura-campeonato.ts`) -> (corrida -> pódio -> standings
+(`standings-campeonato.ts`) -> oficina (`oficina-campeonato.ts`)) × 4 -> corrida -> pódio -> standings -> final
+(`final-campeonato.ts`), acumulando via `meta/campeonato.ts` (`registrarResultado`/`classificacao`/`situacao`).
+Quem PERSISTE (campeonato em andamento, flocos, troféu, evolução) é sempre `gerenciador.ts`
+(`aoIniciarCampeonato`/`aoRegistrarResultadoCampeonato`/`aoComprarUpgrade`), nunca `campeonato.ts` direto -- mesma
+convenção de "um único ponto de escrita" do resto do arquivo. As 4 telas novas usam fundo Pixar raster reaproveitado
+(`fundo-campeonato.ts`, zero crédito Runway novo) -- ver memória `campeonato-telas-reusam-fundo-pixar-sem-credito`.
 
 **Responsabilidade (plano §3.1):** cenas (`ui/cenas/*`: título, descida, resultado), menus e a persistência de
 interface. É a camada que junta o resto.

@@ -413,10 +413,15 @@ describe('pistaAtiva (selecao de pista)', () => {
 describe('campeonato (plano C5a)', () => {
   it('valido passa intacto; etapa e SEMPRE pistasConcluidas.length (nunca o bruto)', () => {
     const c = sanearCampeonato(
-      { semente: 123, personagem: 'kaka', etapa: 99, pistasConcluidas: [{ pista: 'vale', ordem: 2, ticks: 3000 }] },
+      { semente: 123, personagem: 'kaka', etapa: 99, pistasConcluidas: [{ pista: 'vale', ordem: ['pingu', 'kaka', 'yeti'], ticks: 3000 }] },
       REGRAS,
     );
-    expect(c).toEqual({ semente: 123, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem: 2, ticks: 3000 }] });
+    expect(c).toEqual({
+      semente: 123,
+      personagem: 'kaka',
+      etapa: 1,
+      pistasConcluidas: [{ pista: 'vale', ordem: ['pingu', 'kaka', 'yeti'], ticks: 3000 }],
+    });
   });
 
   it('sem semente ou personagem invalido: todo o campeonato e descartado (nao da pra repetir as 5 pistas sem eles)', () => {
@@ -426,22 +431,44 @@ describe('campeonato (plano C5a)', () => {
     for (const lixo of [null, undefined, 5, 'x', []]) expect(sanearCampeonato(lixo, REGRAS)).toBeUndefined();
   });
 
-  it('pistasConcluidas: pista invalida/ordem fora de 1..MAX_CORREDORES/ticks invalido descarta o REGISTRO, nao o campeonato', () => {
+  it('pistasConcluidas: pista invalida/ordem vazia (sem ids do catalogo)/ticks invalido descarta o REGISTRO, nao o campeonato', () => {
     const c = sanearCampeonato(
       {
         semente: 1,
         personagem: 'kaka',
         pistasConcluidas: [
-          { pista: 'vale', ordem: 1, ticks: 100 },
-          { pista: 'pista-fantasma', ordem: 1, ticks: 100 },
-          { pista: 'cume', ordem: MAX_CORREDORES_CAMPEONATO + 1, ticks: 100 },
-          { pista: 'gelo', ordem: 1, ticks: 0 },
+          { pista: 'vale', ordem: ['kaka', 'pingu'], ticks: 100 },
+          { pista: 'pista-fantasma', ordem: ['kaka'], ticks: 100 },
+          { pista: 'cume', ordem: ['fantasma-1', 'fantasma-2'], ticks: 100 },
+          { pista: 'gelo', ordem: ['kaka'], ticks: 0 },
         ],
       },
       REGRAS,
     );
-    expect(c?.pistasConcluidas).toEqual([{ pista: 'vale', ordem: 1, ticks: 100 }]);
+    expect(c?.pistasConcluidas).toEqual([{ pista: 'vale', ordem: ['kaka', 'pingu'], ticks: 100 }]);
     expect(c?.etapa).toBe(1);
+  });
+
+  it('ordem: ids fora do catalogo e repetidos sao descartados', () => {
+    const c = sanearCampeonato(
+      {
+        semente: 1,
+        personagem: 'kaka',
+        pistasConcluidas: [{ pista: 'vale', ordem: ['kaka', 'fantasma', 'kaka', 'pingu', 'yeti', 'pingu', 'yeti', 'kaka'], ticks: 100 }],
+      },
+      REGRAS,
+    );
+    expect(c?.pistasConcluidas[0]?.ordem).toEqual(['kaka', 'pingu', 'yeti']);
+  });
+
+  it('ordem: teto em MAX_CORREDORES_CAMPEONATO ids, mesmo com um catalogo maior', () => {
+    const catalogoGrande: RegrasSave = { ...REGRAS, personagens: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] };
+    const c = sanearCampeonato(
+      { semente: 1, personagem: 'a', pistasConcluidas: [{ pista: 'vale', ordem: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ticks: 100 }] },
+      catalogoGrande,
+    );
+    expect(c?.pistasConcluidas[0]?.ordem).toHaveLength(MAX_CORREDORES_CAMPEONATO);
+    expect(c?.pistasConcluidas[0]?.ordem).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
   it('pista repetida: so a primeira ocorrencia conta; teto no tamanho do catalogo de pistas', () => {
@@ -450,20 +477,20 @@ describe('campeonato (plano C5a)', () => {
         semente: 1,
         personagem: 'kaka',
         pistasConcluidas: [
-          { pista: 'vale', ordem: 1, ticks: 100 },
-          { pista: 'vale', ordem: 3, ticks: 200 },
-          { pista: 'cume', ordem: 2, ticks: 300 },
-          { pista: 'gelo', ordem: 2, ticks: 300 },
+          { pista: 'vale', ordem: ['kaka'], ticks: 100 },
+          { pista: 'vale', ordem: ['yeti'], ticks: 200 },
+          { pista: 'cume', ordem: ['pingu'], ticks: 300 },
+          { pista: 'gelo', ordem: ['pingu'], ticks: 300 },
         ],
       },
       REGRAS,
     );
     expect(c?.pistasConcluidas.map((p) => p.pista)).toEqual(['vale', 'cume', 'gelo']); // REGRAS so tem 3 pistas
-    expect(c?.pistasConcluidas[0]).toEqual({ pista: 'vale', ordem: 1, ticks: 100 });
+    expect(c?.pistasConcluidas[0]).toEqual({ pista: 'vale', ordem: ['kaka'], ticks: 100 });
   });
 
   it('nao muta a entrada; idempotente dentro de sanearSave', () => {
-    const bruto = { semente: 1, personagem: 'kaka', pistasConcluidas: [{ pista: 'vale', ordem: 1, ticks: 100 }] };
+    const bruto = { semente: 1, personagem: 'kaka', pistasConcluidas: [{ pista: 'vale', ordem: ['kaka'], ticks: 100 }] };
     const antes = JSON.stringify(bruto);
     sanearCampeonato(bruto, REGRAS);
     expect(JSON.stringify(bruto)).toBe(antes);
@@ -531,13 +558,13 @@ describe('sanearSave', () => {
     const cheio = sanearSave(
       {
         ...saveCheio(),
-        campeonato: { semente: 1, personagem: 'kaka', pistasConcluidas: [{ pista: 'vale', ordem: 1, ticks: 10 }] },
+        campeonato: { semente: 1, personagem: 'kaka', pistasConcluidas: [{ pista: 'vale', ordem: ['kaka'], ticks: 10 }] },
         trofeus: ['kaka', 'kaka'],
         evolucao: { flocos: 30, niveis: { kaka: 2 } },
       },
       REGRAS,
     );
-    expect(cheio.campeonato).toEqual({ semente: 1, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem: 1, ticks: 10 }] });
+    expect(cheio.campeonato).toEqual({ semente: 1, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem: ['kaka'], ticks: 10 }] });
     expect(cheio.trofeus).toEqual(['kaka']);
     expect(cheio.evolucao).toEqual({ flocos: 30, niveis: { kaka: 2 } });
 

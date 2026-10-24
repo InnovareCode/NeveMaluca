@@ -133,11 +133,19 @@ describe('ciclo de vida do EstadoCampeonato', () => {
     expect(iniciarCampeonato(42, 'kaka')).toEqual({ semente: 42, personagem: 'kaka', etapa: 0, pistasConcluidas: [] });
   });
 
-  it('registrarResultado: acrescenta a posicao do jogador e avanca a etapa; nao muta o estado anterior', () => {
+  it('registrarResultado: grava o podio COMPLETO (nao so a posicao do jogador) e avanca a etapa; nao muta o estado anterior', () => {
     const estado0 = iniciarCampeonato(1, 'kaka');
-    const r = resultado('vale', [SEIS[2] as string, 'kaka', ...SEIS.slice(3)]); // kaka em 2o
+    const ordem = [SEIS[2] as string, 'kaka', ...SEIS.slice(3)]; // kaka em 2o
+    const r = resultado('vale', ordem);
     const estado1 = registrarResultado(estado0, r, 'kaka');
     expect(estado0.etapa).toBe(0);
-    expect(estado1).toEqual({ semente: 1, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem: 2, ticks: r.ticks['kaka'] }] });
+    expect(estado1).toEqual({ semente: 1, personagem: 'kaka', etapa: 1, pistasConcluidas: [{ pista: 'vale', ordem, ticks: r.ticks['kaka'] }] });
+  });
+
+  it('classificacao/situacao funcionam direto sobre EstadoCampeonato.pistasConcluidas (apos reload, sem o ResultadoCorrida rico)', () => {
+    let estado = iniciarCampeonato(1, 'jogador');
+    for (let i = 0; i < 5; i++) estado = registrarResultado(estado, resultado(`pista-${i}`, [...SEIS]), 'jogador');
+    expect(situacao(estado.pistasConcluidas, 'jogador')).toBe('vencido');
+    expect(classificacao(estado.pistasConcluidas)[0]?.id).toBe('jogador');
   });
 });

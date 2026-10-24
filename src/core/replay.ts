@@ -11,7 +11,7 @@
  */
 import { TETO_PONTOS, TETO_TICKS_REPLAY, FORMA_ID } from './constantes';
 import { comandoCompartilhado, byteDoComando } from './comandos';
-import type { ComandoDescida, ReplayV1 } from './contratos';
+import { MODOS_DESCIDA, type ComandoDescida, type ModoDescida, type ReplayV1, type ReplayV2 } from './contratos';
 import { falha, ok, type Resultado } from './erros';
 import { FORMATO_HASH } from './hash';
 
@@ -124,16 +124,13 @@ function inteiroEm(x: unknown, min: number, max: number): x is number {
   return typeof x === 'number' && Number.isInteger(x) && x >= min && x <= max;
 }
 
-/**
- * Valida um `ReplayV1` de fora. Devolve uma CÓPIA só com os campos conhecidos (campo extra é descartado, não repassado).
- * Confere formato, limites e que os comandos decodificam; NÃO reexecuta o motor (isso é do `descida/`, que compara o
- * `hashFinal`). `resultado.ticks` não pode passar da quantidade de comandos gravados.
- */
-export function validarReplayV1(x: unknown, maxTicks: number = TETO_TICKS_REPLAY): Resultado<ReplayV1> {
-  if (typeof x !== 'object' || x === null || Array.isArray(x)) return falha(['replay: não é um objeto']);
-  const o = x as Record<string, unknown>;
+/** Campos comuns a `ReplayV1`/`ReplayV2` (tudo, menos `v` e os campos novos do V2). */
+type CamposBaseReplay = Omit<ReplayV1, 'v'>;
+
+/** Valida os campos comuns a QUALQUER versão de replay (tudo, menos `v`). Compartilhado por `validarReplayV1`/`V2`
+ *  para as duas nunca divergirem silenciosamente numa regra (ex. o teto de `versaoMotor`). */
+function validarCamposBaseReplay(o: Record<string, unknown>, maxTicks: number): { erros: string[]; base: CamposBaseReplay | null } {
   const erros: string[] = [];
-  if (o['v'] !== 1) erros.push('replay.v: só a versão 1 é conhecida');
   if (typeof o['pista'] !== 'string' || !FORMA_ID.test(o['pista'])) erros.push('replay.pista: id inválido');
   if (typeof o['hashPista'] !== 'string' || !FORMATO_HASH.test(o['hashPista'])) erros.push('replay.hashPista: precisa ter 16 dígitos hexadecimais minúsculos');
   if (!inteiroEm(o['semente'], 0, SEMENTE_MAX)) erros.push('replay.semente: precisa ser inteiro de 0 a 4294967295');
@@ -166,15 +163,117 @@ export function validarReplayV1(x: unknown, maxTicks: number = TETO_TICKS_REPLAY
     else resultado = { pontos: ro['pontos'] as number, ticks: ro['ticks'] as number, hashFinal: ro['hashFinal'] as string };
   }
 
-  if (erros.length > 0 || resultado === null) return falha(erros);
+  if (erros.length > 0 || resultado === null) return { erros, base: null };
+  return {
+    erros,
+    base: {
+      pista: o['pista'] as string,
+      hashPista: o['hashPista'] as string,
+      semente: o['semente'] as number,
+      personagem: o['personagem'] as string,
+      versaoMotor: o['versaoMotor'] as string,
+      comandos: o['comandos'] as string,
+      resultado,
+    },
+  };
+}
+
+/**
+ * Valida um `ReplayV1` de fora. Devolve uma CÓPIA só com os campos conhecidos (campo extra é descartado, não repassado).
+ * Confere formato, limites e que os comandos decodificam; NÃO reexecuta o motor (isso é do `descida/`, que compara o
+ * `hashFinal`). `resultado.ticks` não pode passar da quantidade de comandos gravados.
+ */
+export function validarReplayV1(x: unknown, maxTicks: number = TETO_TICKS_REPLAY): Resultado<ReplayV1> {
+  if (typeof x !== 'object' || x === null || Array.isArray(x)) return falha(['replay: não é um objeto']);
+  const o = x as Record<string, unknown>;
+  const erros: string[] = [];
+  if (o['v'] !== 1) erros.push('replay.v: só a versão 1 é conhecida (use validarReplayV2 para v:2)');
+  const { erros: errosBase, base } = validarCamposBaseReplay(o, maxTicks);
+  erros.push(...errosBase);
+  if (erros.length > 0 || base === null) return falha(erros);
+  return ok({ v: 1, ...base });
+}
+
+// --- ReplayV2 (plano `docs/plano-corrida-campeonato.md` §Arquitetura, C6) ---
+
+/** Mesmo teto de `data/evolucao.ts` (`NIVEL_MAXIMO_EVOLUCAO`) e `meta/storage.ts` (`TETO_NIVEL_EVOLUCAO`). `core/`
+ *  não importa `data/` (varredura de arquitetura, plano §3.1) — por isso duplicado, não importado de lá. */
+const NIVEL_EVOLUCAO_MAX_REPLAY = 5;
+/** Generoso para o elenco real (6 personagens hoje): o replay é dado de fora, nunca confia no tamanho declarado. */
+const MAX_PERSONAGENS_NIVEIS_REPLAY = 64;
+/** Mesmo teto de `meta/storage.ts` (`MAX_CORREDORES_CAMPEONATO`) menos o próprio jogador. */
+const MAX_RIVAIS_REPLAY = 5;
+
+function validarNiveisReplay(bruto: unknown): { erros: string[]; valor: Readonly<Partial<Record<string, number>>> } {
+  if (bruto === undefined) return { erros: [], valor: {} };
+  if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto)) return { erros: ['replay.niveis: precisa ser um objeto'], valor: {} };
+  const o = bruto as Record<string, unknown>;
+  const chaves = Object.keys(o);
+  if (chaves.length > MAX_PERSONAGENS_NIVEIS_REPLAY) return { erros: [`replay.niveis: no máximo ${MAX_PERSONAGENS_NIVEIS_REPLAY} personagens`], valor: {} };
+  const erros: string[] = [];
+  const valor: Record<string, number> = {};
+  for (const chave of chaves) {
+    if (!FORMA_ID.test(chave)) {
+      erros.push(`replay.niveis: chave "${chave}" não tem forma de id`);
+      continue;
+    }
+    if (!inteiroEm(o[chave], 0, NIVEL_EVOLUCAO_MAX_REPLAY)) {
+      erros.push(`replay.niveis.${chave}: inteiro de 0 a ${NIVEL_EVOLUCAO_MAX_REPLAY}`);
+      continue;
+    }
+    valor[chave] = o[chave] as number;
+  }
+  return { erros, valor };
+}
+
+function validarCorridaReplay(bruto: unknown): { erros: string[]; valor?: NonNullable<ReplayV2['corrida']> } {
+  if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto)) return { erros: ['replay.corrida: precisa ser um objeto'] };
+  const o = bruto as Record<string, unknown>;
+  const erros: string[] = [];
+  if (!inteiroEm(o['semente'], 0, SEMENTE_MAX)) erros.push('replay.corrida.semente: precisa ser inteiro de 0 a 4294967295');
+  const rivaisBruto = o['rivais'];
+  if (!Array.isArray(rivaisBruto)) {
+    erros.push('replay.corrida.rivais: precisa ser uma lista');
+  } else if (rivaisBruto.length > MAX_RIVAIS_REPLAY) {
+    erros.push(`replay.corrida.rivais: no máximo ${MAX_RIVAIS_REPLAY} rivais`);
+  } else if (rivaisBruto.some((r) => typeof r !== 'string' || !FORMA_ID.test(r))) {
+    erros.push('replay.corrida.rivais: cada id precisa ter forma de id');
+  }
+  if (erros.length > 0) return { erros };
+  return { erros: [], valor: { semente: o['semente'] as number, rivais: rivaisBruto as readonly string[] } };
+}
+
+/**
+ * Valida um `ReplayV2` de fora (plano C6: modo + níveis de evolução + corrida, por cima da MESMA base de
+ * `ReplayV1`). `corrida` é opcional (replays de Treino não têm rival nenhum). Mesma filosofia de `validarReplayV1`:
+ * devolve cópia só com campos conhecidos, nunca reexecuta o motor.
+ */
+export function validarReplayV2(x: unknown, maxTicks: number = TETO_TICKS_REPLAY): Resultado<ReplayV2> {
+  if (typeof x !== 'object' || x === null || Array.isArray(x)) return falha(['replay: não é um objeto']);
+  const o = x as Record<string, unknown>;
+  const erros: string[] = [];
+  if (o['v'] !== 2) erros.push('replay.v: só a versão 2 é conhecida (use validarReplayV1 para v:1)');
+  if (!(MODOS_DESCIDA as readonly string[]).includes(o['modo'] as string)) erros.push(`replay.modo: precisa ser um de ${MODOS_DESCIDA.join('/')}`);
+
+  const { erros: errosNiveis, valor: niveis } = validarNiveisReplay(o['niveis']);
+  erros.push(...errosNiveis);
+
+  let corrida: ReplayV2['corrida'];
+  if (o['corrida'] !== undefined) {
+    const { erros: errosCorrida, valor } = validarCorridaReplay(o['corrida']);
+    erros.push(...errosCorrida);
+    corrida = valor;
+  }
+
+  const { erros: errosBase, base } = validarCamposBaseReplay(o, maxTicks);
+  erros.push(...errosBase);
+
+  if (erros.length > 0 || base === null) return falha(erros);
   return ok({
-    v: 1,
-    pista: o['pista'] as string,
-    hashPista: o['hashPista'] as string,
-    semente: o['semente'] as number,
-    personagem: o['personagem'] as string,
-    versaoMotor: o['versaoMotor'] as string,
-    comandos: o['comandos'] as string,
-    resultado,
+    v: 2,
+    ...base,
+    modo: o['modo'] as ModoDescida,
+    niveis,
+    ...(corrida !== undefined ? { corrida } : {}),
   });
 }

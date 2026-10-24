@@ -11,7 +11,7 @@
  * nunca dentro do laço de decisão por tick — por isso nenhum `Math.random`/relógio aqui (varredura de arquitetura
  * trata `corrida/` com as mesmas regras de `descida/`).
  */
-import type { ComandoDescida, DefPersonagem, EventoDescida, IdPersonagem, LeituraDescida, PistaGerada } from '../core/contratos';
+import type { ComandoDescida, DefPersonagem, EventoDescida, IdPersonagem, LeituraDescida, ObjetoPista, PistaGerada } from '../core/contratos';
 import { hashDeTexto } from '../core/hash';
 import { criarRng, type Rng } from '../core/rng';
 import { criarBotCuidadoso, criarBotManobreiro, type ConfigDescida, type OpcoesBotManobreiro } from '../descida/index';
@@ -75,11 +75,13 @@ export function criarIA(
   def: DefPersonagem,
   semente: number,
   catalogoPerfis: Readonly<Record<IdPersonagem, PerfilIA>> = PERFIS_IA,
+  /** Obstáculos altos da camada desta corrida (plano C4): sem ele, nenhum rival agacha (compatível com antes do C4). */
+  obstaculosAltos: readonly ObjetoPista[] = [],
 ): (leitura: LeituraDescida) => ComandoDescida {
   const rng = rngDaIA(semente, def.id);
   const perfil = perfilIA(def.id, catalogoPerfis);
-  const manobreiro = criarBotManobreiro(pista, config, sortearOpcoesManobreiro(rng, perfil.ousadia));
-  const cuidadoso = criarBotCuidadoso(pista); // parâmetros padrão, de propósito: ver comentário acima.
+  const manobreiro = criarBotManobreiro(pista, config, sortearOpcoesManobreiro(rng, perfil.ousadia), obstaculosAltos);
+  const cuidadoso = criarBotCuidadoso(pista, {}, obstaculosAltos); // parâmetros padrão, de propósito: ver comentário acima.
 
   let checkpointAtual = 0;
   const quedasPorCheckpoint = new Map<number, number>();

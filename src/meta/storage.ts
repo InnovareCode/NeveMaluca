@@ -369,16 +369,34 @@ export function sanearPistaAtiva(bruto: unknown, regras: RegrasSave): IdPista | 
 }
 
 /**
- * Uma pista do campeonato já concluída (plano C5a): só a posição do JOGADOR (1..`MAX_CORREDORES_CAMPEONATO`) e os
- * ticks dela, não o pódio completo — `meta/campeonato.ts` deriva pontos a partir do `ResultadoCorrida.ordem` da
- * CORRIDA em si (dado rico, em memória), não deste registro resumido do save. Registro inválido é descartado por
- * inteiro (não remendado), igual a `sanearRecorde`.
+ * Pódio completo de uma pista do campeonato (plano C5a/C5b/C8b): até `MAX_CORREDORES_CAMPEONATO` ids do catálogo
+ * de personagens, sem repetição, na ordem de chegada (1º ao último). Lixo (não-array, id fora do catálogo,
+ * repetido) é descartado item a item — nunca derruba o campeonato inteiro, igual às outras listas saneadas aqui.
+ * `undefined` quando sobra vazio: um pódio sem ninguém não é um registro válido.
+ */
+function sanearOrdemCampeonato(bruto: unknown, regras: RegrasSave): readonly IdPersonagem[] | undefined {
+  if (!Array.isArray(bruto)) return undefined;
+  const vistos = new Set<string>();
+  const saida: IdPersonagem[] = [];
+  for (const id of (bruto as unknown[]).slice(0, MAX_CORREDORES_CAMPEONATO)) {
+    if (typeof id !== 'string' || !regras.personagens.includes(id) || vistos.has(id)) continue;
+    vistos.add(id);
+    saida.push(id);
+  }
+  return saida.length > 0 ? saida : undefined;
+}
+
+/**
+ * Uma pista do campeonato já concluída (plano C5a/C5b): o pódio COMPLETO (`ordem`, não só a posição do jogador —
+ * é o que `meta/campeonato.ts` → `classificacao`/`situacao` precisam para recalcular os pontos de todos depois de
+ * um reload) e os ticks do JOGADOR nela. Registro inválido é descartado por inteiro (não remendado), igual a
+ * `sanearRecorde`.
  */
 function sanearPistaConcluida(bruto: unknown, regras: RegrasSave): PistaConcluidaCampeonato | undefined {
   if (!ehObjeto(bruto)) return undefined;
   const existe = regras.pistas.includes(bruto['pista'] as string) || regras.pistasIniciais.includes(bruto['pista'] as string);
   if (typeof bruto['pista'] !== 'string' || !existe) return undefined;
-  const ordem = inteiroLimitado(bruto['ordem'], 1, MAX_CORREDORES_CAMPEONATO);
+  const ordem = sanearOrdemCampeonato(bruto['ordem'], regras);
   const ticks = inteiroLimitado(bruto['ticks'], 1, TETO_TICKS);
   if (ordem === undefined || ticks === undefined) return undefined;
   return { pista: bruto['pista'], ordem, ticks };

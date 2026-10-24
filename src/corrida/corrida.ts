@@ -14,6 +14,7 @@ import type {
   CamadaJogo,
   ComandoDescida,
   DefPista,
+  Evolucao,
   IdPersonagem,
   LeituraCorrida,
   LeituraDescida,
@@ -25,7 +26,7 @@ import type {
 } from '../core/contratos';
 import { TETO_TICKS_REPLAY } from '../core/constantes';
 import { ErroDeContrato } from '../core/erros';
-import { configDoPersonagem, criarDescida, type MotorDescida } from '../descida/index';
+import { aplicarEvolucao, configDoPersonagem, criarDescida, type MotorDescida } from '../descida/index';
 import { gerarCamadaJogo } from '../pista/index';
 import { flocosDaCorrida } from '../data/evolucao';
 import { PERFIS_IA, criarIA, type PerfilIA } from './ia';
@@ -44,6 +45,12 @@ export interface OpcoesCorrida {
   readonly participantes: readonly ParticipanteCorrida[];
   /** Injetável só para teste (perfis falsos); produção usa `PERFIS_IA` (padrão). */
   readonly catalogoPerfis?: Readonly<Record<IdPersonagem, PerfilIA>>;
+  /**
+   * Evolução entre campeonatos (plano C-D3/C6, `descida/atributos.ts` → `aplicarEvolucao`): aplicada a CADA
+   * corredor (jogador e rivais) pelo próprio `niveis[id]` — sem ela (como todo chamador de antes do C6 faz), todos
+   * correm no nível 0 (idêntico à ficha pura, `configDoPersonagem`), comportamento de sempre.
+   */
+  readonly evolucao?: Evolucao;
 }
 
 export interface Corrida {
@@ -84,12 +91,16 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
 
   const camada = opcoes.camada ?? (opcoes.def !== undefined ? gerarCamadaJogo(opcoes.pista, opcoes.def) : undefined);
   const opcoesMotor: OpcoesDescida = { modo: 'corrida', ...(camada !== undefined ? { camada } : {}) };
+  const niveisEvolucao = opcoes.evolucao?.niveis ?? {};
+  const obstaculosAltos = camada?.obstaculosAltos ?? [];
   const resumoJogador = criarAcumuladorResumo();
 
   const corredores: Corredor[] = opcoes.participantes.map((p): Corredor => {
-    const config = configDoPersonagem(p.config.id);
+    // C6: evolução é CAMADA por cima da ficha (`aplicarEvolucao`) — nível 0 (sem `opcoes.evolucao`, como todo
+    // chamador de antes do C6) devolve `config` intacto, por construção (ver `descida/atributos.ts`).
+    const config = aplicarEvolucao(configDoPersonagem(p.config.id), p.config, niveisEvolucao);
     const motor = criarDescida(opcoes.pista, config, opcoesMotor);
-    const ia = p.piloto.tipo === 'ia' ? criarIA(opcoes.pista, config, p.config, opcoes.semente, opcoes.catalogoPerfis ?? PERFIS_IA) : null;
+    const ia = p.piloto.tipo === 'ia' ? criarIA(opcoes.pista, config, p.config, opcoes.semente, opcoes.catalogoPerfis ?? PERFIS_IA, obstaculosAltos) : null;
     return { id: p.id, ehJogador: p.piloto.tipo === 'jogador', piloto: p.piloto, motor, ia, leitura: motor.leitura(), tickChegada: null };
   });
 

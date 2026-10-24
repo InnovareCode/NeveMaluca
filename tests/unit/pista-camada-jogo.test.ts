@@ -7,6 +7,7 @@ import { FORMATO_HASH } from '../../src/core/hash';
 import { PISTA_CUME_DA_VENTANIA, PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE, PISTA_VILA_CHOCOLATE, PISTA_VULCAO_PE_GELADO } from '../../src/data/pistas';
 import { gerarCamadaJogo } from '../../src/pista/camada-jogo';
 import { gerarPista } from '../../src/pista/gerador';
+import { trilhoEm } from '../../src/pista/consulta';
 
 const PISTAS = [PISTA_MORRO_DO_PINHAO, PISTA_PICO_DO_PICOLE, PISTA_VILA_CHOCOLATE, PISTA_VULCAO_PE_GELADO, PISTA_CUME_DA_VENTANIA];
 
@@ -65,8 +66,18 @@ describe('gerarCamadaJogo: forma do resultado (C3), nas 5 pistas oficiais', () =
       expect(camada.porticoX).toBe(pista.chegadaX);
     });
 
-    it(`${def.id}: obstaculosAltos reservado (vazio, C4 ainda não existe)`, () => {
-      expect(camada.obstaculosAltos).toEqual([]);
+    it(`${def.id}: obstaculosAltos (C4) tem ao menos 1, todos dentro da pista e sem sobrepor trilho/kicker`, () => {
+      expect(camada.obstaculosAltos.length).toBeGreaterThan(0);
+      for (const o of camada.obstaculosAltos) {
+        expect(o.tipo).toBe('galho');
+        expect(o.x).toBeGreaterThanOrEqual(0);
+        expect(o.x + o.largura).toBeLessThanOrEqual(pista.chegadaX);
+        expect(trilhoEm(pista, o.x)).toBeNull();
+        for (const k of camada.kickers) {
+          const fora = o.x + o.largura < k.x - 1 || o.x > k.x + k.largura + 1;
+          expect(fora, `galho em ${o.x} perto do kicker em ${k.x}`).toBe(true);
+        }
+      }
     });
   }
 });

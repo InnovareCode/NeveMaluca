@@ -1,13 +1,22 @@
 /**
  * Bot "cuidadoso" (plano §3.4: harness de pista). Reflexo puro sobre `LeituraDescida` + `PistaGerada`: olha um pouco
  * à frente, pula diante de rampa/obstáculo, e nivela o corpo no ar (giro contra o próprio ângulo) para pousar dentro
- * da janela. Nunca segura grab nem agacha (menos risco). Determinístico: sem RNG, mesma leitura => mesmo comando.
+ * da janela. Nunca segura grab; agacha SÓ diante de um obstáculo alto (`obstaculosAltos`, plano corrida-campeonato
+ * C4 — opcional, `[]` por padrão: harness/testes que não passam camada continuam IDÊNTICOS a antes do C4).
+ * Determinístico: sem RNG, mesma leitura => mesmo comando.
  */
-import type { ComandoDescida, Giro, Grab, LeituraDescida, PistaGerada } from '../core/contratos';
+import type { ComandoDescida, Giro, Grab, LeituraDescida, ObjetoPista, PistaGerada } from '../core/contratos';
 import { PASSO_S } from '../core/constantes';
 import { MORTAL_VOLTAS_MAX } from '../data/manobras';
 import { inclinacaoGrausEm, obstaculoDuroNaFaixa } from '../pista/consulta';
 import type { ConfigDescida } from './constantes';
+
+/** Primeiro obstáculo alto (`CamadaJogo.obstaculosAltos`) cujo retângulo cruza `[x0, x1]`, ou `null`. Mesmo padrão
+ *  de `obstaculoDuroNaFaixa` (`pista/consulta.ts`), só que sobre a lista da CAMADA (não da `PistaGerada`). */
+function obstaculoAltoNaFaixa(obstaculos: readonly ObjetoPista[], x0: number, x1: number): boolean {
+  for (const o of obstaculos) if (o.x <= x1 && o.x + o.largura >= x0) return true;
+  return false;
+}
 
 export interface OpcoesBotCuidadoso {
   /** Quantos metros adiante o bot olha para decidir se pula. */
@@ -27,8 +36,15 @@ export interface OpcoesBotCuidadoso {
 
 const PADRAO: Required<OpcoesBotCuidadoso> = { antecipacaoM: 4, limiarRampaGraus: 8, limiarNivelarGraus: 6, velocidadeMinParaPularDeRampaMs: 3 };
 
-/** Cria a função de decisão do bot para UMA pista. Chamar a cada tick com a `LeituraDescida` mais recente. */
-export function criarBotCuidadoso(pista: PistaGerada, opcoes: OpcoesBotCuidadoso = {}): (leitura: LeituraDescida) => ComandoDescida {
+/**
+ * Cria a função de decisão do bot para UMA pista. Chamar a cada tick com a `LeituraDescida` mais recente.
+ * `obstaculosAltos` (C4): default `[]` — sem ele, o bot nunca agacha (comportamento de antes do C4, intacto).
+ */
+export function criarBotCuidadoso(
+  pista: PistaGerada,
+  opcoes: OpcoesBotCuidadoso = {},
+  obstaculosAltos: readonly ObjetoPista[] = [],
+): (leitura: LeituraDescida) => ComandoDescida {
   const cfg = { ...PADRAO, ...opcoes };
   // Nivelar é uma decisão TOMADA UMA VEZ por voo, não recalculada a cada tick: girar segurado tem `atrasoGiroTicks`
   // de delay (plano §3.3, "um toque rápido é só um pulo") ANTES de a velocidade angular começar a mudar de verdade.
@@ -41,11 +57,15 @@ export function criarBotCuidadoso(pista: PistaGerada, opcoes: OpcoesBotCuidadoso
   return (leitura: LeituraDescida): ComandoDescida => {
     const { piloto } = leitura;
     let pulo = false;
+    let agachar = false;
     if (piloto.modo === 'chao' || piloto.modo === 'trilho') {
       const inclinacaoAdiante = inclinacaoGrausEm(pista, piloto.x + cfg.antecipacaoM);
       const obstaculoAdiante = obstaculoDuroNaFaixa(pista, piloto.x, piloto.x + cfg.antecipacaoM);
       const rampaAdiante = inclinacaoAdiante > cfg.limiarRampaGraus && piloto.velocidade >= cfg.velocidadeMinParaPularDeRampaMs;
       pulo = rampaAdiante || obstaculoAdiante;
+      // Obstáculo alto SÓ passa agachado (C4): agacha desde que vê (mesma janela `antecipacaoM`) até passar por
+      // ele — cautela do cuidadoso, não o reflexo de última hora do "por um fio" (esse bônus é pra quem arrisca).
+      agachar = obstaculoAltoNaFaixa(obstaculosAltos, piloto.x, piloto.x + cfg.antecipacaoM);
     }
 
     const noAr = piloto.modo === 'ar';
@@ -61,7 +81,7 @@ export function criarBotCuidadoso(pista: PistaGerada, opcoes: OpcoesBotCuidadoso
     }
     noArAnterior = noAr;
 
-    return { pulo, giro: giroDecidido, grab: null, agachar: false };
+    return { pulo, giro: giroDecidido, grab: null, agachar };
   };
 }
 
@@ -188,11 +208,13 @@ export function planejarVoo(config: ConfigDescida, ticksArEstimados: number): Pl
 /**
  * Cria a função de decisão do bot manobreiro para UMA pista e a `ConfigDescida` de UM personagem (plano §A.4: "o
  * bot manobreiro precisa conhecer a própria física; sem isso, o que se mede é o bot, e não o personagem").
+ * `obstaculosAltos` (C4): default `[]`, mesma regra do cuidadoso.
  */
 export function criarBotManobreiro(
   pista: PistaGerada,
   config: ConfigDescida,
   opcoes: OpcoesBotManobreiro = {},
+  obstaculosAltos: readonly ObjetoPista[] = [],
 ): (leitura: LeituraDescida) => ComandoDescida {
   const cfg = { ...PADRAO_MANOBREIRO, ...opcoes };
   const intervaloVoluntario = INTERVALO_PULO_VOLUNTARIO_TICKS[cfg.ousadia];
@@ -207,6 +229,7 @@ export function criarBotManobreiro(
   return (leitura: LeituraDescida): ComandoDescida => {
     const { piloto } = leitura;
     let pulo = false;
+    let agachar = false;
 
     if (piloto.modo === 'chao' || piloto.modo === 'trilho') {
       ticksNoChaoSemPular++;
@@ -217,6 +240,8 @@ export function criarBotManobreiro(
       const estiloVoluntario = ticksNoChaoSemPular >= intervaloVoluntario && temVelocidadeParaPular;
       pulo = rampaAdiante || obstaculoAdiante || estiloVoluntario;
       if (pulo) ticksNoChaoSemPular = 0;
+      // Obstáculo alto SÓ passa agachado (C4): o manobreiro agacha (não pula por cima) — ousado no ar, não aqui.
+      agachar = obstaculoAltoNaFaixa(obstaculosAltos, piloto.x, piloto.x + cfg.antecipacaoM);
     }
 
     const noAr = piloto.modo === 'ar';
@@ -239,6 +264,6 @@ export function criarBotManobreiro(
     }
     noArAnterior = noAr;
 
-    return { pulo, giro: giroDecidido, grab: noAr ? GRAB_DO_MANOBREIRO : null, agachar: false };
+    return { pulo, giro: giroDecidido, grab: noAr ? GRAB_DO_MANOBREIRO : null, agachar };
   };
 }
