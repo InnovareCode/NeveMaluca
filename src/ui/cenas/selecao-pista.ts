@@ -13,6 +13,7 @@
 import { ALTURA, LARGURA } from '../../core/constantes';
 import { obterPistaDeDados, PISTAS_DE_DADOS } from '../../data/pistas';
 import { temaDeRenderDoTema } from '../../render/temas/catalogo';
+import { precarregarAssetsParqueRaster } from '../../render/temas/parque-raster';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
@@ -69,6 +70,11 @@ function cartao(indice: number): BotaoRetangular {
 export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   let hover: string | null = null;
+
+  // Dispara o carregamento do cenário raster do Pico do Picolé aqui (fire-and-forget, decodificado ANTES de
+  // montar o tema -- docs/piloto-cenario-pixar.md §6): por quando o jogador escolher a pista e descer, os assets
+  // já estão prontos (ou o pintor cai sozinho no vetorial se ainda não deu tempo/falhou).
+  void precarregarAssetsParqueRaster(opcoes.documento);
 
   const cartaoNoPonto = (pt: { x: number; y: number }): number | null => {
     for (let i = 0; i < opcoes.catalogo.length; i += 1) {

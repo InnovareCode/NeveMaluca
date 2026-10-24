@@ -24,7 +24,8 @@ export interface SpritePersonagem {
 
 const cachePersonagens = new Map<string, Promise<SpritePersonagem>>();
 
-function resolverUrlAsset(caminhoRelativo: string): string {
+/** Resolve um caminho relativo (`assets/...`) para a URL respeitando a base do Vite; reusado por outros carregadores de asset (ex. `render/temas/parque-raster.ts`). */
+export function resolverUrlAsset(caminhoRelativo: string): string {
   const base = import.meta.env.BASE_URL || '/';
   const semBarraDupla = base.endsWith('/') ? base : `${base}/`;
   const caminhoSemBarra = caminhoRelativo.startsWith('/') ? caminhoRelativo.slice(1) : caminhoRelativo;
