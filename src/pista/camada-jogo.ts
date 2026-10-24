@@ -28,9 +28,10 @@ import { hashDeValor } from '../core/hash';
 import { rngDoCanal } from '../core/rng';
 import { alturaEm, inclinacaoGrausEm, trilhoEm } from './consulta';
 
-// '3' (plano itens-corrida, I0): a MESMA forma de '2', mais `caixas` (sempre `[]` até I2 plantar as posições reais)
-// — bump só para marcar a mudança de forma (nenhum compat-check lê este campo hoje; `ReplayV2` nunca serializa
-// `CamadaJogo`, ela é sempre regerada de `pista`+`def`, puro e determinístico — ver `criarCorrida`).
+// '3' (plano itens-corrida, I0/I2): a MESMA forma de '2', mais `caixas` (posições reais plantadas na I2, abaixo) —
+// bump só marcou a mudança de FORMA (nenhum compat-check lê este campo hoje; `ReplayV2` nunca serializa
+// `CamadaJogo`, ela é sempre regerada de `pista`+`def`, puro e determinístico — ver `criarCorrida`). Não bumpa de
+// novo aqui: só os VALORES de `caixas` mudaram (antes sempre `[]`), a forma do tipo é a mesma desde a I0.
 export const VERSAO_CAMADA_JOGO = '3';
 
 /** Passo do varredor de rampas, em metros: fino o bastante para não pular picos curtos (vão/kicker-duplo). */
@@ -82,6 +83,13 @@ const LARGURA_OBSTACULO_ALTO_M = 1.4;
 const ALTURA_OBSTACULO_ALTO_M = 1.3;
 /** Nunca mais perto de um kicker que isto (de qualquer lado): agachar no meio de um voo de kicker não é a ideia. */
 const MARGEM_KICKER_OBSTACULO_M = 10;
+
+/** Espaçamento entre caixas de item (plano itens-corrida, I-D5): generoso o bastante pra não virar chuva de itens
+ *  numa pista de 900-1200 m, raro o bastante pra cada caixa valer a rota. Mesma variação por `rng` (canal
+ *  `'camada'`) dos outros passos deste arquivo — evita um padrão idêntico em pistas de dificuldade constante. */
+const PASSO_CAIXA_MIN_M = 60;
+const PASSO_CAIXA_MAX_M = 90;
+const RAIO_CAIXA_M = 1.3;
 
 interface Rampa {
   readonly x0: number;
@@ -198,6 +206,25 @@ function obstaculosAltosDe(pista: PistaGerada, def: DefPista, kickers: readonly 
   return obstaculos;
 }
 
+/**
+ * Caixas de item (plano itens-corrida §Contratos, I2): varre a pista num passo quase regular (como
+ * `obstaculosAltosDe`), evitando kicker/trilho (`perigosoParaObstaculo` — mesmo motivo: pegar uma caixa não pode
+ * competir com decolar ou grindar). 1 espaço por CORREDOR é regra de `corrida/itens.ts`, não daqui — esta função só
+ * planta ONDE as caixas ficam, igual a `obstaculosAltosDe`.
+ */
+function caixasDe(pista: PistaGerada, kickers: readonly KickerCamada[], rng: ReturnType<typeof rngDoCanal>): CaixaCamada[] {
+  const caixas: CaixaCamada[] = [];
+  const fim = pista.chegadaX - MARGEM_CHEGADA_M;
+  let x = MARGEM_ABERTURA_M + rng.entre(PASSO_CAIXA_MIN_M, PASSO_CAIXA_MAX_M);
+  while (x <= fim) {
+    if (!perigosoParaObstaculo(pista, kickers, x)) {
+      caixas.push({ x, y: alturaEm(pista, x) + 0.8, raio: RAIO_CAIXA_M });
+    }
+    x += rng.entre(PASSO_CAIXA_MIN_M, PASSO_CAIXA_MAX_M);
+  }
+  return caixas;
+}
+
 /** Gera a camada de jogo para uma `PistaGerada` já pronta. Pura: nunca lança, nunca confere hash esperado. */
 export function gerarCamadaJogo(pista: PistaGerada, def: DefPista): CamadaJogo {
   const rng = rngDoCanal(def.semente, 'camada');
@@ -208,10 +235,10 @@ export function gerarCamadaJogo(pista: PistaGerada, def: DefPista): CamadaJogo {
   const douradoDaPista = dourado(pista, kickers, rng);
   if (douradoDaPista !== null) itens.push(douradoDaPista);
   const obstaculosAltos = obstaculosAltosDe(pista, def, kickers, rng);
+  // Posicionamento real das caixas (plano itens-corrida, I2) — continua o MESMO `rng` de canal `'camada'`, depois
+  // de kickers/dourado/obstáculos (ordem importa pro determinismo, nunca pro resultado em si).
+  const caixas = caixasDe(pista, kickers, rng);
 
-  // `caixas` (plano itens-corrida, I0): posicionamento real é I2 — por ora sempre `[]`, mesmo bootstrap que
-  // `obstaculosAltos` teve antes do C4 (campo presente na forma, sem efeito nenhum até a lógica existir).
-  const caixas: CaixaCamada[] = [];
   const semHash = { itens, kickers, obstaculosAltos, caixas, porticoX: pista.chegadaX, versao: VERSAO_CAMADA_JOGO };
   const hash = hashDeValor(semHash);
   return { ...semHash, hash };

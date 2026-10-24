@@ -184,7 +184,10 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         return;
       }
       const cmd: ComandoDescida = entrada.obterComando();
-      leitura = corrida.processar(cmd);
+      // `usarItem` (plano itens-corrida §I4b): a entrada ainda não tem botão/tecla de item — fica `false` até a
+      // Lyra ligar isso (I4b); `Corrida.processar` já aceita o campo desde a I2, sem mudar NADA do comportamento
+      // de hoje enquanto ele vem sempre `false`.
+      leitura = corrida.processar({ descida: cmd, usarItem: false });
       camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual);
       particulas.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       popupsManobra.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, leitura.jogador.tick);

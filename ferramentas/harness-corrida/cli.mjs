@@ -69,7 +69,7 @@ function rodarCorrida(m, pistaGerada, def, sementeDaCorrida, idJogador, bot, max
   const corrida = m.corrida.criarCorrida({ pista: pistaGerada, def, semente: sementeDaCorrida, participantes: montarParticipantes(m, idJogador) });
   let leitura = corrida.leitura();
   for (let i = 0; i < maxTicks && leitura.jogador.fase !== 'chegou'; i++) {
-    leitura = corrida.processar(bot(leitura.jogador));
+    leitura = corrida.processar({ descida: bot(leitura.jogador), usarItem: false });
   }
   const jogadorChegou = leitura.jogador.fase === 'chegou';
   const resultado = corrida.finalizar();
@@ -94,7 +94,7 @@ function medirManobrasDoJogador(m, pistaGerada, def, camada, sementeDaCorrida, i
   let obstaculosRente = 0;
   for (let i = 0; i < maxTicks && leitura.jogador.fase !== 'chegou'; i++) {
     const xAntes = leitura.jogador.piloto.x;
-    leitura = corrida.processar(bot(leitura.jogador));
+    leitura = corrida.processar({ descida: bot(leitura.jogador), usarItem: false });
     for (const ev of leitura.jogador.eventos) {
       if (ev.tipo === 'pulo') {
         if (emVooDeKicker) {

@@ -116,7 +116,10 @@ const TURBO_DECAIMENTO_POR_TICK = 0.99;
  * quando vem" vale sem precisar hashear mais nada.
  */
 const FATOR_VELOCIDADE_TROMBADA = 0.3;
-const TICKS_ATORDOADO_TROMBADA = 40;
+/** Exportado para `corrida/itens.ts` (I2) espelhar `atordoado` em `LeituraRivalCorrida` sem duplicar o número (o
+ *  orquestrador nunca lê `EstadoDescida` direto — só precisa saber por quantos ticks o PRÓPRIO efeito que ele
+ *  acabou de aplicar vai travar o controle, pra contar a própria janela em paralelo à do motor). */
+export const TICKS_ATORDOADO_TROMBADA = 40;
 
 interface EstadoPiloto {
   x: number;

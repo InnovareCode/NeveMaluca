@@ -28,7 +28,7 @@ function correrCorridaCompleta(semente: number, idJogador = 'capi') {
   const bot = criarBotCuidadoso(pista);
   let leitura = corrida.leitura();
   for (let i = 0; i < MAX_TICKS_JOGADOR && leitura.jogador.fase !== 'chegou'; i++) {
-    leitura = corrida.processar(bot(leitura.jogador));
+    leitura = corrida.processar({ descida: bot(leitura.jogador), usarItem: false });
   }
   const resultado = corrida.finalizar();
   return { leituraFinal: leitura, resultado };
@@ -58,8 +58,8 @@ describe('criarCorrida: forma e regras básicas', () => {
   it('cada processar() avança 1 tick (jogador e corrida andam juntos)', () => {
     const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
     const corrida = criarCorrida({ pista, semente: 1, participantes: participantes('capi') });
-    const l1 = corrida.processar(CMD_VAZIO);
-    const l2 = corrida.processar(CMD_VAZIO);
+    const l1 = corrida.processar({ descida: CMD_VAZIO, usarItem: false });
+    const l2 = corrida.processar({ descida: CMD_VAZIO, usarItem: false });
     expect(l2.tick).toBe(l1.tick + 1);
     expect(l2.jogador.tick).toBe(l1.jogador.tick + 1);
   });
