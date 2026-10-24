@@ -32,8 +32,8 @@ test.describe('Seleção de Personagem', () => {
     );
     expect(antes).toBeUndefined();
 
-    // Clica no botão PERSONAGEM (960x540 lógicos: x=80..300, y=445..499; centro x=190, y=472)
-    await clicarLogico(190, 472);
+    // Clica no botão PERSONAGEM (960x540 lógicos: x=20..240, y=448..488; centro x=130, y=468)
+    await clicarLogico(130, 468);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao');
@@ -59,8 +59,8 @@ test.describe('Seleção de Personagem', () => {
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('menu');
 
-    // Entra no Jogo (centro do botão Jogar: x=190, y=247) sem lançar erro
-    await clicarLogico(190, 247);
+    // Entra no Jogo (centro do botão Treino: x=130, y=224) sem lançar erro
+    await clicarLogico(130, 224);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

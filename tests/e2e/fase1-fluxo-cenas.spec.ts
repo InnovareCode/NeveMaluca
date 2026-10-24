@@ -41,7 +41,7 @@ test.describe('Fase 1: Fluxo de Cenas e Telas', () => {
     });
     expect(coresMenu).toBeGreaterThan(10);
 
-    // 3. No Menu, clica no botão Opções (em 960x540 lógicos: x=80..300, y=370..424)
+    // 3. No Menu, clica no botão Opções (em 960x540 lógicos: x=20..240, y=400..440)
     // Converte a posição lógica para a coordenada no elemento canvas na tela
     const caixa = await canvas.boundingBox();
     expect(caixa).not.toBeNull();
@@ -50,8 +50,8 @@ test.describe('Fase 1: Fluxo de Cenas e Telas', () => {
     const escalaX = caixa.width / 960;
     const escalaY = caixa.height / 540;
 
-    // Clica no centro do botão Opções (x=190, y=397)
-    await page.mouse.click(caixa.x + 190 * escalaX, caixa.y + 397 * escalaY);
+    // Clica no centro do botão Opções (x=130, y=420)
+    await page.mouse.click(caixa.x + 130 * escalaX, caixa.y + 420 * escalaY);
 
     // Confere que a cena mudou para 'opcoes'
     await expect.poll(async () => {
@@ -85,8 +85,8 @@ test.describe('Fase 1: Fluxo de Cenas e Telas', () => {
       });
     }).toBe('menu');
 
-    // 6. No Menu, clica no botão Jogar (em 960x540 lógicos: centro x=190, y=247)
-    await page.mouse.click(caixa.x + 190 * escalaX, caixa.y + 247 * escalaY);
+    // 6. No Menu, clica no botão Treino (em 960x540 lógicos: centro x=130, y=224)
+    await page.mouse.click(caixa.x + 130 * escalaX, caixa.y + 224 * escalaY);
 
     // Confere que a cena mudou para 'jogo'
     await expect.poll(async () => {

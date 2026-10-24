@@ -32,8 +32,8 @@ test.describe('Seleção de Pista', () => {
     );
     expect(antes).toBeUndefined();
 
-    // Clica no botão PISTA (960x540 lógicos: x=320..540, y=445..499; centro x=430, y=472)
-    await clicarLogico(430, 472);
+    // Clica no botão PISTA (960x540 lógicos: x=20..240, y=496..536; centro x=130, y=516)
+    await clicarLogico(130, 516);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao-pista');
@@ -59,8 +59,8 @@ test.describe('Seleção de Pista', () => {
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('menu');
 
-    // Entra no Jogo (centro do botão Jogar: x=190, y=247) sem lançar erro, já com a pista escolhida
-    await clicarLogico(190, 247);
+    // Entra no Jogo (centro do botão Treino: x=130, y=224) sem lançar erro, já com a pista escolhida
+    await clicarLogico(130, 224);
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

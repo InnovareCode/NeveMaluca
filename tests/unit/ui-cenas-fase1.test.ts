@@ -200,8 +200,8 @@ describe('Fase 1: Cena de Menu Principal', () => {
 
     const cena = criarCenaMenu({ canvas, janela, aoJogar, aoOpcoes });
 
-    // Clica dentro de Jogar: x: 80..300, y: 220..274
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 240 });
+    // Clica dentro de Treino (ex-Jogar): x: 20..240, y: 204..244
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(aoJogar).toHaveBeenCalledTimes(1);
 
     // Tecla Enter
@@ -219,8 +219,8 @@ describe('Fase 1: Cena de Menu Principal', () => {
 
     const cena = criarCenaMenu({ canvas, janela, aoJogar, aoOpcoes });
 
-    // Clica dentro de Opções: x: 80..300, y: 370..424
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 390 });
+    // Clica dentro de Opções: x: 20..240, y: 400..440
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 420 });
     expect(aoOpcoes).toHaveBeenCalledTimes(1);
 
     janela.disparar('KeyO');
@@ -240,8 +240,8 @@ describe('Fase 1: Cena de Menu Principal', () => {
       aoModos,
     });
 
-    // Clica dentro de Modos: x: 80..300, y: 295..349
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 310 });
+    // Clica dentro de Modos (CAMPEONATO): x: 20..240, y: 252..292
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 272 });
     expect(aoModos).toHaveBeenCalledTimes(1);
 
     cena.destruir?.();
@@ -280,8 +280,8 @@ describe('Fase 1: Cena de Menu Principal', () => {
       aoPersonagem,
     });
 
-    // Clica dentro de Personagem: x: 80..300, y: 445..499
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 460 });
+    // Clica dentro de Personagem: x: 20..240, y: 448..488
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 468 });
     expect(aoPersonagem).toHaveBeenCalledTimes(1);
 
     janela.disparar('KeyP');
@@ -291,11 +291,11 @@ describe('Fase 1: Cena de Menu Principal', () => {
 
     // Sem aoPersonagem: clicar no botão não lança erro
     const cenaSemCallback = criarCenaMenu({ canvas, aoJogar: () => undefined, aoOpcoes: () => undefined });
-    expect(() => canvas.disparar('pointerdown', { clientX: 120, clientY: 460 })).not.toThrow();
+    expect(() => canvas.disparar('pointerdown', { clientX: 130, clientY: 468 })).not.toThrow();
     cenaSemCallback.destruir?.();
   });
 
-  it('dispara aoPista ao tocar no botão PISTA (ao lado de PERSONAGEM) ou apertar KeyT; sem o callback fica inerte', () => {
+  it('dispara aoPista ao tocar no botão PISTA (abaixo de PERSONAGEM) ou apertar KeyT; sem o callback fica inerte', () => {
     const canvas = criarCanvasFalso();
     const janela = criarJanelaFalsa();
     const aoPista = vi.fn();
@@ -308,8 +308,8 @@ describe('Fase 1: Cena de Menu Principal', () => {
       aoPista,
     });
 
-    // Botão PISTA: x 320..540, y 445..499 (mesma linha de PERSONAGEM, ao lado)
-    canvas.disparar('pointerdown', { clientX: 400, clientY: 460 });
+    // Botão PISTA: x 20..240, y 496..536 (abaixo de PERSONAGEM, mesma coluna)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 516 });
     expect(aoPista).toHaveBeenCalledTimes(1);
 
     janela.disparar('KeyT');
@@ -319,7 +319,7 @@ describe('Fase 1: Cena de Menu Principal', () => {
 
     // Sem aoPista: clicar no botão não lança erro
     const cenaSemCallback = criarCenaMenu({ canvas, aoJogar: () => undefined, aoOpcoes: () => undefined });
-    expect(() => canvas.disparar('pointerdown', { clientX: 400, clientY: 460 })).not.toThrow();
+    expect(() => canvas.disparar('pointerdown', { clientX: 130, clientY: 516 })).not.toThrow();
     cenaSemCallback.destruir?.();
   });
 });
@@ -573,8 +573,8 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     for (let i = 0; i < 20; i += 1) gerenciador.atualizar();
     expect(gerenciador.cenaAtual()).toBe('menu');
 
-    // No menu, toca em Jogar (x: 80..300, y: 220..274)
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 240 });
+    // No menu, toca em Treino (x: 20..240, y: 204..244)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
   });
 
@@ -595,8 +595,8 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
 
     expect(gerenciador.cenaAtual()).toBe('menu');
 
-    // Clica em opções (x: 80..300, y: 370..424)
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 390 });
+    // Clica em opções (x: 20..240, y: 400..440)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 420 });
     expect(gerenciador.cenaAtual()).toBe('opcoes');
 
     // Alterna controles para botões
@@ -630,8 +630,8 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     // Nenhuma escolha ainda: o padrão (implícito) é o primeiro inicial do catálogo (capi), nada gravado
     expect(save.personagemAtivo).toBeUndefined();
 
-    // No menu, toca em PERSONAGEM (x: 80..300, y: 445..499)
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 460 });
+    // No menu, toca em PERSONAGEM (x: 20..240, y: 448..488)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 468 });
     expect(gerenciador.cenaAtual()).toBe('selecao');
 
     // Escolhe o card 1 (segunda coluna, primeira linha = 'bandeira'): x 350..610, y 112..262
@@ -645,7 +645,7 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     // Entra no jogo: a cena de descida recebe o personagem escolhido (sem lançar erro na composição)
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 240 });
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();
@@ -663,8 +663,8 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     // Nenhuma escolha ainda: o padrão (implícito) é a primeira pista inicial do catálogo (morro-do-pinhao), nada gravado
     expect(save.pistaAtiva).toBeUndefined();
 
-    // No menu, toca em PISTA (x: 320..540, y: 445..499)
-    canvas.disparar('pointerdown', { clientX: 400, clientY: 460 });
+    // No menu, toca em PISTA (x: 20..240, y: 496..536)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 516 });
     expect(gerenciador.cenaAtual()).toBe('selecao-pista');
 
     // Escolhe o card 1 (segunda coluna, primeira linha = 'pico-do-picole'): x 350..610, y 112..262
@@ -678,7 +678,7 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     // Entra no jogo: a cena de descida recebe a pista escolhida (sem lançar erro na composição)
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 240 });
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();

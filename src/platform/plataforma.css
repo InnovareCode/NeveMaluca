@@ -170,6 +170,17 @@
   display: inline;
 }
 
+/* Celular deitado: só o ícone, pra não cobrir a capa do menu (o rótulo continua no aria-label e no textContent). */
+@media (max-height: 500px) {
+  #btn-tela-cheia.com-rotulo .rotulo {
+    display: none;
+  }
+  #btn-tela-cheia {
+    padding: 0;
+    background: rgba(11, 26, 51, 0.55);
+  }
+}
+
 #btn-tela-cheia:hover {
   background: rgba(42, 125, 225, 0.85);
 }
