@@ -16,17 +16,18 @@ import { pintorParqueRaster } from './parque-raster';
 // num script de prova à parte; nunca acontece em produção (ambos os pontos reais importam por caminho relativo).
 export { precarregarAssetsParqueRaster, _esquecerAssetsParqueRasterParaTeste, _dimensoesCacheParaTeste } from './parque-raster';
 export { precarregarAssetsBosqueRaster, _esquecerAssetsBosqueRasterParaTeste, _dimensoesCacheBosqueParaTeste } from './bosque-raster';
-import { pintorVila } from './vila';
+export { precarregarAssetsVilaRaster, _esquecerAssetsVilaRasterParaTeste, _dimensoesCacheVilaParaTeste } from './vila-raster';
+import { pintorVilaRaster } from './vila-raster';
 import { pintorVulcao } from './vulcao';
 import type { PintorTema } from './tipos';
 
-// `bosque` e `parque` usam o pintor raster "Pixar" (docs/rollout-cenarios-pixar.md): cada um cai sozinho na versão
-// vetorial se os assets ainda não carregaram ou falharem (ver `bosque-raster.ts`/`parque-raster.ts`) -- por isso o
-// mapa aponta direto pra eles, sem precisar de um 2º caminho aqui.
+// `bosque`, `parque` e `vila` usam o pintor raster "Pixar" (docs/rollout-cenarios-pixar.md): cada um cai sozinho na
+// versão vetorial se os assets ainda não carregaram ou falharem (ver `bosque-raster.ts`/`parque-raster.ts`/
+// `vila-raster.ts`) -- por isso o mapa aponta direto pra eles, sem precisar de um 2º caminho aqui.
 const PINTORES_POR_TEMA: Readonly<Record<string, PintorTema>> = {
   bosque: pintorBosqueRaster,
   parque: pintorParqueRaster,
-  vila: pintorVila,
+  vila: pintorVilaRaster,
   vulcao: pintorVulcao,
   cume: pintorCume,
 };

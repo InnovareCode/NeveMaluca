@@ -205,15 +205,23 @@ def processar_texturas(cfg):
 
 def processar_objetos(cfg):
     print("folha de objetos (12 celulas)")
-    rgba = chave_e_despill(carregar_rgb(cfg["fonte"], "objetos-v1.png"), cfg["chroma"])
+    raw = carregar_rgb(cfg["fonte"], "objetos-v1.png")
+    rgba = chave_e_despill(raw, cfg["chroma"])
     h, w = rgba.shape[:2]
     cols = [round(i * w / 4) for i in range(5)]
     lins = [round(i * h / 3) for i in range(4)]
     multicomp = set(cfg.get("objetos_multicomp", ()))
+    # objetos que brilham (lua, magma, lanterna) deixam um halo que vira franja da chave: re-chaveia a
+    # celula com tol/suav mais fortes pra comer o halo sem tocar no corpo (longe da chave). {nome: (tol, suav)}
+    forte = dict(cfg.get("objetos_chave_forte", {}))
     for i, nome in enumerate(cfg["objetos"]):
         x0, x1 = cols[i % 4], cols[i % 4 + 1]
         y0, y1 = lins[i // 4], lins[i // 4 + 1]
-        cel = rgba[y0:y1, x0:x1]
+        if nome in forte:
+            t, s = forte[nome]
+            cel = chave_e_despill(raw[y0:y1, x0:x1], cfg["chroma"], tol=t, suav=s)
+        else:
+            cel = rgba[y0:y1, x0:x1]
         mask = cel[..., 3] > 10
         if not mask.any():
             print(f"  AVISO: celula {nome} vazia, pulando"); continue
@@ -256,6 +264,48 @@ PISTAS = {
             "obj-bandeirinha-vermelha", "obj-bandeirinha-amarela", "obj-porteira", "obj-placa-seta",
         ],
         "objetos_multicomp": (),        # Morro: nenhum objeto com partes soltas de proposito
+    },
+    "vila-chocolate": {
+        "chroma": "verde",
+        "corte_topo_silhuetas": None,   # medido: #1 noturna veio limpa, sem fantasma
+        "manta_topo_cor": [234, 240, 255],   # neve #EAF0FF
+        "manta_bottom_cor": None,       # slab (neve->telha->periwinkle) vai ate a base
+        "texturas": ["tex-corpo", "tex-telha", "tex-enxaimel", "tex-neve"],  # TL TR BL BR (SS5.8)
+        "objetos": [
+            "obj-chamine", "obj-barril", "obj-treno", "obj-pinheiro-luzinhas",
+            "obj-boneco-gorro", "obj-marshmallow", "obj-varal", "obj-lampiao",
+            "obj-cata-vento", "obj-lua", "obj-caneca", "obj-portico-enxaimel",
+        ],
+        "objetos_multicomp": ("obj-varal",),   # varal: lampadas penduradas soltas de proposito
+        "objetos_chave_forte": {"obj-lua": (230, 40)},   # lua tem halo assado: chave forte come o anel verde
+    },
+    "vulcao-pe-gelado": {
+        "chroma": "verde",
+        "corte_topo_silhuetas": None,
+        "manta_topo_cor": [221, 235, 250],   # neve-gelo #DDEBFA
+        "manta_bottom_cor": None,            # slab de gelo vai ate a base
+        "texturas": ["tex-corpo", "tex-crosta", "tex-basalto", "tex-neve"],  # TL TR BL BR (SS6.8)
+        "objetos": [
+            "obj-prisma-basalto", "obj-bomba-vulcanica", "obj-coluna-tombada", "obj-fumarola",
+            "obj-boneco-escalda-pes", "obj-cristal-gelo", "obj-ponte-basalto", "obj-chaleira",
+            "obj-baforada", "obj-lua", "obj-termometro", "obj-portico-basalto",
+        ],
+        "objetos_multicomp": ("obj-baforada", "obj-chaleira"),   # vapor solto de proposito
+        "objetos_chave_forte": {"obj-lua": (230, 40)},           # lua: come o halo verde
+    },
+    "cume-da-ventania": {
+        "chroma": "verde",
+        "corte_topo_silhuetas": None,
+        "manta_topo_cor": [232, 241, 255],   # neve de vento #E8F1FF
+        "manta_bottom_cor": None,            # slab de gelo vai ate a base
+        "texturas": ["tex-corpo", "tex-cornija", "tex-fenda", "tex-neve"],  # TL TR BL BR (SS7.8)
+        "objetos": [
+            "obj-rocha-gelo", "obj-bloco-gelo", "obj-laje-cornija", "obj-pinheiro-torto",
+            "obj-boneco-cachecol", "obj-cristal-floco", "obj-corda", "obj-poste-corda",
+            "obj-torre-trelica", "obj-biruta", "obj-lua", "obj-placa-vento",
+        ],
+        "objetos_multicomp": (),             # corda e uma peca so; nada solto de proposito
+        "objetos_chave_forte": {"obj-lua": (230, 40)},
     },
 }
 

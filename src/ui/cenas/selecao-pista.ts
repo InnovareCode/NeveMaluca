@@ -12,7 +12,7 @@
  */
 import { ALTURA, LARGURA } from '../../core/constantes';
 import { obterPistaDeDados, PISTAS_DE_DADOS } from '../../data/pistas';
-import { precarregarAssetsBosqueRaster, temaDeRenderDoTema } from '../../render/temas/catalogo';
+import { precarregarAssetsBosqueRaster, precarregarAssetsVilaRaster, temaDeRenderDoTema } from '../../render/temas/catalogo';
 import { precarregarAssetsParqueRaster } from '../../render/temas/parque-raster';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
@@ -78,6 +78,7 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   // `pintorDoTema` usa para o Morro -- ver memória `dynamic-import-mesmo-caminho-mesma-instancia-vite`.
   void precarregarAssetsParqueRaster(opcoes.documento);
   void precarregarAssetsBosqueRaster(opcoes.documento);
+  void precarregarAssetsVilaRaster(opcoes.documento);
 
   const cartaoNoPonto = (pt: { x: number; y: number }): number | null => {
     for (let i = 0; i < opcoes.catalogo.length; i += 1) {
