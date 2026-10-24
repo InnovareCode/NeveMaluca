@@ -13,6 +13,7 @@
  * com um comando neutro, e não dentro de `desenhar`).
  */
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
+import { precarregarAssetsItens } from '../../assets/itens';
 import type { ComandoDescida, PilotoLeitura, ReplayV1 } from '../../core/contratos';
 import { codificarComandos } from '../../core/replay';
 import { rngDoCanal } from '../../core/rng';
@@ -147,6 +148,8 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
     .catch(() => {
       // fallback silencioso para a cápsula se o sprite falhar
     });
+  // Ícone do dourado (único item visível em TREINO, `desenharItensCamada`): mesmo lead time do sprite do piloto.
+  void precarregarAssetsItens();
 
   // Fantasma (C6): replay de outra descida (tipicamente o #1 salvo) rodando num 2º motor, em lockstep por tick com
   // este. Pista/versão incompatível ou comandos ilegíveis -> `reprodutorFantasma` fica `null` e a descida segue sem

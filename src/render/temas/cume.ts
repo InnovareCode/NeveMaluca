@@ -722,6 +722,49 @@ function desenharBonecoCachecolVento(ctx: CanvasRenderingContext2D, x: number, y
   ctx.stroke();
 }
 
+/** "Galho" (`CamadaJogo.obstaculosAltos`, C4) na pele do Cume: poste de madeira congelado fincado na neve --
+ *  antes caía no fallback genérico (retângulo cinza liso). Mesma silhueta de `bosque.ts: desenharGalho`, madeira
+ *  escura (`COR_TRONCO`) + galho claro de corda/fibra (`COR_CORDA_FIBRA`) + gelo no topo. */
+function desenharGalhoCume(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const topoY = y - h;
+  const meioW = w * 0.16;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x - meioW, y);
+  ctx.lineTo(x - meioW * 0.5, topoY + h * 0.12);
+  ctx.lineTo(x + meioW * 0.9, topoY);
+  ctx.lineTo(x + meioW * 1.1, topoY + h * 0.18);
+  ctx.lineTo(x + meioW * 0.3, y);
+  ctx.closePath();
+  ctx.fillStyle = COR_TRONCO;
+  ctx.fill();
+  ctx.strokeStyle = COR_CONTORNO_ESCURO;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x, y - h * 0.42);
+  ctx.lineTo(x + w * 0.46, y - h * 0.62);
+  ctx.lineTo(x + w * 0.4, y - h * 0.52);
+  ctx.lineTo(x + meioW * 0.4, y - h * 0.36);
+  ctx.closePath();
+  ctx.fillStyle = COR_CORDA_FIBRA;
+  ctx.fill();
+  ctx.strokeStyle = COR_CONTORNO_ESCURO;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(x + meioW * 0.2, topoY + h * 0.03, w * 0.26, h * 0.09, -0.2, 0, Math.PI * 2);
+  ctx.fillStyle = COR_TERRENO_MANTA;
+  ctx.fill();
+  ctx.strokeStyle = COR_CONTORNO_ESCURO;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function desenharObjetoCume(ctx: CanvasRenderingContext2D, obj: ObjetoPista, xTela: number, yTela: number, escala: number): void {
   const larguraPx = Math.max(8, obj.largura * escala);
   const alturaPx = Math.max(8, obj.altura * escala);
@@ -762,6 +805,9 @@ function desenharObjetoCume(ctx: CanvasRenderingContext2D, obj: ObjetoPista, xTe
       ctx.fill();
       break;
     }
+    case 'galho':
+      desenharGalhoCume(ctx, xTela, yTela, larguraPx, alturaPx);
+      break;
     default:
       // Fallback genérico tingido na paleta do Cume (`rampa`/`bandeira`/`portico`/`placa`: mesmo nível do
       // Picolé/Vila/Vulcão — ver memória `pintor-tema-nivel-de-pele-espelha-precedente`).

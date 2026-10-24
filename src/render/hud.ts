@@ -4,14 +4,15 @@
  *
  * Botão/slot de item + feedback de eventos (plano itens-corrida §I4b/I5, Lyra): `RETANGULO_BOTAO_ITEM` é a MESMA
  * zona que `ui/cenas/corrida.ts` repassa pro toque (`input/toque.ts: OpcoesToque.botaoItem`) — um retângulo só,
- * lido pelos dois lados (desenho aqui, hit-test lá), pra nunca desalinhar hitbox e ícone. Cores/letras são
- * placeholder vetorial (sem asset novo); o Apolo troca por arte de verdade depois (plano: "polimento de
- * nomes/arte é do Apolo").
+ * lido pelos dois lados (desenho aqui, hit-test lá), pra nunca desalinhar hitbox e ícone. Ícone real (2026-10-24,
+ * `assets/itens.ts`: `bola`/`poca`/`nuvem`/`turbo`/`escudo`/`ima`, 256x256) quando já carregado; círculo colorido
+ * + inicial é só o fallback enquanto a imagem não chegou (nunca travado, mesmo padrão de `assetsMenuCapaProntos`).
  */
 import { ALTURA, LARGURA } from '../core/constantes';
 import type { ComboLeitura, EventoCorrida, FaseDescida, IdPersonagem, TipoItem } from '../core/contratos';
 import { TIPOS_ITEM } from '../core/contratos';
 import { JANELA_LIGACAO_TICKS } from '../data/manobras';
+import { assetsItensProntos } from '../assets/itens';
 
 export interface DadosHud {
   readonly velocidadeMs: number;
@@ -298,18 +299,36 @@ export function desenharBotaoItem(ctx: CanvasRenderingContext2D, dados: DadosBot
     ctx.stroke();
     ctx.setLineDash([]);
   } else {
-    ctx.beginPath();
-    ctx.arc(cx, cy, raio - 8, 0, Math.PI * 2);
-    ctx.fillStyle = COR_ITEM[itemMostrado];
-    ctx.fill();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = COR_CONTORNO;
-    ctx.stroke();
-    ctx.fillStyle = COR_CONTORNO;
-    ctx.font = `800 ${Math.round(raio * 0.9)}px Barlow, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(itemMostrado.charAt(0).toUpperCase(), cx, cy + 1);
+    const icone = assetsItensProntos()?.[itemMostrado];
+    if (icone) {
+      const ladoIcone = (raio - 6) * 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, raio - 6, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(8, 18, 36, 0.35)';
+      ctx.fill();
+      ctx.drawImage(icone, cx - ladoIcone / 2, cy - ladoIcone / 2, ladoIcone, ladoIcone);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(cx, cy, raio - 6, 0, Math.PI * 2);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = COR_CONTORNO;
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy, raio - 8, 0, Math.PI * 2);
+      ctx.fillStyle = COR_ITEM[itemMostrado];
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = COR_CONTORNO;
+      ctx.stroke();
+      ctx.fillStyle = COR_CONTORNO;
+      ctx.font = `800 ${Math.round(raio * 0.9)}px Barlow, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(itemMostrado.charAt(0).toUpperCase(), cx, cy + 1);
+    }
   }
   ctx.restore();
 }

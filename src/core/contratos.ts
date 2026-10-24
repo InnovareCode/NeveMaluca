@@ -458,6 +458,16 @@ export interface LeituraRivalCorrida {
   readonly escudo?: boolean;
   /** Controle travado por uma trombada (reflete `atordoadoTicksRestantes > 0` do motor dele). */
   readonly atordoado?: boolean;
+  /**
+   * Leitura FÍSICA completa do motor deste rival neste tick (pedido do dono, 2026-10-24: "rivais animados de
+   * verdade, da mesma forma que o jogador") — `corrida/corrida.ts` já calcula isso por dentro (cada rival roda
+   * um `MotorDescida` próprio); antes só `distancia`/`fase` chegavam a `render/`. SÓ LEITURA: espelha
+   * `Corredor.leitura.piloto`/`.eventos` tick a tick, nunca influencia a simulação — não entra em `hashEstado()`.
+   */
+  readonly leituraPiloto: PilotoLeitura;
+  /** Eventos do motor dele NESTE tick (pulo/pouso/tombo/manobra/combo) — dispara pose visual/estica-amassa por
+   *  rival em `render/pose-visual.ts`, mesmo mecanismo do jogador. */
+  readonly eventos: readonly EventoDescida[];
 }
 
 /** Leitura de UM tick da corrida inteira (plano §Contratos): o jogador em detalhe, os rivais resumidos.

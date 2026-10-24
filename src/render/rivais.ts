@@ -1,26 +1,26 @@
 /**
  * Indicadores visuais dos rivais da corrida (plano `docs/plano-corrida-campeonato.md` §C2b, redesenho "rivais na
  * pista de verdade" pedido pelo dono em 2026-10-24): quem está dentro da margem da tela é desenhado com o MESMO
- * sprite/escala/ancoragem do piloto do jogador (`render/piloto.ts: desenharPiloto`, reaproveitado aqui — nunca uma
- * bolha/anel/avatar circular), nome pequeno e discreto sobre a cabeça; quem já saiu da tela ganha uma seta na
- * borda com o rosto (sprite, se já carregado) e a distância relativa ao jogador ("+12 m"/"-8 m") -- esse indicador
- * de FORA da tela continua como estava (é HUD, não "rival em bolha" na pista).
+ * sprite/escala/ancoragem/POSE do piloto do jogador (`render/piloto.ts: desenharPiloto`, reaproveitado aqui —
+ * nunca uma bolha/anel/avatar circular), nome pequeno e discreto sobre a cabeça; quem já saiu da tela ganha uma
+ * seta na borda com o rosto (sprite, se já carregado) e a distância relativa ao jogador ("+12 m"/"-8 m") -- esse
+ * indicador de FORA da tela continua como estava (é HUD, não "rival em bolha" na pista).
  *
- * Só RENDER: recebe a posição de mundo (`xM`/`yM`) e a inclinação do terreno (`anguloGraus`) já calculadas por
- * quem chama (`ui/cenas/corrida.ts`) -- nunca consulta `pista/` (regra de camada, memória
- * `render-nao-pode-importar-pista`: `render/` só importa `core/`, `data/`, `assets/`) e nunca toca o motor.
+ * Desde a 2ª rodada (2026-10-24, "rivais animados de verdade"): `rival.piloto` é a `PilotoLeitura` REAL do motor
+ * dele (`LeituraRivalCorrida.leituraPiloto`, `core/contratos.ts`/`corrida/corrida.ts` -- SÓ LEITURA, nunca
+ * influencia a simulação), com a pose já ajustada pela instância de `render/pose-visual.ts` DELE (takeoff/wobble/
+ * grab/tombo, igual ao jogador) -- quem monta isso é `ui/cenas/corrida.ts`, nunca aqui (`render/` só importa
+ * `core/`/`data/`/`assets/`, nunca `pista/`/`corrida/`).
  *
- * PENDÊNCIA conhecida (fora do alcance desta tela, registrada no handoff): `LeituraRivalCorrida` (`core/
- * contratos.ts`) só expõe `distancia`/`fase` de cada rival, não a leitura completa do motor dele (`pose`/`modo`/
- * `angulo`/`y` reais) nem os `EventoDescida` que disparariam takeoff/wobble/grab/estica-e-amassa visuais -- por
- * isso aqui cada rival sempre desenha numa pose "de pé" (ou de queda, quando `fase === 'tombo'`), nunca salta/gira
- * de verdade. Expor isso é mudança em `src/corrida/corrida.ts` (fora do escopo desta tarefa).
+ * Só RENDER: recebe `piloto`/`estica` já prontos por quem chama, nunca consulta `pista/`/`corrida/` nem toca o
+ * motor (regra de camada, memória `render-nao-pode-importar-pista`).
  */
 import type { SpritePersonagem } from '../assets/index';
 import { ALTURA, LARGURA, PX_POR_METRO } from '../core/constantes';
 import type { PilotoLeitura } from '../core/contratos';
 import { mundoParaTela, type EstadoCamera } from './mundo';
 import { desenharPiloto } from './piloto';
+import type { FatorEstica } from './pose-visual';
 
 const COR_TEXTO = '#f4f9ff';
 const COR_CONTORNO = '#0b1a33';
@@ -32,44 +32,23 @@ const RAIO_AVATAR_SETA_PX = 13;
  * início de uma corrida (pelotão fechado) os nomes empilham/atravessam uns aos outros e ficam ilegíveis. O sprite
  * em si continua desenhado (só o nome some) -- ver `desenharRivais`. */
 const LIMIAR_COLADO_PX = 90;
-/** Altura (m) acima do CHÃO (pés) onde o nome flutua -- fixa porque toda pose agora escala pro mesmo tamanho real
- * (`render/piloto.ts: ALTURA_ALVO_M`), então o topo da cabeça está sempre na mesma altura relativa aos pés. */
+/** Altura (m) acima dos PÉS onde o nome flutua -- fixa porque toda pose escala pro mesmo tamanho real
+ * (`render/piloto.ts: ALTURA_ALVO_M`), então a cabeça está sempre nessa altura relativa aos pés (mesmo no ar). */
 const ALTURA_NOME_M = 2.25;
 
 export interface RivalVisual {
   readonly id: string;
   readonly nome: string;
   readonly cor: string;
-  /** Posição no MUNDO: pés no chão da pista no x do rival (plano C-D2: sem colisão, cada motor é independente). */
-  readonly xM: number;
-  readonly yM: number;
-  /** Inclinação do terreno (graus, convenção `core/trig.ts`) em `xM` -- aproxima o ângulo do corpo dele no chão. */
-  readonly anguloGraus: number;
-  /** `fase === 'tombo'` do motor dele: desenha numa pose de queda em vez da pose "de pé" padrão. */
-  readonly emTombo: boolean;
+  /** Leitura FÍSICA real do motor dele neste tick (x/y/ângulo/modo/pose) -- pose já passada pela instância de
+   *  `RastreadorPoseVisual` DELE (takeoff/wobble/grab), mesmo mecanismo do jogador. */
+  readonly piloto: PilotoLeitura;
+  /** Estica-e-amassa deste tick (`RastreadorPoseVisual.escalaVisual()` DELE); sem ele, 1:1. */
+  readonly estica?: FatorEstica | undefined;
   /** `rival.distancia - jogador.distancia`: positivo = na frente, negativo = atrás. */
   readonly distanciaRelativaM: number;
   /** Sprite já carregado (fire-and-forget), ou `null`/ausente -- cai no fallback (cápsula/ponto colorido). */
   readonly sprite?: SpritePersonagem | null | undefined;
-}
-
-/** Leitura sintética: só os campos que `desenharPiloto` de fato lê (x/y/angulo/modo/pose) -- os demais (vx/vy/
- * velocidade/grab/voltas/ticksNoAr) não existem pra um rival nesta tela (ver PENDÊNCIA no cabeçalho), zerados. */
-function pilotoSinteticoDoRival(rival: RivalVisual): PilotoLeitura {
-  return {
-    x: rival.xM,
-    y: rival.yM,
-    vx: 0,
-    vy: 0,
-    velocidade: 0,
-    angulo: rival.anguloGraus,
-    anguloTerreno: rival.anguloGraus,
-    modo: rival.emTombo ? 'tombo' : 'chao',
-    pose: rival.emTombo ? 'fall1' : 'ride0',
-    grab: null,
-    voltas: 0,
-    ticksNoAr: 0,
-  };
 }
 
 function obterAvatar(sprite: RivalVisual['sprite']): CanvasImageSource | null {
@@ -141,14 +120,14 @@ function desenharRivalForaDeTela(ctx: CanvasRenderingContext2D, xTela: number, r
   ctx.restore();
 }
 
-/** Desenha todos os `rivais`: dentro da margem da tela, sprite em tamanho real (+ nome se não estiver amontoado
- * com outro rival, ver `LIMIAR_COLADO_PX`) -- ordenados por profundidade (`yTela` crescente) pra quem está mais à
- * frente na tela (mais embaixo) desenhar por CIMA de quem está mais atrás, legível mesmo no pelotão fechado do
- * início; fora da margem, seta+rosto+distância (esses nunca colidem entre si -- cada lado da borda tem no máximo
- * uma seta por altura `ALTURA * 0.42`, sempre a mesma). */
+/** Desenha todos os `rivais`: dentro da margem da tela, sprite em tamanho real na pose/estica reais do motor dele
+ * (+ nome se não estiver amontoado com outro rival, ver `LIMIAR_COLADO_PX`) -- ordenados por profundidade
+ * (`yTela` crescente) pra quem está mais à frente na tela (mais embaixo) desenhar por CIMA de quem está mais
+ * atrás, legível mesmo no pelotão fechado do início; fora da margem, seta+rosto+distância (esses nunca colidem
+ * entre si -- cada lado da borda tem no máximo uma seta por altura `ALTURA * 0.42`, sempre a mesma). */
 export function desenharRivais(ctx: CanvasRenderingContext2D, camera: EstadoCamera, rivais: readonly RivalVisual[]): void {
   const pontos = rivais.map((rival) => {
-    const pt = mundoParaTela(rival.xM, rival.yM, camera, PX_POR_METRO);
+    const pt = mundoParaTela(rival.piloto.x, rival.piloto.y, camera, PX_POR_METRO);
     return { x: pt.x, y: pt.y, dentroDaTela: pt.x >= MARGEM_BORDA_PX && pt.x <= LARGURA - MARGEM_BORDA_PX };
   });
 
@@ -160,10 +139,10 @@ export function desenharRivais(ctx: CanvasRenderingContext2D, camera: EstadoCame
       continue;
     }
     const colado = pontos.some((q, j) => rivais[j] !== rival && q.dentroDaTela && Math.hypot(p.x - q.x, p.y - q.y) < LIMIAR_COLADO_PX);
-    desenharPiloto(ctx, pilotoSinteticoDoRival(rival), camera, rival.sprite ?? null);
+    desenharPiloto(ctx, rival.piloto, camera, rival.sprite ?? null, undefined, rival.estica);
     if (colado) continue;
 
-    const topo = mundoParaTela(rival.xM, rival.yM + ALTURA_NOME_M, camera, PX_POR_METRO);
+    const topo = mundoParaTela(rival.piloto.x, rival.piloto.y + ALTURA_NOME_M, camera, PX_POR_METRO);
     ctx.save();
     ctx.globalAlpha = 0.85;
     ctx.font = '700 12px Barlow, sans-serif';

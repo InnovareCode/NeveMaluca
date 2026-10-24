@@ -12,11 +12,13 @@
  * Cada coletável é um `ObjetoPista` SINTÉTICO de tipo `'floco'` (nunca entra em `pista.objetos`/hash, mesmo padrão
  * de `render/chegada.ts` -- ver memória `objeto-sintetico-render-only-sem-tocar-hash`): reaproveita de graça a
  * pele que cada tema já desenha pra esse tipo (pinhão no Morro, cristal no Cume/Vulcão, marshmallow na Vila, gota
- * de menta no Parque -- `render/temas/<tema>-raster.ts`), sem nenhum sprite novo. `dourado` ganha um halo
- * pulsante por cima (vetorial, sem asset) pra ler como "item raro".
+ * de menta no Parque -- `render/temas/<tema>-raster.ts`), sem nenhum sprite novo. `dourado` usa o ícone real
+ * (`floco-dourado.webp`, 2026-10-24) + halo pulsante por baixo; sem o ícone, cai na MESMA pele do tema (como
+ * antes) com o halo por cima.
  */
 import { PX_POR_METRO } from '../core/constantes';
 import type { CamadaJogo, EventoDescida, ObjetoPista, PilotoLeitura, PistaGerada } from '../core/contratos';
+import { assetsItensProntos } from '../assets/itens';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
 import { alturaDoTerreno } from './terreno';
 import type { PintorTema } from './temas/tipos';
@@ -50,6 +52,13 @@ export function desenharItensCamada(
       ctx.arc(centro.x, centro.y, alturaPx * 0.9, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+
+      const icone = assetsItensProntos()?.flocoDourado;
+      if (icone) {
+        const lado = alturaPx * 1.3;
+        ctx.drawImage(icone, centro.x - lado / 2, centro.y - lado / 2, lado, lado);
+        continue;
+      }
     }
 
     // Sintético: `yTela` é a BASE (mesmo contrato de `pintor.desenharObjeto`) -- desloca pra baixo metade da

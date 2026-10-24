@@ -218,6 +218,10 @@ export function criarCorrida(opcoes: OpcoesCorrida): Corrida {
         item: itensCorrida.itemDe(c.id),
         escudo: itensCorrida.escudoAtivo(c.id),
         atordoado: itensCorrida.atordoadoAtivo(c.id),
+        // SÓ LEITURA (pedido do dono, 2026-10-24): espelha o que `c.leitura` já tem, nunca influencia a
+        // simulação -- `hashEstado()` continua só sobre `c.motor.hashEstado()`, intocado.
+        leituraPiloto: c.leitura.piloto,
+        eventos: c.leitura.eventos,
       }));
     return {
       tick,

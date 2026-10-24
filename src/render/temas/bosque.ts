@@ -436,6 +436,50 @@ function desenharTronco(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
   ctx.fill();
 }
 
+/** Desenha o "galho" (`CamadaJogo.obstaculosAltos`, C4): um graveto quebrado nascendo da neve até a altura de
+ *  cabeça -- antes caía no fallback genérico (retângulo cinza liso, `#7A8F9F`), que o dono notou destoando do
+ *  resto da arte Pixar. Tronco principal torto + galho fino secundário + boné de neve na ponta, mesma linguagem
+ *  de `desenharTronco` acima (madeira + neve, corte quadrilátero preenchido, nunca stroke-only). */
+function desenharGalho(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const topoY = y - h;
+  const meioW = w * 0.16;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x - meioW, y);
+  ctx.lineTo(x - meioW * 0.5, topoY + h * 0.12);
+  ctx.lineTo(x + meioW * 0.9, topoY);
+  ctx.lineTo(x + meioW * 1.1, topoY + h * 0.18);
+  ctx.lineTo(x + meioW * 0.3, y);
+  ctx.closePath();
+  ctx.fillStyle = COR_MADEIRA_ESCURA;
+  ctx.fill();
+  ctx.strokeStyle = COR_CONTORNO;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x, y - h * 0.42);
+  ctx.lineTo(x + w * 0.46, y - h * 0.62);
+  ctx.lineTo(x + w * 0.4, y - h * 0.52);
+  ctx.lineTo(x + meioW * 0.4, y - h * 0.36);
+  ctx.closePath();
+  ctx.fillStyle = COR_MADEIRA_CLARA;
+  ctx.fill();
+  ctx.strokeStyle = COR_CONTORNO;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(x + meioW * 0.2, topoY + h * 0.03, w * 0.26, h * 0.09, -0.2, 0, Math.PI * 2);
+  ctx.fillStyle = COR_NEVE_LUZ_OBJ;
+  ctx.fill();
+  ctx.strokeStyle = COR_CONTORNO;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Desenha um boneco de neve cômico de 3 esferas com cenoura e chapéu torto */
 function desenharBonecoDeNeve(ctx: CanvasRenderingContext2D, x: number, y: number, _w: number, h: number): void {
   const baseR = h * 0.28;
@@ -624,6 +668,9 @@ function desenharObjetoBosque(ctx: CanvasRenderingContext2D, obj: ObjetoPista, x
       break;
     case 'floco':
       desenharColetavel(ctx, xTela, yTela, larguraPx, alturaPx);
+      break;
+    case 'galho':
+      desenharGalho(ctx, xTela, yTela, larguraPx, alturaPx);
       break;
     default:
       // Fallback genérico elegante com contorno escuro e neve no topo

@@ -3,12 +3,11 @@
  * C2a, Vega) com o jogador (entrada real, como `descida.ts`) + 5 rivais de IA -- o elenco inteiro
  * (`data/personagens.ts`) menos quem o jogador escolheu -- numa única pista.
  *
- * `LeituraCorrida.rivais` chega SEM x/y (`{id, piloto, fase, distancia}`, `core/contratos.ts`): a câmera só segue
- * o JOGADOR (mesma `criarCamera`/`Camera` de `descida.ts`, alimentada só por `leitura.jogador.piloto`), e a
- * posição de cada rival na tela é calculada por `distancia` -- a MESMA unidade/escala de `PilotoLeitura.x`
- * (`descida/motor.ts`: `estado.distancia = p.x`) -- mais a altura do chão nesse ponto (`pista/consulta.ts
- * alturaEm`). Essa conta mora AQUI, não em `render/rivais.ts`: `render/` não pode importar `pista/` (regra de
- * camada, memória `render-nao-pode-importar-pista`).
+ * `LeituraCorrida.rivais` expõe `leituraPiloto` (a `PilotoLeitura` REAL do motor de cada rival, SÓ LEITURA --
+ * `corrida/corrida.ts`, pedido do dono 2026-10-24: "rivais animados de verdade") + `eventos` do tick: a câmera só
+ * segue o JOGADOR (mesma `criarCamera`/`Camera` de `descida.ts`, alimentada só por `leitura.jogador.piloto`), mas
+ * cada rival desenha na própria posição/pose/ângulo reais, com UM `RastreadorPoseVisual` (`render/pose-visual.ts`)
+ * por rival (`visualRivais`) pra takeoff/wobble/grab/estica-e-amassa, mesmo mecanismo do jogador.
  *
  * Por ora roda UMA corrida (plano §C2b: "por ora pode rodar uma corrida (1ª pista)"); quando o jogador chega,
  * `corrida.finalizar()` fecha o pódio na hora (os rivais que faltam correm pela própria IA até o fim ou o teto de
@@ -16,6 +15,7 @@
  * C5b) fica em `ui/cenas/campeonato.ts`, que compõe esta cena com `ui/cenas/podio.ts`.
  */
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
+import { precarregarAssetsItens } from '../../assets/itens';
 import type { ComandoDescida, ParticipanteCorrida, ResultadoCorrida } from '../../core/contratos';
 import { rngDoCanal } from '../../core/rng';
 import { criarCorrida, type Corrida } from '../../corrida/index';
@@ -26,7 +26,7 @@ import type { AlvoToque } from '../../input/toque';
 // Import por arquivo (não o barril '../../input'): mesmo motivo de `descida.ts` (ver comentário lá).
 import { criarEntrada, type Entrada } from '../../input/index';
 import { exigirPistaValida, gerarCamadaJogo } from '../../pista/index';
-import { alturaEm, inclinacaoGrausEm } from '../../pista/consulta';
+import { alturaEm } from '../../pista/consulta';
 import {
   desenharItensCamada,
   desenharKickers,
@@ -163,6 +163,10 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   const avisosObstaculo: SistemaAvisosObstaculo = criarSistemaAvisosObstaculo();
   const turboPouso: SistemaTurboPouso = criarSistemaTurboPouso();
   const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
+  // Rivais animados de verdade (pedido do dono, 2026-10-24): 1 rastreador de pose visual POR RIVAL, mesmo
+  // mecanismo do jogador (takeoff/wobble/grab/estica-e-amassa) -- `render/pose-visual.ts` já previa isso
+  // ("fantasma/rivais do C2b usam outra instância cada"). Criado 1x aqui, atualizado por `id` a cada tick.
+  const visualRivais = new Map<string, RastreadorPoseVisual>(participantes.filter((p) => p.id !== idJogador).map((p) => [p.id, criarRastreadorPoseVisual()]));
   const confete: SistemaConfete = criarConfete(rngVisual);
   // Feedback dos eventosCorrida (I5): toast curto acima do botão de item quando ENVOLVE o jogador.
   const feedbackItens: SistemaFeedbackItens = criarSistemaFeedbackItens();
@@ -191,6 +195,9 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         // fallback silencioso: cápsula (jogador) ou ponto colorido + inicial (rival)
       });
   }
+  // Ícones de item (2026-10-24): mesmo lead time dos sprites -- `render/hud.ts`/`itens.ts`/`camada.ts` caem no
+  // vetorial sozinhos enquanto não chega, nunca travam um tick.
+  void precarregarAssetsItens();
 
   let leitura = corrida.leitura();
   camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual);
@@ -230,6 +237,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       avisosObstaculo.atualizar(leitura.jogador.eventos);
       turboPouso.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       visualPiloto.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
+      for (const r of leitura.rivais) visualRivais.get(r.id)?.atualizar(r.leituraPiloto, r.eventos);
       somManobras?.atualizar(leitura.jogador);
       somDescida?.atualizar(leitura.jogador);
       musicaAdaptativa?.atualizar(leitura.jogador);
@@ -238,6 +246,9 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       for (const ev of leitura.eventosCorrida ?? []) {
         if (ev.tipo === 'item-usado' && ev.id === idJogador && ev.item === 'escudo') escudoJogadorTicks = PARAMETROS_ESCUDO_ITEM.ticks;
         else if (ev.tipo === 'bloqueado' && ev.id === idJogador) escudoJogadorTicks = 0;
+        // Soco de câmera ao ser atingido (feedback do dono): `render/camera.ts` só lê `EventoDescida`, por isso o
+        // gatilho de "acerto" (que é `EventoCorrida`, só existe aqui) mora na cena, nunca dentro da câmera.
+        else if (ev.tipo === 'acerto' && ev.em === idJogador) camera.golpe(1);
       }
       if (escudoJogadorTicks > 0) escudoJogadorTicks -= 1;
       if (leitura.jogador.fase === 'chegou') {
@@ -267,16 +278,17 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       );
       desenharEntidadesItens(ctx, camLeitura, entidadesVisuais, leitura.jogador.tick);
 
+      // Rivais animados de verdade (pedido do dono): `r.leituraPiloto` é a física REAL do motor dele (SÓ LEITURA,
+      // `corrida/corrida.ts` -- nunca influencia a simulação), pose ajustada pela instância de pose visual DELE,
+      // igual ao jogador. Sem posição sintética/aproximada: pulo/giro/tombo saem do próprio motor.
       const rivaisVisuais: RivalVisual[] = leitura.rivais.map((r) => {
-        const xM = r.distancia;
+        const tracker = visualRivais.get(r.id);
         return {
           id: r.id,
           nome: nomeDoPersonagem(r.id),
           cor: corDoPersonagem(r.id),
-          xM,
-          yM: alturaEm(pista, xM), // pés no chão -- `desenharPiloto` ancora pelo contato/pivô do sprite, igual ao jogador
-          anguloGraus: inclinacaoGrausEm(pista, xM),
-          emTombo: r.fase === 'tombo',
+          piloto: { ...r.leituraPiloto, pose: tracker?.poseVisual(r.leituraPiloto.pose) ?? r.leituraPiloto.pose },
+          estica: tracker?.escalaVisual(),
           distanciaRelativaM: r.distancia - leitura.jogador.distancia,
           sprite: sprites.get(r.id) ?? null,
         };
@@ -285,7 +297,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       // Bolha de gelo dos rivais (plano itens-corrida): `LeituraRivalCorrida.escudo` já vem pronto; mesmo índice
       // de `rivaisVisuais` (os dois nascem de `leitura.rivais.map(...)`, nunca reordenados).
       leitura.rivais.forEach((r, i) => {
-        if (r.escudo) desenharEscudo(ctx, camLeitura, (rivaisVisuais[i] as RivalVisual).xM, (rivaisVisuais[i] as RivalVisual).yM, leitura.jogador.tick);
+        if (r.escudo) desenharEscudo(ctx, camLeitura, (rivaisVisuais[i] as RivalVisual).piloto.x, (rivaisVisuais[i] as RivalVisual).piloto.y, leitura.jogador.tick);
       });
 
       turboPouso.desenhar(ctx, camLeitura); // ANTES do piloto: o flash fica atrás, nunca cobre o sprite

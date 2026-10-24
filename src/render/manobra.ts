@@ -25,6 +25,8 @@ const ENTRELINHA_PX = 22;
 const COR_MANOBRA = '#ffe08a';
 const COR_COMBO_FECHADO = '#ffd166';
 const COR_COMBO_PERDIDO = '#ff6b6b';
+const COR_PERFEITO = '#fff1a8';
+const VIDA_PERFEITO_TICKS = 40;
 
 interface Popup {
   ativo: boolean;
@@ -140,6 +142,10 @@ export function criarSistemaPopupsManobra(): SistemaPopupsManobra {
           // quando `camada` está presente (treino sem camada nunca emite este evento), mesmo texto cru de sempre
           // (sem passar pelos sinônimos do Apolo: é feedback raro e pontual, não precisa variar).
           abrir('POR UM FIO!', `+${ev.pontos}`, COR_COMBO_FECHADO, piloto.x, piloto.y + 0.8, VIDA_MANOBRA_TICKS, 24);
+        } else if (ev.tipo === 'pouso' && ev.qualidade === 'perfeito') {
+          // Game feel (feedback do dono, 2026-10-24): "PERFEITO!" no pouso impecável -- texto cru de sempre (sem
+          // sinônimo do Apolo, é um selo de qualidade, não uma piada variável), mesmo molde dos popups acima.
+          abrir('PERFEITO!', '', COR_PERFEITO, piloto.x, piloto.y + 0.9, VIDA_PERFEITO_TICKS, 26);
         }
       }
 
