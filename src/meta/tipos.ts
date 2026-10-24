@@ -88,6 +88,13 @@ export interface SaveV1 {
    */
   personagemAtivo?: IdPersonagem;
   /**
+   * Pista escolhida pelo jogador (seleção de pista, UI). ADITIVO (sem bump: ausente = jogador nunca escolheu, e
+   * quem lê decide o padrão — hoje a primeira `RegrasSave.pistasIniciais`, implícito, como os outros iniciais
+   * nunca gravados). Validado contra `RegrasSave.pistas` (o catálogo inteiro, não só `prog.pistas`: o gating de
+   * desbloqueio ainda não existe, M3-futuro). Mesmo padrão de [[personagemAtivo]].
+   */
+  pistaAtiva?: IdPista;
+  /**
    * Campos de raiz que este build nao conhece (o mesmo `v`, gravados por um build com campo aditivo): preservados
    * com limites (ver `MAX_EXTRAS_*` em storage.ts). Ausente quando nao ha.
    */

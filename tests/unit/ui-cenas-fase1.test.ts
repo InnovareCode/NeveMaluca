@@ -5,6 +5,7 @@ import { criarCenaAbertura } from '../../src/ui/cenas/abertura';
 import { criarCenaMenu } from '../../src/ui/cenas/menu';
 import { criarCenaOpcoes } from '../../src/ui/cenas/opcoes';
 import { criarCenaSelecao } from '../../src/ui/cenas/selecao';
+import { criarCenaSelecaoPista } from '../../src/ui/cenas/selecao-pista';
 import { criarGerenciadorCenas } from '../../src/ui/cenas/gerenciador';
 import { eventoParaPontoLogico, pontoDentroDoBotao } from '../../src/ui/interacao';
 import { caminhoArredondado } from '../../src/ui/desenho';
@@ -293,6 +294,34 @@ describe('Fase 1: Cena de Menu Principal', () => {
     expect(() => canvas.disparar('pointerdown', { clientX: 120, clientY: 460 })).not.toThrow();
     cenaSemCallback.destruir?.();
   });
+
+  it('dispara aoPista ao tocar no botão PISTA (ao lado de PERSONAGEM) ou apertar KeyT; sem o callback fica inerte', () => {
+    const canvas = criarCanvasFalso();
+    const janela = criarJanelaFalsa();
+    const aoPista = vi.fn();
+
+    const cena = criarCenaMenu({
+      canvas,
+      janela,
+      aoJogar: () => undefined,
+      aoOpcoes: () => undefined,
+      aoPista,
+    });
+
+    // Botão PISTA: x 320..540, y 445..499 (mesma linha de PERSONAGEM, ao lado)
+    canvas.disparar('pointerdown', { clientX: 400, clientY: 460 });
+    expect(aoPista).toHaveBeenCalledTimes(1);
+
+    janela.disparar('KeyT');
+    expect(aoPista).toHaveBeenCalledTimes(2);
+
+    cena.destruir?.();
+
+    // Sem aoPista: clicar no botão não lança erro
+    const cenaSemCallback = criarCenaMenu({ canvas, aoJogar: () => undefined, aoOpcoes: () => undefined });
+    expect(() => canvas.disparar('pointerdown', { clientX: 400, clientY: 460 })).not.toThrow();
+    cenaSemCallback.destruir?.();
+  });
 });
 
 describe('Fase 1: Tela de Seleção de Personagem', () => {
@@ -353,6 +382,79 @@ describe('Fase 1: Tela de Seleção de Personagem', () => {
       janela,
       catalogo: CATALOGO,
       obterPersonagemAtivo: () => 'capi',
+      aoEscolher: () => undefined,
+      aoVoltar: () => undefined,
+    });
+
+    expect(canvas.totalOuvintes('pointerdown')).toBe(1);
+    expect(canvas.totalOuvintes('pointermove')).toBe(1);
+    expect(janela.totalOuvintes('keydown')).toBe(1);
+
+    cena.destruir?.();
+    expect(canvas.totalOuvintes('pointerdown')).toBe(0);
+    expect(canvas.totalOuvintes('pointermove')).toBe(0);
+    expect(janela.totalOuvintes('keydown')).toBe(0);
+  });
+});
+
+describe('Fase 1: Tela de Seleção de Pista', () => {
+  const CATALOGO_PISTAS = ['morro-do-pinhao', 'pico-do-picole', 'vila-chocolate', 'vulcao-pe-gelado', 'cume-da-ventania'];
+
+  it('escolhe a pista do card tocado (card 0 = morro-do-pinhao, no topo-esquerda da grade)', () => {
+    const canvas = criarCanvasFalso();
+    const aoEscolher = vi.fn();
+
+    const cena = criarCenaSelecaoPista({
+      canvas,
+      catalogo: CATALOGO_PISTAS,
+      obterPistaAtiva: () => 'morro-do-pinhao',
+      aoEscolher,
+      aoVoltar: () => undefined,
+    });
+
+    // Card 0: x 70..330, y 112..262 (mesma grade de selecao.ts)
+    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
+    expect(aoEscolher).toHaveBeenCalledWith('morro-do-pinhao');
+
+    // Card 3 (segunda linha, primeira coluna) = vulcao-pe-gelado
+    canvas.disparar('pointerdown', { clientX: 150, clientY: 320 });
+    expect(aoEscolher).toHaveBeenCalledWith('vulcao-pe-gelado');
+
+    cena.destruir?.();
+  });
+
+  it('volta ao menu ao tocar VOLTAR ou apertar Escape', () => {
+    const canvas = criarCanvasFalso();
+    const janela = criarJanelaFalsa();
+    const aoVoltar = vi.fn();
+
+    const cena = criarCenaSelecaoPista({
+      canvas,
+      janela,
+      catalogo: CATALOGO_PISTAS,
+      obterPistaAtiva: () => 'morro-do-pinhao',
+      aoEscolher: () => undefined,
+      aoVoltar,
+    });
+
+    // Botão Voltar: x 380..580, y 452..498
+    canvas.disparar('pointerdown', { clientX: 480, clientY: 470 });
+    expect(aoVoltar).toHaveBeenCalledTimes(1);
+
+    janela.disparar('Escape');
+    expect(aoVoltar).toHaveBeenCalledTimes(2);
+
+    cena.destruir?.();
+  });
+
+  it('limpa listeners ao chamar destruir()', () => {
+    const canvas = criarCanvasFalso();
+    const janela = criarJanelaFalsa();
+    const cena = criarCenaSelecaoPista({
+      canvas,
+      janela,
+      catalogo: CATALOGO_PISTAS,
+      obterPistaAtiva: () => 'morro-do-pinhao',
       aoEscolher: () => undefined,
       aoVoltar: () => undefined,
     });
@@ -543,6 +645,39 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     // Entra no jogo: a cena de descida recebe o personagem escolhido (sem lançar erro na composição)
+    canvas.disparar('pointerdown', { clientX: 120, clientY: 240 });
+    expect(gerenciador.cenaAtual()).toBe('jogo');
+
+    gerenciador.destruir?.();
+  });
+
+  it('menu -> seleção de pista: escolhe, persiste no save e volta ao menu; o jogo pega a pista escolhida', () => {
+    const canvas = criarCanvasFalso();
+    const janela = criarJanelaFalsa();
+    const save = saveMock();
+    const armazenamentoMap = new Map<string, string>();
+    const armazenamento = { getItem: (k: string) => armazenamentoMap.get(k) ?? null, setItem: (k: string, v: string) => armazenamentoMap.set(k, v), removeItem: (k: string) => armazenamentoMap.delete(k) };
+
+    const gerenciador = criarGerenciadorCenas({ canvas, janela, save, armazenamento, cenaInicial: 'menu' });
+
+    // Nenhuma escolha ainda: o padrão (implícito) é a primeira pista inicial do catálogo (morro-do-pinhao), nada gravado
+    expect(save.pistaAtiva).toBeUndefined();
+
+    // No menu, toca em PISTA (x: 320..540, y: 445..499)
+    canvas.disparar('pointerdown', { clientX: 400, clientY: 460 });
+    expect(gerenciador.cenaAtual()).toBe('selecao-pista');
+
+    // Escolhe o card 1 (segunda coluna, primeira linha = 'pico-do-picole'): x 350..610, y 112..262
+    canvas.disparar('pointerdown', { clientX: 450, clientY: 150 });
+    expect(save.pistaAtiva).toBe('pico-do-picole');
+    expect(armazenamentoMap.has('neve-maluca-v1')).toBe(true);
+    expect((JSON.parse(armazenamentoMap.get('neve-maluca-v1') as string) as { pistaAtiva?: string }).pistaAtiva).toBe('pico-do-picole');
+
+    // Volta ao menu via Escape
+    janela.disparar('Escape');
+    expect(gerenciador.cenaAtual()).toBe('menu');
+
+    // Entra no jogo: a cena de descida recebe a pista escolhida (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 120, clientY: 240 });
     expect(gerenciador.cenaAtual()).toBe('jogo');
 

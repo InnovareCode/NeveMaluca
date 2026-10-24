@@ -84,6 +84,7 @@ const CHAVES_CONHECIDAS: ReadonlySet<string> = new Set([
   'fantasmas',
   'diario',
   'personagemAtivo',
+  'pistaAtiva',
   'extras',
 ]);
 const FORMA_CHAVE_EXTRA = /^[a-z][A-Za-z0-9]{0,31}$/;
@@ -348,6 +349,15 @@ export function sanearPersonagemAtivo(bruto: unknown, regras: RegrasSave): IdPer
   return typeof bruto === 'string' && regras.personagens.includes(bruto) ? bruto : undefined;
 }
 
+/**
+ * Pista ativa (seleção de pista, UI): mesma regra de `sanearPersonagemAtivo`, validada contra o CATÁLOGO INTEIRO
+ * (`regras.pistas`), de propósito sem checar `prog.pistas` — o gating de desbloqueio ainda não existe (M3-futuro).
+ * Ausente, lixo, ou id fora do catálogo -> `undefined` (quem lê decide o padrão).
+ */
+export function sanearPistaAtiva(bruto: unknown, regras: RegrasSave): IdPista | undefined {
+  return typeof bruto === 'string' && regras.pistas.includes(bruto) ? bruto : undefined;
+}
+
 /** Fantasmas: ate `MAX_FANTASMAS` no total (conhecidas primeiro, na ordem do catalogo), JSON simples e pequeno. */
 export function sanearFantasmas(bruto: unknown, regras: RegrasSave): Record<IdPista, ReplayOpaco> | undefined {
   if (!ehObjeto(bruto)) return undefined;
@@ -418,6 +428,7 @@ export function sanearSave(bruto: unknown, regras: RegrasSave): SaveV1 {
   const fantasmas = sanearFantasmas(o['fantasmas'], regras);
   const diario = sanearDiario(o['diario']);
   const personagemAtivo = sanearPersonagemAtivo(o['personagemAtivo'], regras);
+  const pistaAtiva = sanearPistaAtiva(o['pistaAtiva'], regras);
   // No disco os campos desconhecidos moram na RAIZ (um build mais novo os le onde os escreveu); em memoria, em `extras`.
   // Aceita as duas formas, para o saneamento ser idempotente sobre o proprio resultado.
   const extras = sanearExtras({ ...(ehObjeto(o['extras']) ? o['extras'] : {}), ...o });
@@ -430,6 +441,7 @@ export function sanearSave(bruto: unknown, regras: RegrasSave): SaveV1 {
     ...(fantasmas !== undefined ? { fantasmas } : {}),
     ...(diario !== undefined ? { diario } : {}),
     ...(personagemAtivo !== undefined ? { personagemAtivo } : {}),
+    ...(pistaAtiva !== undefined ? { pistaAtiva } : {}),
     ...(extras !== undefined ? { extras } : {}),
   };
 }

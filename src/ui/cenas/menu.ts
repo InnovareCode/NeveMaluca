@@ -25,6 +25,8 @@ export interface OpcoesCenaMenu {
   readonly aoOpcoes: () => void;
   /** Abre a tela de seleção de personagem; sem ela, o botão PERSONAGEM fica inerte (testes que não usam o recurso). */
   readonly aoPersonagem?: (() => void) | undefined;
+  /** Abre a tela de seleção de pista; sem ela, o botão PISTA fica inerte (testes que não usam o recurso). */
+  readonly aoPista?: (() => void) | undefined;
   /** Id do personagem em destaque na vitrine (sprite + fallback); sem ele, mostra a `capi`. */
   readonly obterPersonagemAtivo?: (() => string) | undefined;
 }
@@ -47,6 +49,14 @@ const BOTAO_JOGAR: BotaoRetangular = { id: 'jogar', x: BOTOES_X, y: BOTAO_JOGAR_
 const BOTAO_MODOS: BotaoRetangular = { id: 'modos', x: BOTOES_X, y: BOTAO_MODOS_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
 const BOTAO_OPCOES: BotaoRetangular = { id: 'opcoes', x: BOTOES_X, y: BOTAO_OPCOES_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
 const BOTAO_PERSONAGEM: BotaoRetangular = { id: 'personagem', x: BOTOES_X, y: BOTAO_PERSONAGEM_Y, w: BOTOES_LARGURA, h: BOTOES_ALTURA };
+// Ao lado de PERSONAGEM (mesma linha), não embaixo: não há mais altura livre no canvas 960x540 para uma 5ª linha.
+const BOTAO_PISTA: BotaoRetangular = {
+  id: 'pista',
+  x: BOTOES_X + BOTOES_LARGURA + 20,
+  y: BOTAO_PERSONAGEM_Y,
+  w: BOTOES_LARGURA,
+  h: BOTOES_ALTURA,
+};
 
 function pintarCenarioMenu(ctx: Ctx): void {
   // 1. Céu em degradê
@@ -149,6 +159,7 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
     else if (pontoDentroDoBotao(pt, BOTAO_MODOS)) botaoHover = 'modos';
     else if (pontoDentroDoBotao(pt, BOTAO_OPCOES)) botaoHover = 'opcoes';
     else if (pontoDentroDoBotao(pt, BOTAO_PERSONAGEM)) botaoHover = 'personagem';
+    else if (pontoDentroDoBotao(pt, BOTAO_PISTA)) botaoHover = 'pista';
     else botaoHover = null;
   };
 
@@ -166,6 +177,8 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
       opcoes.aoOpcoes();
     } else if (pontoDentroDoBotao(pt, BOTAO_PERSONAGEM)) {
       opcoes.aoPersonagem?.();
+    } else if (pontoDentroDoBotao(pt, BOTAO_PISTA)) {
+      opcoes.aoPista?.();
     }
   };
 
@@ -177,6 +190,8 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
       opcoes.aoOpcoes();
     } else if (ev.code === 'KeyP') {
       opcoes.aoPersonagem?.();
+    } else if (ev.code === 'KeyT') {
+      opcoes.aoPista?.();
     }
   };
 
@@ -266,6 +281,14 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
         corTopo: botaoHover === 'personagem' ? '#4da2ff' : '#2a7de1',
         corBase: botaoHover === 'personagem' ? '#1f6fd0' : '#144d8f',
         aoVivo: botaoHover === 'personagem',
+      });
+
+      desenharBotao(ctx, {
+        ...BOTAO_PISTA,
+        texto: 'PISTA',
+        corTopo: botaoHover === 'pista' ? '#4da2ff' : '#2a7de1',
+        corBase: botaoHover === 'pista' ? '#1f6fd0' : '#144d8f',
+        aoVivo: botaoHover === 'pista',
       });
 
       // Rodapé

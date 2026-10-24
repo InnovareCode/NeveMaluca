@@ -29,9 +29,10 @@ import { criarCenaJogo } from './jogo';
 import { criarCenaMenu } from './menu';
 import { criarCenaOpcoes } from './opcoes';
 import { criarCenaSelecao } from './selecao';
+import { criarCenaSelecaoPista } from './selecao-pista';
 
 /** Nome de cada cena do fluxo, para depuração/testes (o `id` que `Cena` já carrega). */
-export type IdCenaFluxo = 'abertura' | 'menu' | 'jogo' | 'opcoes' | 'selecao';
+export type IdCenaFluxo = 'abertura' | 'menu' | 'jogo' | 'opcoes' | 'selecao' | 'selecao-pista';
 
 export interface OpcoesGerenciador {
   readonly canvas: AlvoToque;
@@ -118,6 +119,14 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
     persistirConfig();
   };
 
+  /** Pista ativa: escolha do jogador, ou a primeira inicial do catálogo quando ele nunca escolheu (mesma convenção de `obterPersonagemAtivo`). */
+  const obterPistaAtiva = (): string => opcoes.save.pistaAtiva ?? REGRAS_SAVE.pistasIniciais[0] ?? PISTA_MORRO_DO_PINHAO.id;
+
+  const selecionarPista = (id: string): void => {
+    opcoes.save.pistaAtiva = id;
+    persistirConfig();
+  };
+
   const alternarControles = (): void => {
     opcoes.save.cfg.controles = opcoes.save.cfg.controles === 'gestos' ? 'botoes' : 'gestos';
     persistirConfig();
@@ -164,6 +173,7 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoJogar: () => irPara('jogo'),
           aoOpcoes: () => irPara('opcoes'),
           aoPersonagem: () => irPara('selecao'),
+          aoPista: () => irPara('selecao-pista'),
           obterPersonagemAtivo,
         });
       case 'selecao':
@@ -174,6 +184,16 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           catalogo: REGRAS_SAVE.personagens,
           obterPersonagemAtivo,
           aoEscolher: selecionarPersonagem,
+          aoVoltar: () => irPara('menu'),
+        });
+      case 'selecao-pista':
+        return criarCenaSelecaoPista({
+          canvas,
+          janela,
+          documento: doc,
+          catalogo: REGRAS_SAVE.pistas,
+          obterPistaAtiva,
+          aoEscolher: selecionarPista,
           aoVoltar: () => irPara('menu'),
         });
       case 'opcoes':
@@ -198,7 +218,8 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           audio: opcoes.audio,
           save: opcoes.save,
           personagem: obterPersonagemAtivo(),
-          fantasma: obterFantasma(PISTA_MORRO_DO_PINHAO.id),
+          pista: obterPistaAtiva(),
+          fantasma: obterFantasma(obterPistaAtiva()),
           aoResultado: registrarResultadoDescida,
         });
       default: {

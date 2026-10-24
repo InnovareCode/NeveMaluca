@@ -35,6 +35,7 @@ import {
   sanearExtras,
   sanearFantasmas,
   sanearPersonagemAtivo,
+  sanearPistaAtiva,
   sanearProg,
   sanearRecorde,
   sanearRecordes,
@@ -391,6 +392,18 @@ describe('personagemAtivo (selecao de personagem)', () => {
   });
 });
 
+describe('pistaAtiva (selecao de pista)', () => {
+  it('id do catalogo inteiro passa, mesmo sem estar em pistasIniciais (gating e M3-futuro)', () => {
+    expect(sanearPistaAtiva('cume', REGRAS)).toBe('cume'); // nao esta em pistasIniciais
+    expect(sanearPistaAtiva('vale', REGRAS)).toBe('vale'); // inicial
+  });
+
+  it('ausente, lixo ou id fora do catalogo -> undefined (quem le decide o padrao)', () => {
+    for (const ruim of [undefined, null, 5, [], {}, 'vulcao-fantasma', 'vale ', ''])
+      expect(sanearPistaAtiva(ruim, REGRAS)).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 describe('sanearSave', () => {
   it('lixo de qualquer tipo -> save vazio valido', () => {
@@ -414,6 +427,13 @@ describe('sanearSave', () => {
     expect(sanearSave({ ...saveCheio(), personagemAtivo: 'ninja-fantasma' }, REGRAS).personagemAtivo).toBeUndefined();
     expect(sanearSave(saveCheio(), REGRAS).personagemAtivo).toBeUndefined();
     expect('personagemAtivo' in sanearSave(saveCheio(), REGRAS)).toBe(false);
+  });
+
+  it('pistaAtiva valida entra no save saneado; invalida ou ausente nao aparece', () => {
+    expect(sanearSave({ ...saveCheio(), pistaAtiva: 'cume' }, REGRAS).pistaAtiva).toBe('cume');
+    expect(sanearSave({ ...saveCheio(), pistaAtiva: 'vulcao-fantasma' }, REGRAS).pistaAtiva).toBeUndefined();
+    expect(sanearSave(saveCheio(), REGRAS).pistaAtiva).toBeUndefined();
+    expect('pistaAtiva' in sanearSave(saveCheio(), REGRAS)).toBe(false);
   });
 
   it('nao muta a entrada', () => {
