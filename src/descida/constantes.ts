@@ -65,17 +65,30 @@ export const CONFIG_PADRAO: ConfigDescida = {
   atrito: 0.02,
   atritoAgachado: 0.008,
   arrasto: 0.0015,
-  impulsoPuloMs: 6,
+  // Calibragem "pulo mais forte" (dono, iPhone, 2026-10-24): 6 -> 9 m/s. Mais altura/tempo no ar no pulo comum (sem
+  // kicker): hangtime em chão plano sobe de ~0,55 s (33 ticks) pra ~0,82 s (49 ticks) — ver diagnóstico no handoff.
+  // Kickers (`IMPULSO_KICKER_MS=32`, `pista/camada-jogo.ts`) já davam ar de sobra; o alvo aqui é o pulo DO DIA A DIA.
+  impulsoPuloMs: 9,
   fatorRampaMsPorGrau: 0.12,
   giroVelMaxGrausPorTick: 6,
   giroAcelGrausPorTick2: 2,
-  atrasoGiroTicks: 8,
+  // Calibragem "controle no ar mais gostoso": 8 -> 6 ticks (133ms -> 100ms) de atraso antes do giro responder. Ainda
+  // filtra um toque rápido (pulo sem girar), só responde mais rápido a quem segura giro de propósito.
+  atrasoGiroTicks: 6,
   amortecimentoGiro: 0.6,
   limiarPerfeitoGraus: 8,
-  limiarBomGraus: 24,
-  limiarTortoGraus: 58,
+  // Calibragem "travar menos" (dono, iPhone, 2026-10-24; medido em `ferramentas/diagnostico-travar-tmp.mjs`, achado
+  // #1: pouso "torto" sozinho custava ~20s de 46s de corrida média, de LONGE a maior causa de "travar" — mais que
+  // tombo literal e mais que item). 24 -> 32: mais pousos caem na faixa "bom" (perde só 10%, `fatorPerdaBom`) em vez
+  // de "torto". `fatorPerdaTorto` abaixo também suavizado: quem ainda cai torto perde menos e recupera mais rápido.
+  limiarBomGraus: 32,
+  // 58 -> 62: um pouco mais de margem antes de um pouso feio virar tombo de verdade (queda completa).
+  limiarTortoGraus: 62,
   fatorPerdaBom: 0.9,
-  fatorPerdaTorto: 0.65,
+  // 0.65 -> 0.8: perde 20% da velocidade num pouso torto (era 35%) — o achado #1 acima: a PUNIÇÃO em si, não só a
+  // frequência, era o que fazia a recuperação demorar segundos (atrito/arrasto são fracos nessa escala; devolver a
+  // velocidade perdida é lento por natureza — perder menos de cara é o jeito direto de travar menos tempo).
+  fatorPerdaTorto: 0.8,
   ticksTombo: 90,
   velocidadeRespawnMs: 4,
   fatorBonecoDeNeve: 0.85,
@@ -97,5 +110,13 @@ export const VELOCIDADE_PARADO_MS = 0.3;
  * personagem, não só `CONFIG_PADRAO`. Replay `v1` só decodifica com a física de `v2` SEM dessincronizar quando é
  * da Capi (a física dela não mudou — `configDoPersonagem(capi) === CONFIG_PADRAO` campo a campo); de qualquer
  * outro personagem, `criarReprodutorFantasma` rejeita e a descida roda sem fantasma (`descida/replay.ts`).
+ *
+ * Bump para '3' na calibragem "pulo mais forte / travar menos" (dono, iPhone, 2026-10-24): `CONFIG_PADRAO` mudou de
+ * verdade (pulo, janela de pouso) — isso muda a física de TODO personagem, inclusive a Capi (ela É `CONFIG_PADRAO`,
+ * `descida/atributos.ts`). Diferente do bump '1'->'2', não há exceção de compatibilidade aqui: um replay `v2` (de
+ * qualquer personagem) passa a rejeitar igual a um `v1` de não-Capi — a descida roda sem fantasma, continua sem ser
+ * erro de boot (`descida/replay.ts`). Recordes/fantasmas antigos seguem o corte de versão que a `meta/` já tem
+ * (`recordesAntigos`, por `versaoPista`); o dono já aprovou essa perda (não é regressão, é o preço de melhorar a
+ * física).
  */
-export const VERSAO_MOTOR = '2';
+export const VERSAO_MOTOR = '3';

@@ -9,11 +9,15 @@
  * arquivo não tem laço de tick, só números e as duas funções puras que `corrida/itens.ts` (I2) e
  * `corrida/ia-itens.ts` (I3) vão consumir.
  *
+ * I6 (plano §Fases: "calibragem dos itens... portão do dono no iPhone"): `PARAMETROS_TROMBADA_ITEM` e
+ * `PARAMETROS_POCA_FREADA` abaixo foram SUAVIZADOS em 2026-10-24 depois do primeiro playtest real (dono, iPhone:
+ * "trava muito"). Diagnóstico medido (`ferramentas/diagnostico-travar-tmp.mjs`, descartável): a Poça de Calda
+ * sozinha custava ~8,7s de recuperação de velocidade por corrida (2ª maior causa de "travar", só atrás do pouso
+ * torto — ver `descida/constantes.ts`); a trombada (Bola/Nuvem) custava menos no total (poucas ocorrências), mas
+ * cada uma travava o controle E cortava a velocidade com força. Os dois ficam mais leves sem desaparecer: ainda dá
+ * pra "sentir" o acerto, só não rouba vários segundos de corrida por incidente.
+ *
  * O QUE NÃO ESTÁ AQUI, de propósito:
- *  - Bola de Neve e Nuvem de Granizo usam `EfeitoExterno{tipo:'trombada'}`, que não carrega `fator`/`ticks` no
- *    contrato (`core/contratos.ts`) — o motor (`descida/motor.ts`, Vega I1) já fixa
- *    `FATOR_VELOCIDADE_TROMBADA = 0.3` e `TICKS_ATORDOADO_TROMBADA = 40`. Duplicar esses números aqui criaria 2
- *    fontes de verdade para o mesmo efeito; por isso os dois itens abaixo só aparecem na tabela de sorteio.
  *  - A física do projétil/armadilha em si (posição, colisão com rivais) é de `corrida/itens.ts` (I2, Vega) — aqui
  *    só os PARÂMETROS que alimentam o `EfeitoExterno` que o orquestrador produz.
  */
@@ -30,6 +34,13 @@ export interface ParametrosFreadaItem {
   /** Fração de `config.velocidadeMaxMs` que vira o teto enquanto a janela estiver ativa (plano: "freia forte"). */
   readonly fator: number;
   readonly ticks: number;
+}
+
+export interface ParametrosTrombadaItem {
+  /** Fração da velocidade MANTIDA no corte instantâneo (`descida/motor.ts`, laço de `efeitos` em `processarTick`). */
+  readonly fator: number;
+  /** Ticks de controle travado (giro/grab ignorados; pulo/agachar continuam livres). */
+  readonly ticksAtordoado: number;
 }
 
 export interface ParametrosTurboItem {
@@ -53,8 +64,18 @@ export interface ParametrosImaItem {
   readonly ticks: number;
 }
 
-/** Poça de Calda: ~1.5 s a 45% do teto de velocidade (mais leve que a trombada — sem travar controle/combo). */
-export const PARAMETROS_POCA_FREADA: ParametrosFreadaItem = { fator: 0.45, ticks: Math.round(1.5 * TICKS_POR_SEGUNDO) };
+/**
+ * Bola de Neve / Nuvem de Granizo: corte instantâneo de velocidade + controle travado (`EfeitoExterno{tipo:
+ * 'trombada'}`, sem `fator`/`ticks` no contrato — o motor lê daqui, `data/` é a ÚNICA fonte destes 2 números, nunca
+ * duplicados em `descida/motor.ts`). I6 (2026-10-24): suavizado de 0.3/40 pra 0.5/26 — ainda perde metade da
+ * velocidade e trava giro/grab por ~0,43s (era 70% + ~0,67s), mas recupera MUITO mais rápido (a física de chão é
+ * lenta pra devolver velocidade perdida, ver `descida/constantes.ts`).
+ */
+export const PARAMETROS_TROMBADA_ITEM: ParametrosTrombadaItem = { fator: 0.5, ticksAtordoado: 26 };
+
+/** Poça de Calda: ~1 s a 60% do teto de velocidade (mais leve que a trombada — sem travar controle/combo). I6
+ *  (2026-10-24): suavizado de 0.45/1.5s pra 0.6/1s — era a 2ª maior causa de "travar" medida no diagnóstico. */
+export const PARAMETROS_POCA_FREADA: ParametrosFreadaItem = { fator: 0.6, ticks: Math.round(1 * TICKS_POR_SEGUNDO) };
 
 /** Chocolate Quente: estoura o teto do turbo de pouso de uma vez; ~2 s de janela informativa (plano: "impulso ~2s"). */
 export const PARAMETROS_TURBO_ITEM: ParametrosTurboItem = { ms: 12, ticks: 2 * TICKS_POR_SEGUNDO };
@@ -197,6 +218,8 @@ function problemasDosItens(): string[] {
   }
   if (!(PARAMETROS_POCA_FREADA.fator > 0 && PARAMETROS_POCA_FREADA.fator <= 1)) p.push(`PARAMETROS_POCA_FREADA.fator = ${PARAMETROS_POCA_FREADA.fator}, precisa estar em (0, 1]`);
   if (!Number.isInteger(PARAMETROS_POCA_FREADA.ticks) || PARAMETROS_POCA_FREADA.ticks <= 0) p.push('PARAMETROS_POCA_FREADA.ticks precisa ser inteiro > 0');
+  if (!(PARAMETROS_TROMBADA_ITEM.fator > 0 && PARAMETROS_TROMBADA_ITEM.fator < 1)) p.push(`PARAMETROS_TROMBADA_ITEM.fator = ${PARAMETROS_TROMBADA_ITEM.fator}, precisa estar em (0, 1) — tem que cortar velocidade de verdade`);
+  if (!Number.isInteger(PARAMETROS_TROMBADA_ITEM.ticksAtordoado) || PARAMETROS_TROMBADA_ITEM.ticksAtordoado <= 0) p.push('PARAMETROS_TROMBADA_ITEM.ticksAtordoado precisa ser inteiro > 0');
   if (!(PARAMETROS_TURBO_ITEM.ms > 0)) p.push('PARAMETROS_TURBO_ITEM.ms precisa ser > 0');
   if (!Number.isInteger(PARAMETROS_TURBO_ITEM.ticks) || PARAMETROS_TURBO_ITEM.ticks <= 0) p.push('PARAMETROS_TURBO_ITEM.ticks precisa ser inteiro > 0');
   if (!Number.isInteger(PARAMETROS_ESCUDO_ITEM.ticks) || PARAMETROS_ESCUDO_ITEM.ticks <= 0) p.push('PARAMETROS_ESCUDO_ITEM.ticks precisa ser inteiro > 0');

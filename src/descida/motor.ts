@@ -77,6 +77,7 @@ import {
   TRILHO_PONTOS_POR_PASSO,
   ticksDeSegundos,
 } from '../data/manobras';
+import { PARAMETROS_TROMBADA_ITEM } from '../data/itens';
 
 /** Obstáculo alto (plano C4): quanto tempo ANTES o "!" aparece (distância = `config.velocidadeMaxMs * AVISO_SEGUNDOS`,
  *  a física DESTE personagem — não um metro fixo, que seria "~1,5s" só para quem está no teto de velocidade). */
@@ -114,12 +115,18 @@ const TURBO_DECAIMENTO_POR_TICK = 0.99;
  * acrescentar uma chave ao hash quebraria o golden mesmo com o campo zerado). O efeito de verdade entra no hash
  * pelos campos que ele MUDA (`v`/`vx`/`vy`/combo), que já são hasheados — por isso "efeitos entra no hashEstado SÓ
  * quando vem" vale sem precisar hashear mais nada.
+ *
+ * Severidade da trombada (fator de corte + ticks de atordoado): mora em `data/itens.ts`
+ * (`PARAMETROS_TROMBADA_ITEM`), ÚNICA fonte — I6 (plano itens-corrida §Fases) é quem calibra isso, não este
+ * arquivo. `TICKS_ATORDOADO_TROMBADA` abaixo é só um alias de leitura (mesmo valor, outro nome mais curto pra quem
+ * já lê este arquivo todo em termos de "ticks"), não uma 2ª cópia do número.
  */
-const FATOR_VELOCIDADE_TROMBADA = 0.3;
-/** Exportado para `corrida/itens.ts` (I2) espelhar `atordoado` em `LeituraRivalCorrida` sem duplicar o número (o
- *  orquestrador nunca lê `EstadoDescida` direto — só precisa saber por quantos ticks o PRÓPRIO efeito que ele
- *  acabou de aplicar vai travar o controle, pra contar a própria janela em paralelo à do motor). */
-export const TICKS_ATORDOADO_TROMBADA = 40;
+const FATOR_VELOCIDADE_TROMBADA = PARAMETROS_TROMBADA_ITEM.fator;
+/** Alias de `PARAMETROS_TROMBADA_ITEM.ticksAtordoado` (`data/itens.ts`, única fonte). Exportado para `corrida/
+ *  itens.ts` (I2) espelhar `atordoado` em `LeituraRivalCorrida` sem importar `data/itens.ts` só por isso — o
+ *  orquestrador nunca lê `EstadoDescida` direto, só precisa saber por quantos ticks o PRÓPRIO efeito que ele acabou
+ *  de aplicar vai travar o controle, pra contar a própria janela em paralelo à do motor. */
+export const TICKS_ATORDOADO_TROMBADA = PARAMETROS_TROMBADA_ITEM.ticksAtordoado;
 
 interface EstadoPiloto {
   x: number;

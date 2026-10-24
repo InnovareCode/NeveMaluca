@@ -3,9 +3,15 @@
  *
  * 1. Teste-congelamento da Capi: grava como constante o `hashEstado()` final + pontos + ticks de uma descida
  *    completa da Capi (`CONFIG_PADRAO`, bot "cuidadoso") na semente OFICIAL do Morro do Pinhão e mais 3 sementes
- *    (1, 2, 3). Os valores foram capturados rodando o código de HOJE (antes de qualquer mudança de F1 em diante).
- *    Se algum destes 4 valores mudar no futuro, a física ou a pontuação da Capi mudou — o que é proibido pelo
- *    plano ("a Capi é a mesma", R-M3-1): este teste é o que transforma essa regra em prova, não em opinião.
+ *    (1, 2, 3). Se algum destes 4 valores mudar no futuro SEM uma mudança de física aprovada, a física ou a
+ *    pontuação da Capi regrediu (proibido pelo plano, "a Capi é a mesma", R-M3-1): este teste é o que transforma
+ *    essa regra em prova, não em opinião.
+ *
+ *    REGERADO em 2026-10-24 (calibragem "pulo mais forte / travar menos", autorizada pelo dono depois do playtest
+ *    no iPhone): `CONFIG_PADRAO` mudou de propósito (`impulsoPuloMs`, janela de pouso — ver `descida/
+ *    constantes.ts`) e muda a física da Capi TAMBÉM (ela É `CONFIG_PADRAO`). Os 4 valores abaixo são o resultado
+ *    REAL de rodar este mesmo teste (motor real + bot cuidadoso real) depois da mudança — não foram "ajustados pra
+ *    passar"; `VERSAO_MOTOR` foi de '2' pra '3' no mesmo commit (replays antigos passam a rodar sem fantasma).
  * 2. Teste do hash do Morro congelado: `gerarPista` com a semente oficial dá o mesmo hash gravado em
  *    `PISTA_MORRO_DO_PINHAO.hashEsperado`. Mudar o catálogo/algoritmo do gerador (proibido no M3, R-M3-2) quebra
  *    este teste antes de mandar os recordes do dono para "antigos".
@@ -27,10 +33,10 @@ const GOLDEN_CAPI: ReadonlyArray<{
   readonly pontos: number;
   readonly ticks: number;
 }> = [
-  { semente: 20261022, hashPista: '1c4d551601d3a6ae', hashFinal: 'cbfdbe21ee57537b', pontos: 266, ticks: 2285 }, // semente oficial (= hashEsperado de PISTA_MORRO_DO_PINHAO)
-  { semente: 1, hashPista: '02d8e8e29c9d955a', hashFinal: '3829d6b0c05d3c4c', pontos: 330, ticks: 2302 },
-  { semente: 2, hashPista: 'efd2a151526472f5', hashFinal: '03ead668e208d176', pontos: 390, ticks: 2412 },
-  { semente: 3, hashPista: '4e2448b6243ae405', hashFinal: '28565658230d8b68', pontos: 376, ticks: 2262 },
+  { semente: 20261022, hashPista: '1c4d551601d3a6ae', hashFinal: 'a5539929a05d45b6', pontos: 190, ticks: 2181 }, // semente oficial (= hashEsperado de PISTA_MORRO_DO_PINHAO)
+  { semente: 1, hashPista: '02d8e8e29c9d955a', hashFinal: '2397ad7e7afbf426', pontos: 330, ticks: 2183 },
+  { semente: 2, hashPista: 'efd2a151526472f5', hashFinal: '87a4463c5aa92dc0', pontos: 170, ticks: 2258 },
+  { semente: 3, hashPista: '4e2448b6243ae405', hashFinal: 'abaa27393f3f649c', pontos: 865, ticks: 2247 },
 ];
 
 function descerComBotCuidadoso(semente: number): { readonly hashPista: string; readonly hashFinal: string; readonly pontos: number; readonly ticks: number } {

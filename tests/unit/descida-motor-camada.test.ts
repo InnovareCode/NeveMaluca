@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CamadaJogo, ComandoDescida } from '../../src/core/contratos';
 import { PISTA_MORRO_DO_PINHAO } from '../../src/data/pistas';
-import { CONFIG_PADRAO } from '../../src/descida/constantes';
+import { CONFIG_PADRAO, type ConfigDescida } from '../../src/descida/constantes';
 import { criarDescida } from '../../src/descida/motor';
 import { gerarPista } from '../../src/pista/gerador';
 
@@ -75,9 +75,9 @@ describe('motor + camada: turbo de pouso (C-D7)', () => {
   const CAMADA_COM_AR_BONUS: CamadaJogo = { ...SEM_CAMADA, kickers: [{ x: 0, largura: 5, impulsoMs: 20 }] };
 
   /** Pula, deixa o giro em 0 (sem risco de tombo por ângulo) e processa até o 1º `'pouso'`. */
-  function pousarComArBonus(modo: 'treino' | 'corrida', camada: CamadaJogo): number {
+  function pousarComArBonus(modo: 'treino' | 'corrida', camada: CamadaJogo, config: ConfigDescida = CONFIG_PADRAO): number {
     const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
-    const motor = criarDescida(pista, CONFIG_PADRAO, { camada, modo });
+    const motor = criarDescida(pista, config, { camada, modo });
     let leitura = motor.processar(CMD_PULO);
     for (let i = 0; i < 300; i++) {
       leitura = motor.processar(CMD_NADA);
@@ -86,6 +86,11 @@ describe('motor + camada: turbo de pouso (C-D7)', () => {
     throw new Error('não pousou dentro do teto de ticks deste teste');
   }
 
+  /** `impulsoPuloMs` bem pequeno, só pra GARANTIR ar curto (abaixo de `AR_LIMIAR_TICKS`) independente de qualquer
+   *  calibragem futura de `CONFIG_PADRAO.impulsoPuloMs` (o pulo "comum" ficou mais forte na calibragem de
+   *  2026-10-24 — ver `descida/constantes.ts` — e passou a pontuar "ar" por si só com o impulso PADRÃO). */
+  const CONFIG_PULO_CURTO: ConfigDescida = { ...CONFIG_PADRAO, impulsoPuloMs: 2 };
+
   it('em modo corrida, pousar bem depois de ganhar ar (manobra) dá MAIS velocidade do que em modo treino', () => {
     const treino = pousarComArBonus('treino', CAMADA_COM_AR_BONUS);
     const corrida = pousarComArBonus('corrida', CAMADA_COM_AR_BONUS);
@@ -93,8 +98,8 @@ describe('motor + camada: turbo de pouso (C-D7)', () => {
   });
 
   it('sem manobra nenhuma (ar curto, abaixo do limiar que pontua "ar"), o turbo não dá nada: corrida === treino', () => {
-    const treino = pousarComArBonus('treino', SEM_CAMADA); // pulo normal (sem kicker): ar curto, 0 ponto de manobra.
-    const corrida = pousarComArBonus('corrida', SEM_CAMADA);
+    const treino = pousarComArBonus('treino', SEM_CAMADA, CONFIG_PULO_CURTO); // sem kicker + impulso mínimo: ar curto, 0 ponto de manobra.
+    const corrida = pousarComArBonus('corrida', SEM_CAMADA, CONFIG_PULO_CURTO);
     expect(corrida).toBeCloseTo(treino, 6);
   });
 

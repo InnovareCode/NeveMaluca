@@ -18,12 +18,15 @@
  * REGERADO na I3 (`docs/plano-itens-corrida.md` §Fases, Vega): até I2 os 5 rivais nunca usavam item (`usarItem`
  * sempre `false` pra eles, só o jogador jogava de verdade) — a trilha/`ResultadoCorrida` anteriores refletiam
  * exatamente isso. Com a I3 (`corrida/ia-itens.ts`), os rivais passaram a usar item de verdade (determinístico,
- * `hashSorteio01(semente, id, tick)`) e podem acertar o JOGADOR — nesta semente, uma Poça de Calda da `bia` pega o
- * jogador perto do tick 425 (índice 17 da trilha), mudando a corrida inteira a partir daí (chega mais tarde, com
- * menos pontos/flocos, e `acertosSofridos` sai de 0). Isto NÃO é regressão: os 3 motores (desktop/celular/
- * webkit-se) bateram EXATO entre si no valor novo (determinismo cross-engine intacto) — só o valor fixado aqui
- * ficou velho. Regerado com `node ferramentas/harness-corrida/gerar-golden-temp.mjs` (script descartável, mesma
- * técnica do `PROGRAMA` abaixo rodando via Vite SSR no Node em vez do navegador).
+ * `hashSorteio01(semente, id, tick)`) e podem acertar o JOGADOR.
+ *
+ * REGERADO DE NOVO em 2026-10-24 (calibragem "pulo mais forte / travar menos", dono/iPhone — ver `descida/
+ * constantes.ts`): `CONFIG_PADRAO` mudou de propósito (física da Capi inclusa — ela É `CONFIG_PADRAO`) e
+ * `PARAMETROS_TROMBADA_ITEM`/`PARAMETROS_POCA_FREADA` (`data/itens.ts`) foram suavizados (I6). Não é regressão:
+ * os 3 motores (desktop/celular/webkit-se) bateram EXATO entre si no valor NOVO (determinismo cross-engine
+ * intacto) — só o valor fixado aqui ficou velho. Regerado com `node ferramentas/harness-corrida/gerar-golden-
+ * temp.mjs` (script descartável, mesma técnica do `PROGRAMA` abaixo rodando via Vite SSR no Node em vez do
+ * navegador).
  *
  * Mesmo truque de `core-determinismo.spec.ts`: o código roda como TEXTO no navegador (não como função do teste)
  * pro Playwright não reescrever os `import()`.
@@ -72,37 +75,36 @@ const PROGRAMA = `(async () => {
 /** Trilha dourada (Node/Vitest, `corrida/corrida.ts` real): `hashEstado()` a cada 25 ticks (0, 25, 50, ...) + o
  *  último tick antes da chegada do jogador (2026, fora do passo de 25 — por isso repete no índice seguinte). */
 const TRILHA_DOURADA = [
-  'ce5d37c11c5f3c8f', '28181ad657cf3fe3', 'f6be93f96fc553b3', 'be0034a4b211be51', '3beef75c273d026c',
-  'ed17e55fd7940142', '59a6f82c5bb61003', '6d3e39ee286997fe', 'be9f98fe9a5d7058', '3a76a1d55551370c',
-  '05394ec65c033dec', 'fea8fc3205cad6aa', 'b87c67b42af63725', '64dc40d417bf26a0', 'ded74abba408ee27',
-  '4515b4345f3a1429', '083929af58428791', '90d57d13c85cde92', '7f6d8c4d375ea04a', '4de7b5043ee43668',
-  'cbd94cf1f6c09785', '89874f8cc92aaabc', '0bc373a4020c20a8', 'e146c226b10c978c', '2961d644c002d5cc',
-  '39a888a4fa5c0a38', '0dbac0b2e6360204', '6bf0824d09bb55d4', '757981c782c78cd3', 'c22b3bf5683bee77',
-  'd71458a114027356', '9df577e2a41f7162', '46186f86b5a20682', 'b8b50465e4f5eceb', '16ff5fce8930c095',
-  '65bd3ac91f9cd5f3', '04a624dc6acafad9', '6bbed46b80281720', '13bd8ee5971ec652', '882ca810a11e21ad',
-  '5488a20c2021f766', '9ad174864c253cb8', '6a432457bce00932', '216bda761c15c127', 'e1a536cc97e93b24',
-  '5cf0d954ab4c4cec', 'd02f51bbd121acf1', 'b0865cc9c009eeb7', '860fbd97380cce79', '3b42cb11f2df0fc8',
-  '30a1afbee98b21be', 'b4ecc6f1e9e20c0d', '9884deae1733f9ea', 'dba175f688dfc76b', '6414bf5e5dd0c704',
-  'af35e1cb801fa15f', '8aa3520bada0f764', 'af6d3031aac9296a', '8f8a9fe1ad891eba', '8ed37947828295d1',
-  '1e87097d76256665', '9a817294df7bc6c0', '4a4261662a2d8f55', '6fa412cc0aab0a24', '8448708638a8bf70',
-  '5f4462b212727aef', '6f5d3180d971f48e', '6606e44a6cab2465', '547870f4b5488f07', 'ee73436ee1721d77',
-  '42f8b7fd3bc84d05', '6a30edb1e8525879', '2dd59b365205e0bf', '675418903287224b', '24dfeeb8b2bc6328',
-  'a500699d7a0c4ae0', 'afb85b7103e304d6', '66380824e67afe9c', '4ff01ba6c08e44fa', '4aa3f1d9f79fd21c',
-  '4f27458d7548e8d2', '512f19af114de8a5', '8ea779195fc590fa', '0f8813f5805fe729', '57b6a449197b00f6',
-  'f83175af9496c091', 'f26ad706bb39244c', '1ad72ee4d096a52d', 'd6025f2f7eb3ffa2', '7743267fa7ca8d4b',
-  'c70ceff30d9ca3bd', '1c06dc787c9d29c5', '76e6b6fff19de7cd',
+  'ce5d37c11c5f3c8f', '28181ad657cf3fe3', '595287e5cc2ee5f3', 'd99f15383b89194c', 'f80d831335ea82ef',
+  'b0bdaeb0fa98b8d6', '780542d5fa331208', '751349fc1f26aecc', 'a9648a03c4249d75', '1965c44941b733c4',
+  'e1067c256f01bb1c', '3cf628866ec6d7dc', 'e04c76355597caac', '288f2f95a189deff', '930864ca13c151b8',
+  'b32b49a00c9107ad', '450c6cdd2d8dc356', '4cc78d565b39863e', 'b5a7e7d53264ab47', '932055afb6cfff53',
+  '7eb6f680f9271e1f', '9217eac34c98a7d0', 'c0d57e07dc294004', '5a6b20e846a2afa3', '255d05f4bf013f7a',
+  '3331ed2b0bc71017', '1d4c732fe2ca44b2', 'da277c87c8c1f07b', 'dd47a2921f5fb1b1', 'd554012d48a5080a',
+  '4033ee40368f70a1', 'a5c57911b3995bbb', '8c22e24bb89985c1', '74ae40670efd4232', '304928657890d97c',
+  'dee61c70b09ee13d', 'd760a09d6df2f272', 'ec2c51f35a0b41b6', '6dd91621aafc62d9', '0eea987b45747265',
+  'a585a7567d8793b8', '8712190e1fd42cd1', 'bd50e81dac3449e2', '5bc766235c76dc42', '9d6f02b69c298e04',
+  '2be64eee97684d15', '7a337545a7329b00', '0e8a350c7034c167', '66c832298dbad4c2', '6fb4aeaceb6d4cb1',
+  'bffd58d9781d5bb3', '59a23fde0cb5cfbf', 'c656c5478f6fe759', '8ad4cf8a6dfb630b', '94fe7b195c75fac6',
+  '2aca7aac3b7605e9', 'e2e8390f8b987eb7', '80d0d3ce425792a2', '1c199c82f6a9ef53', 'c530072c41058791',
+  'a47a8c1bf42e841f', '8c1b7c820593dbd0', '19316af2a6401f60', 'fde6f2e067fc5fa6', 'e634b90dc72f3c74',
+  'afd49e43bf7349d6', '10ae258ef2427e78', '5a28b286c381349f', 'ad4aa46acdd4c793', 'd51808d5d5153b47',
+  '9e4e05ea1a6b5b39', 'fdf3ba72c6f2e2a7', 'ad5f2985538523a2', '0a8a06bf94c183c6', '7dcdb4a8729320ed',
+  'e50f95a003298e02', '283b27d5fdffe39a', 'dbd9c998d9b71361', '91e690b73e5e0edc', '036ac09dc5c411e7',
+  '7bdf92bf241a1024', '1f926796f851c05c', '002b02af34403f6f', '03f69f4d92b92fd7', '9b68cd696268057f',
+  '0ee937db9611cb92',
 ];
 
 const RESULTADO_DOURADO = {
   pista: 'morro-do-pinhao',
-  ordem: ['bandeira', 'queque', 'capi', 'cidinha', 'beto', 'bia'],
-  ticks: { capi: 2293, bandeira: 2170, cidinha: 2392, beto: 2613, queque: 2209, bia: 2864 },
+  ordem: ['queque', 'cidinha', 'bandeira', 'bia', 'beto', 'capi'],
+  ticks: { capi: 2124, bandeira: 1863, cidinha: 1858, beto: 1941, queque: 1854, bia: 1925 },
   resumoJogador: {
-    pontos: 3000, ticks: 2293, tombos: 0, maiorVoltasNumSalto: 0, maiorTicksNoAr: 201, maiorGrindTicks: 0,
-    pousosPerfeitos: 0, maiorMult: 2, maiorComboManobras: 1, bonecos: 3, concluiu: true,
+    pontos: 3080, ticks: 2124, tombos: 0, maiorVoltasNumSalto: 0, maiorTicksNoAr: 214, maiorGrindTicks: 0,
+    pousosPerfeitos: 0, maiorMult: 2, maiorComboManobras: 1, bonecos: 2, concluiu: true,
   },
-  flocosGanhos: 24,
-  itens: { acertosDados: 1, acertosSofridos: 6 },
+  flocosGanhos: 15,
+  itens: { acertosDados: 0, acertosSofridos: 5 },
 };
 
 test('corrida + itens: mesma semente/comandos do jogador (bot cuidadoso, usarItem sempre true) bate EXATO com o Node em qualquer motor JS (hashEstado tick a tick, ResultadoCorrida e hash da pista)', async ({ page }) => {
@@ -112,14 +114,14 @@ test('corrida + itens: mesma semente/comandos do jogador (bot cuidadoso, usarIte
   const r = (await page.evaluate(PROGRAMA)) as Record<string, unknown>;
   expect(erros).toEqual([]);
   expect(r['pistaHash']).toBe('1c4d551601d3a6ae');
-  expect(r['totalTicks']).toBe(2294);
+  expect(r['totalTicks']).toBe(2125);
   // Comparação ponto a ponto (não só `toEqual` da lista inteira) pra apontar o ÍNDICE exato (tick = índice*25,
   // exceto o último) onde este motor divergiu do Node, se divergir.
   const trilha = r['trilha'] as string[];
   for (let idx = 0; idx < TRILHA_DOURADA.length; idx++) {
     expect(trilha[idx], `hashEstado diverge no índice ${idx} (tick ~${idx * 25}, semente=2026, pista=morro-do-pinhao)`).toBe(TRILHA_DOURADA[idx]);
   }
-  expect(r['hashNaChegada']).toBe('76e6b6fff19de7cd');
+  expect(r['hashNaChegada']).toBe('0ee937db9611cb92');
   expect(r['resultado']).toEqual(RESULTADO_DOURADO);
-  expect(r['hashAposFinalizar']).toBe('717329527441185c');
+  expect(r['hashAposFinalizar']).toBe('0ee937db9611cb92');
 });

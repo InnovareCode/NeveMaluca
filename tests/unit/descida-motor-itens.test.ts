@@ -35,7 +35,7 @@ describe('motor + itens: efeitos omitido/vazio não muda nada (golden)', () => {
 });
 
 describe('motor + itens: trombada', () => {
-  it('corta a velocidade a ~30%, emite "atingido" (não "tombo"), não respawna/reseta posição', () => {
+  it('corta a velocidade a ~50% (PARAMETROS_TROMBADA_ITEM.fator, data/itens.ts), emite "atingido" (não "tombo"), não respawna/reseta posição', () => {
     const pista = gerarPista(PISTA_MORRO_DO_PINHAO);
     const motor = criarDescida(pista, CONFIG_PADRAO);
     let l = motor.leitura();
@@ -49,8 +49,8 @@ describe('motor + itens: trombada', () => {
     expect(l.eventos).toContainEqual({ tipo: 'atingido', item: 'bola' });
     expect(l.eventos.some((e) => e.tipo === 'tombo')).toBe(false);
     expect(l.fase).toBe('descendo');
-    expect(l.piloto.velocidade).toBeGreaterThan(vAntes * 0.25);
-    expect(l.piloto.velocidade).toBeLessThan(vAntes * 0.35);
+    expect(l.piloto.velocidade).toBeGreaterThan(vAntes * 0.45);
+    expect(l.piloto.velocidade).toBeLessThan(vAntes * 0.55);
     expect(l.piloto.x).toBeGreaterThanOrEqual(xAntes); // nunca volta pro checkpoint (plano I-D7)
   });
 

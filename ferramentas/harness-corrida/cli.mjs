@@ -217,7 +217,14 @@ async function main() {
     console.log(
       `  Agregado (5 pistas): mortais=${totalMortais} (média ${mortaisPorPistaMedia.toFixed(1)}/pista), encaixe kicker->mortal=${(razaoKickerAgregada * 100).toFixed(0)}%, tempo manobreiro/cuidadoso=${razaoTempoAgregada.toFixed(3)} (${((razaoTempoAgregada - 1) * 100).toFixed(1)}%).`,
     );
-    if (mortaisPorPistaMedia < 3) falhas.push({ criterio: 'mortais-por-pista-agregado', mortaisPorPistaMedia });
+    // Piso recalibrado em 2026-10-24 (calibragem "pulo mais forte", dono/iPhone — `src/descida/constantes.ts`:
+    // `impulsoPuloMs` 6->9 muda a FORMA da estratégia do manobreiro: voos mais longos fazem `planejarVoo` mirar
+    // mortais de MAIS voltas (mais pontos cada), não mais mortais pequenos em sequência — medido: média cai de
+    // ~3,2 pra ~2,0/pista, mas o encaixe kicker->mortal continua 100% (nenhuma pista fica sem NENHUM mortal — o
+    // pior caso observado, Morro, tem 1) e o tempo manobreiro/cuidadoso MELHOROU (-19,3%, era -10,3%: manobrar
+    // compensa AINDA mais). O que o C3 original queria provar ("manobrar acontece e vale a pena") continua de
+    // pé — só o número "3" datava da física antiga. Piso novo: 1,5 (deixa folga sobre o pior caso observado, 2,0).
+    if (mortaisPorPistaMedia < 1.5) falhas.push({ criterio: 'mortais-por-pista-agregado', mortaisPorPistaMedia });
     if (razaoKickerAgregada < 0.3) falhas.push({ criterio: 'kicker-mortal-agregado', razaoKickerAgregada });
     if (razaoTempoAgregada > 1.02) falhas.push({ criterio: 'manobrar-nao-compensa-no-tempo', razaoTempoAgregada });
 

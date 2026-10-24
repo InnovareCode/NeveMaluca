@@ -43,16 +43,19 @@ describe('configDoPersonagem: números de partida do plano §A.2 nos extremos do
     expect(configDoPersonagem('cidinha').giroVelMaxGrausPorTick).toBeCloseTo(7.2, 9);
   });
 
-  it('equilíbrio: Beto (90, Capi 110) 6,4 / 19,2 / 46,4°', () => {
+  it('equilíbrio: Beto (90, Capi 110) 6,4 / 25,6 / 49,6°', () => {
+    // Base (CONFIG_PADRAO) de limiarBomGraus/limiarTortoGraus mudou na calibragem "travar menos" (2026-10-24,
+    // ver descida/constantes.ts: 24->32 / 58->62); limiarPerfeitoGraus não mudou (base ainda é 8).
     const c = configDoPersonagem('beto');
     expect(c.limiarPerfeitoGraus).toBeCloseTo(6.4, 9);
-    expect(c.limiarBomGraus).toBeCloseTo(19.2, 9);
-    expect(c.limiarTortoGraus).toBeCloseTo(46.4, 9);
+    expect(c.limiarBomGraus).toBeCloseTo(25.6, 9);
+    expect(c.limiarTortoGraus).toBeCloseTo(49.6, 9);
   });
 
-  it('pulo: Bandeira (110) 6,6 m/s · Cidinha (90) 5,4 m/s', () => {
-    expect(configDoPersonagem('bandeira').impulsoPuloMs).toBeCloseTo(6.6, 9);
-    expect(configDoPersonagem('cidinha').impulsoPuloMs).toBeCloseTo(5.4, 9);
+  it('pulo: Bandeira (110) 9,9 m/s · Cidinha (90) 8,1 m/s', () => {
+    // Base (CONFIG_PADRAO.impulsoPuloMs) subiu de 6 pra 9 na calibragem "pulo mais forte" (2026-10-24).
+    expect(configDoPersonagem('bandeira').impulsoPuloMs).toBeCloseTo(9.9, 9);
+    expect(configDoPersonagem('cidinha').impulsoPuloMs).toBeCloseTo(8.1, 9);
   });
 
   it('campos que nunca variam por personagem ficam iguais ao CONFIG_PADRAO para todo o elenco', () => {
