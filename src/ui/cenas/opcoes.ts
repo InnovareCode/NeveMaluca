@@ -1,11 +1,13 @@
 /**
- * Tela de Configurações/Opções (Canvas 2D).
+ * Tela de Configurações/Opções (Canvas 2D) -- redesenho "premium estilo Pixar" (`docs/direcao-ui-premium.md`,
+ * Fase 1 §13: fundo fosco, Painel Geada, botão 3D, letreiro, VOLTAR redondo). É a tela mais simples do guia,
+ * escolhida pelo Apolo pra validar o material novo antes de levá-lo pro resto da UI.
  *
- * Requisitos atendidos:
+ * Requisitos atendidos (inalterados desde a versão anterior):
  *  1. Alternar controles: Gestos (padrão D10) vs Botões na tela (grava em `save.cfg.controles`).
  *  2. Áudio on/off (sons e música juntos, gravando `cfg.som`/`cfg.musica`).
  *  3. Tela cheia (integra com `platform/tela-cheia.ts`: no iPhone abre o cartão "como ativar").
- *  4. Voltar (retorna ao Menu Principal).
+ *  4. Voltar (retorna ao Menu Principal, ou à Pausa quando chamada de dentro dela).
  *
  * A tela NÃO escreve no save por conta própria: quem entrega `cfg` é o orquestrador (`ui/cenas/gerenciador.ts`),
  * que já tem o `save` da sessão e o `armazenamento`. Assim o save tem UM só ponto de gravação.
@@ -15,14 +17,18 @@ import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
 import { emTelaCheia, situacaoDaTelaCheia } from '../../platform/tela-cheia';
-import { caminhoArredondado, desenharBotao, desenharTexto } from '../desenho';
+import { caminhoArredondado, desenharFlocos, desenharTexto } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, painelGeada, type TipoBotao3D } from '../kit-premium';
 import type { Cena } from '../tipos';
 import type { ModoControles } from '../../meta/tipos';
+import { assetsMenuCapaProntos, precarregarAssetsMenuCapa } from './menu-capa';
+import type { CamadaEstatica } from '../desenho';
 
 export interface OpcoesCenaOpcoes {
   readonly canvas: AlvoToque;
   readonly janela?: AlvoTeclado | undefined;
+  readonly documento?: Document | undefined;
   readonly obterControles: () => ModoControles;
   readonly obterAudioLigado: () => boolean;
   readonly aoAlternarControles: () => void;
@@ -32,36 +38,151 @@ export interface OpcoesCenaOpcoes {
 }
 
 const COR_FUNDO = '#0c1b30';
-const COR_PAINEL = '#162b47';
-const COR_BORDA = '#2a517f';
 const COR_TEXTO = '#f4f9ff';
-const COR_CONTORNO = '#0b1a33';
+const COR_MUTED = '#aed0ef';
 
-const PAINEL_X = 150;
-const PAINEL_Y = 60;
-const PAINEL_W = 660;
-const PAINEL_H = 420;
+const PAINEL_X = 180;
+const PAINEL_Y = 104;
+const PAINEL_W = 600;
+const PAINEL_H = 340;
 
-const LARGURA_ALTERNATIVA = 250;
-const ALTURA_ALTERNATIVA = 50;
-const COLUNA_ALTERNATIVA = PAINEL_X + PAINEL_W - LARGURA_ALTERNATIVA - 40;
+const PASSO_LINHA = 104;
+const LINHA_1_Y = PAINEL_Y + 78;
+const LINHA_2_Y = LINHA_1_Y + PASSO_LINHA;
+const LINHA_3_Y = LINHA_2_Y + PASSO_LINHA;
 
-const LINHA_1_Y = PAINEL_Y + 120;
-const LINHA_2_Y = PAINEL_Y + 195;
-const LINHA_3_Y = PAINEL_Y + 270;
+const MEDALHAO_CX = PAINEL_X + 66;
+const ROTULO_X = PAINEL_X + 104;
 
-const BOTAO_CONTROLES: BotaoRetangular = { id: 'controles', x: COLUNA_ALTERNATIVA, y: LINHA_1_Y - 25, w: LARGURA_ALTERNATIVA, h: ALTURA_ALTERNATIVA };
-const BOTAO_AUDIO: BotaoRetangular = { id: 'audio', x: COLUNA_ALTERNATIVA, y: LINHA_2_Y - 25, w: LARGURA_ALTERNATIVA, h: ALTURA_ALTERNATIVA };
-const BOTAO_TELA_CHEIA: BotaoRetangular = { id: 'tela_cheia', x: COLUNA_ALTERNATIVA, y: LINHA_3_Y - 25, w: LARGURA_ALTERNATIVA, h: ALTURA_ALTERNATIVA };
-const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: LARGURA / 2 - 100, y: PAINEL_Y + PAINEL_H - 85, w: 200, h: 46 };
+const SEG_W = 232;
+const SEG_H = 48;
+const SEG_X = PAINEL_X + PAINEL_W - 40 - SEG_W;
+const INT_W = 92;
+const INT_H = 48; // alvo de toque mínimo (48 lógicos) -- o guia sugere 44 (§4.4), mas a regra de toque (§1.9) prevalece
+const INT_X = PAINEL_X + PAINEL_W - 40 - INT_W;
+const BOTAO_CHEIA_W = 196;
+const BOTAO_CHEIA_H = 48;
+const BOTAO_CHEIA_X = PAINEL_X + PAINEL_W - 40 - BOTAO_CHEIA_W;
+
+const BOTAO_CONTROLES: BotaoRetangular = { id: 'controles', x: SEG_X, y: LINHA_1_Y - SEG_H / 2, w: SEG_W, h: SEG_H };
+const BOTAO_AUDIO: BotaoRetangular = { id: 'audio', x: INT_X, y: LINHA_2_Y - INT_H / 2, w: INT_W, h: INT_H };
+const BOTAO_TELA_CHEIA: BotaoRetangular = { id: 'tela_cheia', x: BOTAO_CHEIA_X, y: LINHA_3_Y - BOTAO_CHEIA_H / 2, w: BOTAO_CHEIA_W, h: BOTAO_CHEIA_H };
+const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: 32, y: 20, w: 56, h: 56 };
 
 const ROTULO_CONTROLES = 'Controles por toque';
 const ROTULO_AUDIO = 'Sons e música';
 const ROTULO_TELA_CHEIA = 'Tela cheia';
 
+/** Glifo simples em código (mão/alto-falante/setas) -- nunca emoji/glifo de fonte, que muda de cara por sistema. */
+function desenharGlifoLinha(ctx: Ctx, indice: number): void {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#ffffff';
+  const r = 11;
+  if (indice === 0) {
+    // "mão"/controle: um retângulo com um círculo em cima (bem abstrato, só pra ler como "controle").
+    caminhoArredondado(ctx, { x: -r * 0.6, y: -r * 0.2, w: r * 1.2, h: r * 1.1 }, 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.6, r * 0.32, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (indice === 1) {
+    // alto-falante
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.5, -r * 0.35);
+    ctx.lineTo(-r * 0.1, -r * 0.35);
+    ctx.lineTo(r * 0.4, -r * 0.75);
+    ctx.lineTo(r * 0.4, r * 0.75);
+    ctx.lineTo(-r * 0.1, r * 0.35);
+    ctx.lineTo(-r * 0.5, r * 0.35);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(r * 0.1, 0, r * 0.7, -0.5, 0.5);
+    ctx.stroke();
+  } else {
+    // setas de expandir (tela cheia)
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      ctx.save();
+      ctx.translate(sx * r * 0.5, sy * r * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(sx * -r * 0.45, 0);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(0, sy * -r * 0.45);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/** Medalhão simples (vidro) com o glifo da linha dentro. */
+function desenharMedalhaoLinha(ctx: Ctx, cy: number, indice: number): void {
+  const raio = 26;
+  ctx.save();
+  ctx.fillStyle = 'rgba(3,8,24,0.35)';
+  ctx.beginPath();
+  ctx.arc(MEDALHAO_CX, cy + 2, raio, 0, Math.PI * 2);
+  ctx.fill();
+  const grad = ctx.createLinearGradient(MEDALHAO_CX, cy - raio, MEDALHAO_CX, cy + raio);
+  grad.addColorStop(0, 'rgba(140,210,255,0.3)');
+  grad.addColorStop(1, 'rgba(10,24,60,0.65)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(MEDALHAO_CX, cy, raio, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.stroke();
+  ctx.translate(MEDALHAO_CX, cy);
+  desenharGlifoLinha(ctx, indice);
+  ctx.restore();
+}
+
+/** Interruptor (§4.4): trilho-pílula + bola de neve que desliza. */
+function desenharInterruptor(ctx: Ctx, x: number, y: number, w: number, h: number, ligado: boolean, aoVivo: boolean): void {
+  const raio = h / 2;
+  ctx.save();
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  if (ligado) {
+    grad.addColorStop(0, '#9BF5C8');
+    grad.addColorStop(1, '#1F9E66');
+  } else {
+    grad.addColorStop(0, 'rgba(60,78,110,0.9)');
+    grad.addColorStop(1, 'rgba(10,24,60,0.85)');
+  }
+  ctx.fillStyle = grad;
+  caminhoArredondado(ctx, { x, y, w, h }, raio);
+  ctx.fill();
+  ctx.lineWidth = aoVivo ? 2.5 : 1.5;
+  ctx.strokeStyle = aoVivo ? '#ffffff' : 'rgba(255,255,255,0.3)';
+  ctx.stroke();
+
+  const bolaR = h / 2 - 3;
+  const bolaX = ligado ? x + w - bolaR - 3 : x + bolaR + 3;
+  const bolaGrad = ctx.createRadialGradient(bolaX - bolaR * 0.3, y + h / 2 - bolaR * 0.3, 1, bolaX, y + h / 2, bolaR);
+  bolaGrad.addColorStop(0, '#ffffff');
+  bolaGrad.addColorStop(1, '#cfe6f7');
+  ctx.fillStyle = bolaGrad;
+  ctx.beginPath();
+  ctx.arc(bolaX, y + h / 2, bolaR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#0B1630';
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
+  const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
   let hover: string | null = null;
+  let ticks = 0;
+  let fundo: CamadaEstatica | null = null;
+
+  void precarregarAssetsMenuCapa();
 
   const aoMover = (e: Event): void => {
     const pt = eventoParaPontoLogico(e as PointerEvent, opcoes.canvas);
@@ -106,109 +227,107 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
   return {
     id: 'opcoes',
     atualizar() {
-      // nada a avançar: as opções são controladas pelos eventos
+      ticks += 1;
     },
-    desenhar(ctx: Ctx) {
+    desenhar(ctx: Ctx, alpha: number) {
+      const t = ticks + alpha;
+      const assets = assetsMenuCapaProntos();
+      if (!fundo && assets && doc) fundo = construirFundoFosco(doc, assets.capa, { reducao: 16 });
+      if (fundo) fundo.desenhar(ctx);
+      else {
+        ctx.save();
+        ctx.fillStyle = COR_FUNDO;
+        ctx.fillRect(0, 0, LARGURA, ALTURA);
+        ctx.restore();
+      }
+      desenharFlocos(ctx, 22, t, 0.7);
+
+      if (doc) {
+        desenharLetreiro(ctx, doc, 'OPÇÕES', LARGURA / 2, 56, 40, 'gelo');
+        painelGeada(ctx, doc, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H });
+      } else {
+        desenharTexto(ctx, 'OPÇÕES', LARGURA / 2, 56, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 6, alinhamento: 'center' });
+      }
+
+      // divisórias
       ctx.save();
-      ctx.fillStyle = COR_FUNDO;
-      ctx.fillRect(0, 0, LARGURA, ALTURA);
-
-      // painel
-      ctx.fillStyle = COR_PAINEL;
-      caminhoArredondado(ctx, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, 18);
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = COR_BORDA;
-      ctx.stroke();
-
-      // título
-      desenharTexto(ctx, 'OPÇÕES', LARGURA / 2, PAINEL_Y + 62, {
-        fonte: 'italic 800 48px "Barlow Condensed", Impact, sans-serif',
-        cor: COR_TEXTO,
-        contorno: 7,
-        corContorno: COR_CONTORNO,
-        alinhamento: 'center',
-      });
-      desenharTexto(ctx, 'Ajuste o jogo do seu jeito', LARGURA / 2, PAINEL_Y + 88, {
-        fonte: '600 18px Barlow, sans-serif',
-        cor: '#8fb6e0',
-        alinhamento: 'center',
-      });
-
-      // divisória
-      ctx.strokeStyle = COR_BORDA;
+      ctx.strokeStyle = 'rgba(159,227,255,0.22)';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(PAINEL_X + 40, PAINEL_Y + 105);
-      ctx.lineTo(PAINEL_X + PAINEL_W - 40, PAINEL_Y + 105);
-      ctx.stroke();
-
-      // rótulos das linhas
-      const rotulo = (texto: string, y: number): void => {
-        desenharTexto(ctx, texto, PAINEL_X + 40, y + 7, {
-          fonte: '600 24px Barlow, sans-serif',
-          cor: COR_TEXTO,
-        });
-      };
-      rotulo(ROTULO_CONTROLES, LINHA_1_Y);
-      rotulo(ROTULO_AUDIO, LINHA_2_Y);
-      rotulo(ROTULO_TELA_CHEIA, LINHA_3_Y);
-
-      // dica de como cada modo funciona
-      desenharTexto(ctx, 'Toque/arraste vs botões na tela', PAINEL_X + 40, LINHA_1_Y + 26, {
-        fonte: '500 15px Barlow, sans-serif',
-        cor: '#8fb6e0',
-      });
-
+      for (const y of [LINHA_1_Y + PASSO_LINHA / 2, LINHA_2_Y + PASSO_LINHA / 2]) {
+        const grad = ctx.createLinearGradient(PAINEL_X + 30, y, PAINEL_X + PAINEL_W - 30, y);
+        grad.addColorStop(0, 'rgba(159,227,255,0)');
+        grad.addColorStop(0.5, 'rgba(159,227,255,0.3)');
+        grad.addColorStop(1, 'rgba(159,227,255,0)');
+        ctx.strokeStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(PAINEL_X + 30, y);
+        ctx.lineTo(PAINEL_X + PAINEL_W - 30, y);
+        ctx.stroke();
+      }
       ctx.restore();
 
-      // linha 1: modo de controles
+      desenharMedalhaoLinha(ctx, LINHA_1_Y, 0);
+      desenharMedalhaoLinha(ctx, LINHA_2_Y, 1);
+      desenharMedalhaoLinha(ctx, LINHA_3_Y, 2);
+
+      const rotulo = (texto: string, ajuda: string, y: number): void => {
+        desenharTexto(ctx, texto, ROTULO_X, y - 10, { fonte: 'italic 800 24px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO });
+        desenharTexto(ctx, ajuda, ROTULO_X, y + 14, { fonte: '600 15px Barlow, sans-serif', cor: COR_MUTED });
+      };
+      rotulo(ROTULO_CONTROLES, 'Toque/arraste vs botões na tela', LINHA_1_Y);
+      rotulo(ROTULO_AUDIO, 'Sons e música juntos', LINHA_2_Y);
+
       const controlesAtual = opcoes.obterControles();
-      const controlesTexto = controlesAtual === 'gestos' ? 'GESTOS' : 'BOTÕES';
-      desenharBotao(ctx, {
-        ...BOTAO_CONTROLES,
-        texto: controlesTexto,
-        corTopo: controlesAtual === 'gestos' ? '#31c66d' : '#2a7de1',
-        corBase: controlesAtual === 'gestos' ? '#1d7f45' : '#144d8f',
+      const gestos = controlesAtual === 'gestos';
+      // Seletor segmentado GESTOS | BOTÕES: o segmento ativo é um botão 3D secundário com tampa pequena.
+      ctx.save();
+      ctx.fillStyle = 'rgba(4,10,30,0.55)';
+      caminhoArredondado(ctx, BOTAO_CONTROLES, SEG_H / 2);
+      ctx.fill();
+      ctx.restore();
+      const meioW = SEG_W / 2;
+      botao3D(ctx, {
+        x: gestos ? BOTAO_CONTROLES.x : BOTAO_CONTROLES.x + meioW,
+        y: BOTAO_CONTROLES.y,
+        w: meioW,
+        h: SEG_H,
+        texto: gestos ? 'GESTOS' : 'BOTÕES',
+        tipo: 'secundario',
         aoVivo: hover === 'controles',
+        tamanhoFonte: 17,
+      });
+      desenharTexto(ctx, gestos ? 'BOTÕES' : 'GESTOS', gestos ? BOTAO_CONTROLES.x + meioW + meioW / 2 : BOTAO_CONTROLES.x + meioW / 2, BOTAO_CONTROLES.y + SEG_H / 2 + 1, {
+        fonte: 'italic 800 17px "Barlow Condensed", Impact, sans-serif',
+        cor: 'rgba(255,255,255,0.55)',
+        alinhamento: 'center',
+        base: 'middle',
       });
 
-      // linha 2: áudio
+      // linha 2: áudio (interruptor)
       const audioLigado = opcoes.obterAudioLigado();
-      desenharBotao(ctx, {
-        ...BOTAO_AUDIO,
-        texto: audioLigado ? 'LIGADO' : 'DESLIGADO',
-        corTopo: audioLigado ? '#31c66d' : '#55606a',
-        corBase: audioLigado ? '#1d7f45' : '#2c343b',
-        aoVivo: hover === 'audio',
-      });
+      desenharInterruptor(ctx, BOTAO_AUDIO.x, BOTAO_AUDIO.y, BOTAO_AUDIO.w, BOTAO_AUDIO.h, audioLigado, hover === 'audio');
 
-      // linha 3: tela cheia (texto depende da plataforma: no iPhone não existe a API)
+      // linha 3: tela cheia
+      rotulo(
+        ROTULO_TELA_CHEIA,
+        typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel' ? 'Atalho: tecla F' : 'No iPhone: Compartilhar > Adicionar à Tela de Início',
+        LINHA_3_Y,
+      );
       const temApi = typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel';
       const cheiaAgora = typeof document !== 'undefined' && emTelaCheia(document);
-      desenharBotao(ctx, {
+      const tipoCheia: TipoBotao3D = temApi ? (cheiaAgora ? 'secundario' : 'confirmar') : 'secundario';
+      botao3D(ctx, {
         ...BOTAO_TELA_CHEIA,
         texto: temApi ? (cheiaAgora ? 'SAIR' : 'ENTRAR') : 'COMO ATIVAR',
-        corTopo: temApi ? (cheiaAgora ? '#31c66d' : '#2a7de1') : '#f6c90e',
-        corBase: temApi ? (cheiaAgora ? '#1d7f45' : '#144d8f') : '#a06e00',
+        tipo: tipoCheia,
         aoVivo: hover === 'tela_cheia',
       });
-      desenharTexto(ctx, temApi ? 'Atalho: tecla F' : 'No iPhone: Compartilhar > Adicionar à Tela de Início', PAINEL_X + 40, LINHA_3_Y + 26, {
-        fonte: '500 15px Barlow, sans-serif',
-        cor: '#8fb6e0',
-      });
 
-      // botão voltar
-      desenharBotao(ctx, {
-        ...BOTAO_VOLTAR,
-        texto: 'VOLTAR',
-        corTopo: hover === 'voltar' ? '#e85d4a' : '#c0392b',
-        corBase: hover === 'voltar' ? '#b03a26' : '#7d241a',
-        aoVivo: hover === 'voltar',
-      });
-      desenharTexto(ctx, 'ESC volta ao menu', LARGURA / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h + 18, {
-        fonte: '500 14px Barlow, sans-serif',
-        cor: '#8fb6e0',
+      botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
+
+      desenharTexto(ctx, 'ESC volta', BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h + 16, {
+        fonte: '600 14px Barlow, sans-serif',
+        cor: COR_MUTED,
         alinhamento: 'center',
       });
     },

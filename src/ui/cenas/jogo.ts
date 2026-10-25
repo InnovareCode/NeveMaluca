@@ -15,6 +15,7 @@ import type { AlvoToque } from '../../input/toque';
 import type { AudioDestravavel } from '../../audio/index';
 import type { SaveV1 } from '../../meta/tipos';
 import type { Cena } from '../tipos';
+import { criarCortinaNevasca } from '../transicao';
 import { criarCenaDescida, type ResultadoDescida } from './descida';
 import { criarControladorPausa, type ControladorPausa } from './pausa';
 import { criarCenaResultado } from './resultado';
@@ -45,6 +46,19 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
   // Plano C-D6 ("reinicia só antes de cruzar"): posto a `true` no tick da chegada (`aoChegada`), antes mesmo da
   // comemoração acabar -- desliga o REINICIAR do menu de pausa a partir desse instante.
   let jaChegou = false;
+  // "Nevasca" (§10.1) entre descida/resultado -- sempre "pra frente" (não há caminho de volta dentro desta
+  // cena): ver cabeçalho de `ui/transicao.ts` sobre a cena antiga ser destruída já (ninguém testa o `id` desta
+  // sub-cena no meio do caminho).
+  const nevasca = criarCortinaNevasca({ canvas: opcoes.canvas, janela: opcoes.janela });
+
+  /** Destrói a sub-cena atual JÁ e só constrói a próxima no início da revelação (§10.1 passo 4). */
+  function trocarComNevasca(construir: () => Cena): void {
+    jogoAtual?.destruir?.();
+    jogoAtual = null;
+    nevasca.iniciar('frente', () => {
+      jogoAtual = construir();
+    });
+  }
 
   const pausa: ControladorPausa = criarControladorPausa({
     canvas: opcoes.canvas,
@@ -52,7 +66,7 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
     podeReiniciar: () => !jaChegou,
     aoContinuar: () => undefined,
     aoReiniciar: () => {
-      jogoAtual = montarDescida();
+      trocarComNevasca(montarDescida);
     },
     aoAbrirConfiguracoes: () => {
       if (!opcoes.criarTelaOpcoes) return;
@@ -84,16 +98,15 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
       fantasma: opcoes.fantasma,
       aoTerminar: (resultado) => {
         opcoes.aoResultado?.(resultado);
-        jogoAtual?.destruir?.();
-        jogoAtual = criarCenaResultado({
-          dados: resultado,
-          canvas: opcoes.canvas,
-          janela: opcoes.janela,
-          aoReiniciar: () => {
-            jogoAtual = montarDescida();
-          },
-          aoMenu: opcoes.aoMenu,
-        });
+        trocarComNevasca(() =>
+          criarCenaResultado({
+            dados: resultado,
+            canvas: opcoes.canvas,
+            janela: opcoes.janela,
+            aoReiniciar: () => trocarComNevasca(montarDescida),
+            aoMenu: opcoes.aoMenu,
+          }),
+        );
       },
     });
   }
@@ -108,20 +121,23 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
         return;
       }
       if (pausa.pausado) return; // congela a descida/resultado por baixo enquanto o menu de pausa está aberto
-      jogoAtual?.atualizar();
+      nevasca.atualizar(); // no-op fora de transição; constrói a sub-cena nova ao fim de cobrir+segurar
+      if (!nevasca.congelando) jogoAtual?.atualizar(); // 'revelando': a sub-cena nova já tica a própria entrada
     },
     desenhar(ctx, alpha) {
       if (telaConfig) {
         telaConfig.desenhar(ctx, alpha);
         return;
       }
-      jogoAtual?.desenhar(ctx, alpha);
+      if (nevasca.emTransicao) nevasca.desenhar(ctx, alpha, (c, a) => jogoAtual?.desenhar(c, a));
+      else jogoAtual?.desenhar(ctx, alpha);
       pausa.desenhar(ctx);
     },
     destruir() {
       jogoAtual?.destruir?.();
       telaConfig?.destruir?.();
       pausa.destruir();
+      nevasca.destruir();
     },
     aoPausarAutomatico() {
       // Só abre a pausa se há de fato uma descida rolando (resultado/tela de config não precisam disto).

@@ -8,9 +8,10 @@
  * sozinha (feedback do dono: "pausa automática" precisa ser VISÍVEL, não só o laço mudo por baixo).
  *
  * Técnica de leitura sem OCR (mesma de `campeonato-corrida.spec.ts`/pódio): amostra um pixel num ponto do
- * painel que NUNCA tem texto/botão por cima (`PROBE_PAUSA`) e compara com `COR_PAINEL` de `pausa.ts` -- se bate,
- * o painel está na tela; se não bate, não está. `PROBE_OPCOES` é um ponto que só o painel de Opções cobre (mais
- * largo que o de pausa), nunca o de pausa -- distingue as duas telas sem precisar ler texto.
+ * painel que NUNCA tem texto/botão por cima (`PROBE_PAUSA`/`PROBE_OPCOES`) e compara com a cor medida do Painel
+ * Geada daquela tela (`COR_PAINEL_PAUSA`/`COR_PAINEL_OPCOES`, ver o comentário antes delas) -- se bate, o painel
+ * está na tela; se não bate, não está. Os dois pontos ficam em regiões que só o painel da PRÓPRIA tela cobre
+ * (nunca o da outra), o que distingue as duas sem precisar ler texto.
  */
 import { writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
@@ -25,12 +26,26 @@ interface NeveHook {
   readonly canvas: HTMLCanvasElement;
 }
 
-const COR_PAINEL_PAUSA: readonly [number, number, number] = [22, 43, 71]; // '#162b47', ver ui/cenas/pausa.ts
-// Ponto dentro do painel de pausa, abaixo do título "PAUSADO" e acima do 1º botão -- nunca tem texto/botão.
-const PROBE_PAUSA = { x: 480, y: 165 };
-// Dentro do painel de Opções (bem mais largo, x 150..810) mas FORA do de pausa (x 270..690) -- só cobre quando
-// a tela de Opções está por cima.
-const PROBE_OPCOES = { x: 170, y: 70 };
+// O Painel Geada (`kit-premium.ts`) tem uma chapa opaca por dentro -- a cor final do corpo do painel NÃO
+// depende do que está congelado por baixo, então basta medir uma vez no navegador (skill `medir-antes-de-
+// afirmar`) pra ter uma constante estável. Os dois painéis (pausa.ts e opcoes.ts) usam a MESMA receita, mas como
+// têm alturas diferentes (380 vs 340) e os pontos abaixo caem em frações diferentes do degradê de tinta, as
+// cores medidas são distintas -- por isso duas constantes, não uma.
+const COR_PAINEL_PAUSA: readonly [number, number, number] = [12, 26, 63]; // medido no navegador (Chromium), ver ui/cenas/pausa.ts
+const COR_PAINEL_OPCOES: readonly [number, number, number] = [33, 52, 88]; // medido no navegador (Chromium), ver ui/cenas/opcoes.ts
+// Ponto dentro do painel de pausa (x 280..680, y 80..460) mas fora do de Opções (y 104..444) -- só o de pausa
+// desenha aqui, e está longe de qualquer texto/botão/aro.
+const PROBE_PAUSA = { x: 380, y: 450 };
+// Dentro do painel de Opções (x 180..780, y 104..444) mas fora do de pausa (x 280..680 -- 200 < 280) -- só cobre
+// quando a tela de Opções está por cima.
+const PROBE_OPCOES = { x: 220, y: 200 };
+
+/** Compara com tolerância de ±2 por canal: o gradiente do Painel Geada (`kit-premium.ts`) interpola 1 valor
+ *  diferente no WebKit do iPhone (motor diferente do Chromium onde `COR_PAINEL_*` foi medido -- mesma causa de
+ *  `[[pixel-identico-precisa-baseline-por-motor]]`), não é o painel estar ausente. */
+function corProxima(amostra: readonly (number | undefined)[], esperado: readonly [number, number, number], tolerancia = 2): boolean {
+  return esperado.every((v, i) => Math.abs((amostra[i] ?? 0) - v) <= tolerancia);
+}
 
 test.describe('Menu de pausa (Treino e Corrida)', () => {
   test('HUD: botão de pausa abre o painel; CONTINUAR fecha; Esc/P também fecham/abrem', async ({ page }, testInfo) => {
@@ -59,7 +74,7 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('selecao');
-    await clicarLogico(105, 386); // miniatura 0 ('capi')
+    await clicarLogico(110, 470); // cartão 0 ('capi')
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('jogo');
@@ -87,7 +102,7 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
       );
 
     // Antes de pausar: o ponto do painel ainda não é a cor do painel (é gameplay: céu/neve/HUD).
-    expect(await desenharEAmostrar(PROBE_PAUSA)).not.toEqual(COR_PAINEL_PAUSA);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(false);
 
     // Botão de pausa do HUD (`render/hud.ts: RETANGULO_BOTAO_PAUSA`, canto superior direito) -- toque real.
     const retanguloBotaoPausa = await page.evaluate(async () => {
@@ -112,16 +127,16 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     await page.screenshot({ path: testInfo.outputPath('pausa-aberta-viewport.png') });
     await testInfo.attach('pausa-aberta-viewport', { path: testInfo.outputPath('pausa-aberta-viewport.png'), contentType: 'image/png' });
 
-    expect(await desenharEAmostrar(PROBE_PAUSA)).toEqual(COR_PAINEL_PAUSA);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(true);
     expect(await page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual())).toBe('jogo');
 
     // Tecla Esc fecha (continua)
     await page.keyboard.press('Escape');
-    expect(await desenharEAmostrar(PROBE_PAUSA)).not.toEqual(COR_PAINEL_PAUSA);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(false);
 
     // Tecla P abre de novo (mesmo atalho do teclado)
     await page.keyboard.press('KeyP');
-    expect(await desenharEAmostrar(PROBE_PAUSA)).toEqual(COR_PAINEL_PAUSA);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(true);
 
     // CONFIGURAÇÕES: reaproveita a cena de Opções de verdade, depois VOLTAR retorna pra pausa
     const config = await page.evaluate(async () => {
@@ -130,12 +145,12 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
       return BOTAO_CONFIGURACOES as { x: number; y: number; w: number; h: number };
     });
     await clicarLogico(config.x + config.w / 2, config.y + config.h / 2);
-    expect(await desenharEAmostrar(PROBE_OPCOES)).toEqual(COR_PAINEL_PAUSA); // mesma cor de painel, tela de Opções
-    expect(await desenharEAmostrar(PROBE_PAUSA)).not.toEqual(COR_PAINEL_PAUSA); // pausa não desenha por baixo
+    expect(corProxima(await desenharEAmostrar(PROBE_OPCOES), COR_PAINEL_OPCOES)).toBe(true); // painel Geada da tela de Opções
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(false); // pausa não desenha por baixo
 
-    await clicarLogico(480, 418); // botão VOLTAR de `opcoes.ts` (x=380..580, y=395..441)
-    expect(await desenharEAmostrar(PROBE_OPCOES)).not.toEqual(COR_PAINEL_PAUSA);
-    expect(await desenharEAmostrar(PROBE_PAUSA)).toEqual(COR_PAINEL_PAUSA); // voltou pra pausa, não pro menu
+    await clicarLogico(60, 48); // botão VOLTAR redondo de `opcoes.ts` (x=32..88, y=20..76)
+    expect(corProxima(await desenharEAmostrar(PROBE_OPCOES), COR_PAINEL_OPCOES)).toBe(false);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(true); // voltou pra pausa, não pro menu
 
     // VOLTAR AO MENU pede confirmação: CANCELAR continua no jogo pausado
     const botoes = await page.evaluate(async () => {
@@ -150,11 +165,21 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     await clicarLogico(botoes.voltarMenu.x + botoes.voltarMenu.w / 2, botoes.voltarMenu.y + botoes.voltarMenu.h / 2);
     await clicarLogico(botoes.cancelar.x + botoes.cancelar.w / 2, botoes.cancelar.y + botoes.cancelar.h / 2);
     expect(await page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual())).toBe('jogo');
-    expect(await desenharEAmostrar(PROBE_PAUSA)).toEqual(COR_PAINEL_PAUSA); // ainda pausado
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(true); // ainda pausado
 
     // Confirma de verdade: SIM volta ao menu principal
     await clicarLogico(botoes.voltarMenu.x + botoes.voltarMenu.w / 2, botoes.voltarMenu.y + botoes.voltarMenu.h / 2);
     await clicarLogico(botoes.confirmar.x + botoes.confirmar.w / 2, botoes.confirmar.y + botoes.confirmar.h / 2);
+    // "Nevasca" (ui/transicao.ts §10.1): a troca pra 'menu' só termina de CONSTRUIR (e `cenaAtual()` só reflete
+    // o destino) no início da revelação, e isso só avança com `atualizar()` -- o `laco` real está PAUSADO desde
+    // `laco.pausar('e2e-pausa')` (lá em cima, pra congelar o gameplay atrás da pausa), então precisa tickar na
+    // mão (como a contagem acima), sem depender do rAF de verdade.
+    await page.evaluate(async () => {
+      const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
+      const { TICKS_NEVASCA_TOTAL } = await carregar('/src/ui/transicao.ts');
+      const neve = (window as unknown as { __neve: NeveHook }).__neve;
+      for (let i = 0; i < TICKS_NEVASCA_TOTAL; i++) neve.cena.atualizar();
+    });
     expect(await page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual())).toBe('menu');
 
     expect(erros, `erros de página: ${erros.join('; ')}`).toEqual([]);
@@ -181,7 +206,12 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     const clicarLogico = (x: number, y: number) => page.mouse.click(caixa.x + x * escalaX, caixa.y + y * escalaY);
 
     await clicarLogico(130, 224); // TREINO
-    await clicarLogico(105, 386); // miniatura 0 ('capi')
+    // "Nevasca" (§10.1): só dá pra clicar no cartão depois que a seleção TERMINA de construir (senão a Nevasca
+    // ainda está bloqueando/a cena nem existe, e o clique cai no vazio) -- por isso o `.poll()` ANTES do 2º clique.
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
+      .toBe('selecao');
+    await clicarLogico(110, 470); // cartão 0 ('capi')
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual()))
       .toBe('jogo');
@@ -207,7 +237,7 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
       );
 
     await page.keyboard.press('Escape'); // abre a pausa
-    expect(await desenharEAmostrar(PROBE_PAUSA)).toEqual(COR_PAINEL_PAUSA);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(true);
 
     const reiniciar = await page.evaluate(async () => {
       const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
@@ -216,12 +246,21 @@ test.describe('Menu de pausa (Treino e Corrida)', () => {
     });
     await clicarLogico(reiniciar.x + reiniciar.w / 2, reiniciar.y + reiniciar.h / 2);
 
-    expect(await desenharEAmostrar(PROBE_PAUSA)).not.toEqual(COR_PAINEL_PAUSA); // painel fechou
+    // REINICIAR troca a sub-cena (descida nova) pela "Nevasca" interna de `ui/cenas/jogo.ts` (§10.1) -- precisa
+    // tickar na mão (o `laco` real está pausado desde `laco.pausar('e2e-pausa-reiniciar')`, ver acima).
+    await page.evaluate(async () => {
+      const carregar = (caminho: string) => import(/* @vite-ignore */ caminho);
+      const { TICKS_NEVASCA_TOTAL } = await carregar('/src/ui/transicao.ts');
+      const neve = (window as unknown as { __neve: NeveHook }).__neve;
+      for (let i = 0; i < TICKS_NEVASCA_TOTAL; i++) neve.cena.atualizar();
+    });
+
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(false); // painel fechou
     expect(await page.evaluate(() => (window as unknown as { __neve: NeveHook }).__neve.cena.cenaAtual())).toBe('jogo'); // sem travar/navegar
 
     // Pausa automática ao perder o foco (feedback do dono: não é só o laço mudo, o menu tem que aparecer)
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    expect(await desenharEAmostrar(PROBE_PAUSA)).toEqual(COR_PAINEL_PAUSA);
+    expect(corProxima(await desenharEAmostrar(PROBE_PAUSA), COR_PAINEL_PAUSA)).toBe(true);
 
     const fotoFinal = await page.evaluate(() => {
       const neve = (window as unknown as { __neve: NeveHook }).__neve;

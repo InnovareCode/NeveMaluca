@@ -6,6 +6,7 @@
 import type { QuadroCarregado, SpritePersonagem } from '../assets/index';
 import { PX_POR_METRO } from '../core/constantes';
 import type { IdPose, PilotoLeitura } from '../core/contratos';
+import type { PrevisaoPouso } from './camera';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
 import type { FatorEstica } from './pose-visual';
 
@@ -19,8 +20,11 @@ export const COR_POR_MODO: Readonly<Record<PilotoLeitura['modo'], string>> = {
 const RAIO_CORPO_M = 0.35;
 const COMPRIMENTO_PRANCHA_M = 1.3;
 /** Escala do sprite no mundo: destaque visual ao personagem no mobile sem perder a amplitude (feedback do dono,
- *  2026-10-24: "aumenta um pouco pra ficar mais nítido" -- era 1.85). */
-const ALTURA_ALVO_M = 2.05;
+ *  iPhone, 2026-10-24: "o personagem ainda está pequeno na tela e não valoriza o gráfico" -- meta explícita do dono
+ *  é ~1/4 da altura da tela no chão; medido no navegador (skill medir-antes-de-afirmar), em cruzeiro típico (zoom
+ *  de velocidade, não parado) o valor antigo de 2,05 só dava ~13% da altura lógica (540px) -- daí o salto grande,
+ *  não um ajuste fino. Era 1,85 antes desta mesma rodada de "aumenta um pouco". */
+const ALTURA_ALVO_M = 3.9;
 /** Pose usada só pra MEDIR a altura de referência (nunca desenhada aqui) -- toda pose escala por ESTE número, não
  *  pelo próprio `d.altura` dela (feedback do dono: "o personagem muda de tamanho ao cair/levar batida"). Cada
  *  recorte de pose tem padding de enquadramento diferente (braços abertos, giro, queda) -- escalar cada uma pelo
@@ -94,5 +98,31 @@ export function desenharPiloto(
     desenharCapsulaFallback(ctx, piloto.modo, escala);
   }
 
+  ctx.restore();
+}
+
+/**
+ * Marcador discreto do ponto de pouso previsto pela câmera de salto (`render/camera.ts: previsaoPouso()`):
+ * uma sombra elíptica rente ao chão, igual espírito de uma sombra projetada -- nunca um ícone/alerta chamativo
+ * (pedido do dono é "ver onde vai cair", não um aviso de perigo). `previsao.visibilidade` (0..1, mesmo fator de
+ * easing do enquadramento) controla a opacidade: aparece/desaparece junto com o zoom-out, nunca de repente.
+ * Desenhar ANTES do piloto (mesmo padrão de `turboPouso.desenhar` em `ui/cenas/corrida.ts`): é chão, fica atrás.
+ */
+export function desenharMarcadorPouso(ctx: CanvasRenderingContext2D, camera: EstadoCamera, previsao: PrevisaoPouso | null): void {
+  if (!previsao || previsao.visibilidade <= 0.02) return;
+  const pt = mundoParaTela(previsao.x, previsao.y, camera, PX_POR_METRO);
+  const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
+  const raioX = 0.6 * escala;
+  const raioY = 0.2 * escala;
+
+  ctx.save();
+  ctx.globalAlpha = previsao.visibilidade * 0.5;
+  ctx.beginPath();
+  ctx.ellipse(pt.x, pt.y, raioX, raioY, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#0a1e32';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, 0.05 * escala);
+  ctx.strokeStyle = 'rgba(247, 251, 255, 0.7)';
+  ctx.stroke();
   ctx.restore();
 }

@@ -45,7 +45,13 @@ export function alturaDoTerreno(pista: PistaGerada, xM: number): number {
 export function desenharTerreno(ctx: CanvasRenderingContext2D, pista: PistaGerada, camera: EstadoCamera, pintor?: PintorTema): void {
   const comprimentoM = comprimentoDaPistaM(pista);
   const margemM = larguraVisivelM(camera, PX_POR_METRO) * 0.6;
-  const xEsq = Math.max(0, camera.x - margemM);
+  // SEM `Math.max(0, ...)` aqui de propósito (pedido do dono, 2026-10-24): a câmera centra o piloto desde o 1º
+  // quadro (nunca empurrada pra não cortar ninguém na largada, inclusive os 6 do campeonato) -- então é este
+  // desenho que precisa se estender pra trás de x=0, nunca a câmera. `alturaDoTerreno` já devolve a altura de
+  // `pista.alturas[0]` (achatada) pra qualquer `xm<0` -- a pista aqui simplesmente "continua" num platô na mesma
+  // altura da largada, nunca um vazio/buraco. Mesmo array `superficie` abaixo alimenta `pintor?.desenharTerreno`
+  // (todos os 5 temas raster): a extensão vale pra pele raster também, sem precisar tocar tema por tema.
+  const xEsq = camera.x - margemM;
   const xDir = Math.min(comprimentoM, camera.x + margemM);
   if (xDir <= xEsq) return;
 

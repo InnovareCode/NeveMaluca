@@ -1,11 +1,14 @@
 # src/audio/
 
-**Dono:** Vega. **Estado:** destrave (M0) + game feel completo 100% sintetizado — manobras/combo (M2), música
-adaptativa (M2), pulo/pouso/tombo/coleta/chegada (descida), itens da corrida e contagem 3-2-1. Vozes ainda não
-entraram (plano §3.8, resto do backlog).
+**Dono:** Vega. **Estado:** destrave (M0) + game feel completo 100% sintetizado — manobras/combo (M2), pulo/pouso/
+tombo/coleta/chegada (descida), itens da corrida e contagem 3-2-1. Vozes ainda não entraram (plano §3.8, resto do
+backlog). **Música de fundo:** desde 2026-10-24, faixas REAIS (`public/assets/musica/<id>.mp3`, origem/licença em
+`docs/creditos-musica.md`) via `musica-trilha.ts` — a sintetizada (`musica-adaptativa.ts`) passa a ser só o
+FALLBACK de quando um arquivo falha (quem liga as duas olha `TrilhaMusical.estaTocando()`).
 
-**Responsabilidade (plano §3.8):** áudio 100% sintetizado (sem arquivo — a CSP só libera `self`/`blob:`), música por
-pista e eventos para som. Base: `AudioSys` do InnoFighters, copiado e adaptado.
+**Responsabilidade (plano §3.8):** efeitos 100% sintetizados (CSP: `media-src 'self' blob:` — `self` já cobre os
+arquivos de música, servidos do próprio domínio; nenhum CDN/áudio de terceiro). Base dos efeitos: `AudioSys` do
+InnoFighters, copiado e adaptado.
 
 **Importa de:** `core/`, `data/`.
 
@@ -14,7 +17,8 @@ pista e eventos para som. Base: `AudioSys` do InnoFighters, copiado e adaptado.
 | `audio-destravavel.ts` | `AudioDestravavel`: `ctx` (nulo até o 1º gesto), `init()` (cria o `AudioContext`, uma vez), `resume()` (religa `suspended`/`interrupted`; engole a rejeição da promessa) | adaptado de `AudioSys` (`init`, `resume`, `contextoDoNavegador`) do InnoFighters |
 | `sintese.ts` | Primitivas puras `tom`/`ruido` (oscilador/ruído branco + envelope + filtro opcional) e `criarBufferRuido`; `ContextoSintese` é o subconjunto PRÓPRIO de `AudioContext` que elas usam (testável em Node, sem `AudioContext` de verdade) | adaptado de `AudioSys.tone`/`AudioSys.noise` do InnoFighters, sem estado de instância |
 | `som-manobras.ts` | `criarSomManobras(audio, rng, opcoes)`: `aoEvento(evento)`/`atualizar({eventos})` tocam o som de `manobra` (ar/mortal/grab/trilho, cada um com timbre próprio), a "escada" de `combo-fechado` (uma nota por nível de `mult`, subindo) e o som de `combo-perdido` | M2 |
-| `musica-adaptativa.ts` | `criarMusicaAdaptativa(audio, rng, opcoes)`: trilha de fundo que reage a velocidade/combo (4 níveis de intensidade) | M2 |
+| `musica-adaptativa.ts` | `criarMusicaAdaptativa(audio, rng, opcoes)`: trilha de fundo SINTETIZADA que reage a velocidade/combo (4 níveis de intensidade) — hoje só o FALLBACK de `musica-trilha.ts` | M2 |
+| `musica-trilha.ts` | `criarTrilhaMusical(audio, opcoes, buscar?)`: toca a faixa REAL (`tocar(id)`, carrega sob demanda/cache por id, cache nunca pré-aquece as 6 de uma vez), laço sem corte seco (2 vozes defasadas, crossfade curto na volta), crossfade ao trocar de faixa, `ducar(ativo)` (fanfarra/pódio), `estaTocando()` pro fallback saber se deve ligar | 2026-10-24, pedido do dono |
 | `som-descida.ts` | `criarSomDescida(audio, rng, opcoes)`: `aoEvento`/`atualizar({eventos})` tocam `pulo` (whoosh proporcional à força; kicker ganha uma 2ª camada acima de `LIMIAR_IMPULSO_KICKER`), `pouso` (perfeito/bom/torto, 3 timbres), `tombo`, `coleta` (floco/dourado) e `chegada` (fanfarra); `atingido` (acerto SOFRIDO por item) também mora aqui — é o próprio motor do corredor que emite | game feel 2026-10-24 |
 | `som-itens.ts` | `criarSomItens(audio, rng, idJogador, opcoes)`: `aoEvento`/`atualizar(eventos)` sobre `EventoCorrida`, filtrado por `idJogador` (só o que ele faz/sofre toca som) — caixa pega + roleta cosmética, uso de cada item (6 timbres, um por `TipoItem`), acerto DADO, bloqueio do escudo e desvio | game feel 2026-10-24 |
 | `som-contagem.ts` | `criarSomContagem(audio, opcoes)`: `atualizar(ticksContagem)` toca um beep por número da contagem "3-2-1-JÁ" (ver `ui/cenas/contagem.ts`) — não reage a evento nenhum, só ao contador de ticks da cena | game feel 2026-10-24 |
@@ -44,5 +48,16 @@ contagem (ver `ui/cenas/contagem.ts`). Todos aceitam `aoEvento` por evento, se o
 
 **Regras:** sem `Math.random` (use `rng`/`rngDoCanal(semente, 'audio')`), `Date`, `performance` nem timers (varredura em
 `tests/unit/arquitetura.test.ts`) — por isso a síntese agenda tudo pelo relógio do próprio `AudioContext`
-(`ctx.currentTime` + offsets), nunca `setTimeout`/`setInterval`. O `AudioContext` só destrava no primeiro toque
-(iPhone). A CSP libera `media-src blob:` e nenhum áudio externo.
+(`ctx.currentTime` + offsets), nunca `setTimeout`/`setInterval`. `musica-trilha.ts` segue a MESMA regra pro laço
+sem corte seco: usa `onended` (evento, não relógio reinventado) pra encadear a próxima volta. O `AudioContext` só
+destrava no primeiro toque (iPhone). CSP: `media-src 'self' blob:`, `connect-src 'self'` — os `.mp3` vêm do
+próprio domínio (`public/assets/musica/`), sem precisar afrouxar nada.
+
+**`musica-trilha.ts`, como se liga (gerenciador.ts):** instância ÚNICA pro fluxo inteiro (sobrevive à troca de
+cena, senão o crossfade cortaria no meio) — `criarTrilhaMusical(audio, { obterVolumeMusica: () => save.cfg.musica })`.
+`atualizar()` chama a CADA quadro, de UM lugar só (`gerenciador.ts`, não cada cena), porque é o que sobrevive à
+troca de cena inteira. Quem decide qual faixa toca em cada cena de topo: `gerenciador.ts` pro menu/treino (pista
+fixa do início ao fim); a própria `campeonato.ts` pras 5 pistas em sequência + pódio (só ela sabe em qual etapa
+está) — `tocar(id)` com `id` = `DefPista.musica`/`DefTema.musica`, ou `'menu'` fora de corrida. `ducar(true)` no
+pódio (abaixa o ganho mestre igual pra qualquer faixa — todas normalizadas pro mesmo nível, ver
+`docs/creditos-musica.md`), `ducar(false)` ao sair dele.

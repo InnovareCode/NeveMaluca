@@ -6,11 +6,19 @@ import { criarCenaMenu } from '../../src/ui/cenas/menu';
 import { criarCenaOpcoes } from '../../src/ui/cenas/opcoes';
 import { criarCenaSelecao } from '../../src/ui/cenas/selecao';
 import { criarCenaSelecaoPista } from '../../src/ui/cenas/selecao-pista';
-import { criarGerenciadorCenas } from '../../src/ui/cenas/gerenciador';
+import { criarGerenciadorCenas, type GerenciadorCenas } from '../../src/ui/cenas/gerenciador';
 import { eventoParaPontoLogico, pontoDentroDoBotao } from '../../src/ui/interacao';
 import { caminhoArredondado } from '../../src/ui/desenho';
+import { TICKS_NEVASCA_ATE_CONSTRUIR } from '../../src/ui/transicao';
 import type { SaveV1 } from '../../src/meta/tipos';
 import { CONFIG_PADRAO } from '../../src/meta/storage';
+
+/** Depois de um clique/tecla que troca de cena de topo, a cena nova só é CONSTRUÍDA (e seus ouvintes ficam vivos)
+ *  ao fim de cobrir+segurar da "Nevasca" (`ui/transicao.ts` §10.1) -- sem isto, o próximo clique cairia num
+ *  canvas sem ninguém escutando (bloqueado pela própria Nevasca) e a troca nunca aconteceria de verdade. */
+function avancarNevasca(gerenciador: Pick<GerenciadorCenas, 'atualizar'>): void {
+  for (let i = 0; i < TICKS_NEVASCA_ATE_CONSTRUIR; i += 1) gerenciador.atualizar();
+}
 
 interface PointerFalso {
   readonly pointerId?: number;
@@ -322,6 +330,116 @@ describe('Fase 1: Cena de Menu Principal', () => {
     expect(() => canvas.disparar('pointerdown', { clientX: 130, clientY: 516 })).not.toThrow();
     cenaSemCallback.destruir?.();
   });
+
+  it('sem campeonato em andamento, CAMPEONATO chama aoModos direto (comportamento de sempre)', () => {
+    const canvas = criarCanvasFalso();
+    const aoModos = vi.fn();
+
+    const cena = criarCenaMenu({
+      canvas,
+      aoJogar: () => undefined,
+      aoOpcoes: () => undefined,
+      aoModos,
+      obterCampeonatoEmAndamento: () => null,
+    });
+
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 272 });
+    expect(aoModos).toHaveBeenCalledTimes(1);
+
+    cena.destruir?.();
+  });
+
+  it('com campeonato em andamento (pedido do dono): CAMPEONATO abre o overlay Continuar/Novo jogo, não chama aoModos', () => {
+    const canvas = criarCanvasFalso();
+    const aoModos = vi.fn();
+    const aoContinuarCampeonato = vi.fn();
+    const aoNovoCampeonato = vi.fn();
+
+    const cena = criarCenaMenu({
+      canvas,
+      aoJogar: () => undefined,
+      aoOpcoes: () => undefined,
+      aoModos,
+      aoContinuarCampeonato,
+      aoNovoCampeonato,
+      obterCampeonatoEmAndamento: () => ({ semente: 1, personagem: 'capi', etapa: 2, pistasConcluidas: [] }),
+    });
+
+    // Clica em CAMPEONATO: com campeonato em andamento, abre o overlay (não corre direto pro `aoModos`)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 272 });
+    expect(aoModos).not.toHaveBeenCalled();
+
+    // Painel central (ver `PAINEL_CAMP_*`/`BOTAO_CONTINUAR_CAMP` de `menu.ts`): CONTINUAR em (480, 271)
+    canvas.disparar('pointerdown', { clientX: 480, clientY: 271 });
+    expect(aoContinuarCampeonato).toHaveBeenCalledTimes(1);
+    expect(aoNovoCampeonato).not.toHaveBeenCalled();
+
+    cena.destruir?.();
+  });
+
+  it('Novo jogo pede confirmação (perde o progresso) antes de chamar aoNovoCampeonato; CANCELAR não chama nada', () => {
+    const canvas = criarCanvasFalso();
+    const janela = criarJanelaFalsa();
+    const aoNovoCampeonato = vi.fn();
+    const aoContinuarCampeonato = vi.fn();
+
+    const cena = criarCenaMenu({
+      canvas,
+      janela,
+      aoJogar: () => undefined,
+      aoOpcoes: () => undefined,
+      aoModos: () => undefined,
+      aoContinuarCampeonato,
+      aoNovoCampeonato,
+      obterCampeonatoEmAndamento: () => ({ semente: 1, personagem: 'capi', etapa: 2, pistasConcluidas: [] }),
+    });
+
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 272 }); // CAMPEONATO -> overlay
+    canvas.disparar('pointerdown', { clientX: 480, clientY: 327 }); // NOVO JOGO -> sub-painel de confirmação
+    expect(aoNovoCampeonato).not.toHaveBeenCalled(); // ainda não -- só depois de confirmar
+
+    // CANCELAR no sub-painel (385, 311) vs (575, 311): cancela e volta pro painel de escolha, sem apagar nada
+    canvas.disparar('pointerdown', { clientX: 575, clientY: 311 });
+    expect(aoNovoCampeonato).not.toHaveBeenCalled();
+
+    // Reabre Novo jogo e agora confirma (385, 311) = "SIM, NOVO JOGO"
+    canvas.disparar('pointerdown', { clientX: 480, clientY: 327 });
+    canvas.disparar('pointerdown', { clientX: 385, clientY: 311 });
+    expect(aoNovoCampeonato).toHaveBeenCalledTimes(1);
+    expect(aoContinuarCampeonato).not.toHaveBeenCalled();
+
+    cena.destruir?.();
+  });
+
+  it('Escape fecha o overlay Campeonato (sem chamar nada) e, no sub-painel, volta à escolha', () => {
+    const canvas = criarCanvasFalso();
+    const janela = criarJanelaFalsa();
+    const aoModos = vi.fn();
+    const aoNovoCampeonato = vi.fn();
+    const aoContinuarCampeonato = vi.fn();
+
+    const cena = criarCenaMenu({
+      canvas,
+      janela,
+      aoJogar: () => undefined,
+      aoOpcoes: () => undefined,
+      aoModos,
+      aoContinuarCampeonato,
+      aoNovoCampeonato,
+      obterCampeonatoEmAndamento: () => ({ semente: 1, personagem: 'capi', etapa: 2, pistasConcluidas: [] }),
+    });
+
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 272 }); // abre o overlay
+    janela.disparar('Escape'); // fecha o overlay (não é "cancelar campeonato", só fecha a escolha)
+    expect(aoContinuarCampeonato).not.toHaveBeenCalled();
+    expect(aoNovoCampeonato).not.toHaveBeenCalled();
+
+    // Botões normais do menu voltam a reagir (overlay fechado)
+    canvas.disparar('pointerdown', { clientX: 130, clientY: 272 });
+    expect(aoModos).not.toHaveBeenCalled(); // overlay abriu de novo (ainda em andamento), não foi direto
+
+    cena.destruir?.();
+  });
 });
 
 describe('Fase 1: Tela de Seleção de Personagem', () => {
@@ -339,12 +457,12 @@ describe('Fase 1: Tela de Seleção de Personagem', () => {
       aoVoltar: () => undefined,
     });
 
-    // Miniatura 0 ('capi'): x 35..175, y 340..432, centro (105, 386) (ver selecao.ts)
-    canvas.disparar('pointerdown', { clientX: 105, clientY: 386 });
+    // Cartão 0 ('capi'): x 42..178, y 416..524, centro (110, 470) (ver selecao.ts)
+    canvas.disparar('pointerdown', { clientX: 110, clientY: 470 });
     expect(aoEscolher).toHaveBeenCalledWith('capi');
 
-    // Miniatura 3 ('beto'): x 485..625, y 340..432, centro (555, 386)
-    canvas.disparar('pointerdown', { clientX: 555, clientY: 386 });
+    // Cartão 3 ('beto'): x 486..622, y 416..524, centro (554, 470)
+    canvas.disparar('pointerdown', { clientX: 554, clientY: 470 });
     expect(aoEscolher).toHaveBeenCalledWith('beto');
 
     cena.destruir?.();
@@ -364,8 +482,8 @@ describe('Fase 1: Tela de Seleção de Personagem', () => {
       aoVoltar,
     });
 
-    // Botão VOLTAR: x 40..200, y 454..498, centro (120, 476)
-    canvas.disparar('pointerdown', { clientX: 120, clientY: 476 });
+    // Botão VOLTAR redondo, canto superior esquerdo: x 32..88, y 20..76, centro (60, 48)
+    canvas.disparar('pointerdown', { clientX: 60, clientY: 48 });
     expect(aoVoltar).toHaveBeenCalledTimes(1);
 
     janela.disparar('Escape');
@@ -412,12 +530,12 @@ describe('Fase 1: Tela de Seleção de Pista', () => {
       aoVoltar: () => undefined,
     });
 
-    // Card 0: x 70..330, y 112..262 (mesma grade de selecao.ts)
-    canvas.disparar('pointerdown', { clientX: 150, clientY: 150 });
+    // Card 0: x 38..202, y 104..324, centro (120, 214) (fileira única de 5, ver selecao-pista.ts)
+    canvas.disparar('pointerdown', { clientX: 120, clientY: 214 });
     expect(aoEscolher).toHaveBeenCalledWith('morro-do-pinhao');
 
-    // Card 3 (segunda linha, primeira coluna) = vulcao-pe-gelado
-    canvas.disparar('pointerdown', { clientX: 150, clientY: 320 });
+    // Card 3 ('vulcao-pe-gelado'): x 578..742, y 104..324, centro (660, 214)
+    canvas.disparar('pointerdown', { clientX: 660, clientY: 214 });
     expect(aoEscolher).toHaveBeenCalledWith('vulcao-pe-gelado');
 
     cena.destruir?.();
@@ -437,7 +555,8 @@ describe('Fase 1: Tela de Seleção de Pista', () => {
       aoVoltar,
     });
 
-    // Botão Voltar: x 380..580, y 452..498
+    // CTA "PRONTO" (x 330..630, y 456..520) também chama aoVoltar -- mesmo comportamento de sempre
+    // ("tocar no cartão grava, o CTA volta ao menu", ver selecao-pista.ts).
     canvas.disparar('pointerdown', { clientX: 480, clientY: 470 });
     expect(aoVoltar).toHaveBeenCalledTimes(1);
 
@@ -487,8 +606,8 @@ describe('Fase 1: Cena de Configurações / Opções', () => {
       aoVoltar: () => undefined,
     });
 
-    // Clica no botão de controles (x: 520..770, y: 155..205)
-    canvas.disparar('pointerdown', { clientX: 600, clientY: 170 });
+    // Clica no seletor segmentado de controles (x: 508..740, y: 158..206, ver opcoes.ts)
+    canvas.disparar('pointerdown', { clientX: 600, clientY: 182 });
     expect(aoAlternarControles).toHaveBeenCalledTimes(1);
 
     janela.disparar('KeyG');
@@ -513,8 +632,8 @@ describe('Fase 1: Cena de Configurações / Opções', () => {
       aoVoltar: () => undefined,
     });
 
-    // Clica no botão de áudio (x: 520..770, y: 230..280)
-    canvas.disparar('pointerdown', { clientX: 600, clientY: 245 });
+    // Clica no interruptor de áudio (x: 652..740, y: 264..308, ver opcoes.ts)
+    canvas.disparar('pointerdown', { clientX: 696, clientY: 286 });
     expect(aoAlternarAudio).toHaveBeenCalledTimes(1);
 
     janela.disparar('KeyM');
@@ -540,8 +659,8 @@ describe('Fase 1: Cena de Configurações / Opções', () => {
       aoVoltar,
     });
 
-    // Botão Voltar (x: 380..580, y: 408..458)
-    canvas.disparar('pointerdown', { clientX: 480, clientY: 420 });
+    // Botão Voltar redondo, canto superior esquerdo (x: 32..88, y: 20..76, ver opcoes.ts)
+    canvas.disparar('pointerdown', { clientX: 60, clientY: 48 });
     expect(aoVoltar).toHaveBeenCalledTimes(1);
 
     janela.disparar('Escape');
@@ -570,16 +689,19 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
 
     // Avança splash via toque
     canvas.disparar('pointerdown', { clientX: 100, clientY: 100 });
-    for (let i = 0; i < 20; i += 1) gerenciador.atualizar();
+    for (let i = 0; i < 20; i += 1) gerenciador.atualizar(); // fade da própria abertura, dispara a troca pro menu
+    avancarNevasca(gerenciador); // Nevasca até CONSTRUIR o menu (seus ouvintes ficarem vivos)
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     // No menu, toca em Treino (x: 20..240, y: 204..244): passa pela seleção de personagem antes de correr
     // (feedback do dono) -- não vai direto pro jogo.
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('selecao');
 
-    // Escolhe a miniatura 0 ('capi'): x 35..175, y 340..432, centro (105, 386)
-    canvas.disparar('pointerdown', { clientX: 105, clientY: 386 });
+    // Escolhe o cartão 0 ('capi'): x 42..178, y 416..524, centro (110, 470) -- redesenho premium §11.1 de `selecao.ts`
+    canvas.disparar('pointerdown', { clientX: 110, clientY: 470 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('jogo');
   });
 
@@ -602,6 +724,7 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
 
     // Clica em opções (x: 20..240, y: 400..440)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 420 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('opcoes');
 
     // Alterna controles para botões
@@ -618,6 +741,7 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
 
     // Volta para o menu via Escape
     janela.disparar('Escape');
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     gerenciador.destruir?.();
@@ -637,23 +761,27 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
 
     // No menu, toca em PERSONAGEM (x: 20..240, y: 448..488)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 468 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('selecao');
 
-    // Escolhe a miniatura 1 ('bandeira'): x 185..325, y 340..432, centro (255, 386)
-    canvas.disparar('pointerdown', { clientX: 255, clientY: 386 });
+    // Escolhe o cartão 1 ('bandeira'): x 190..326, y 416..524, centro (258, 470) -- redesenho premium §11.1
+    canvas.disparar('pointerdown', { clientX: 258, clientY: 470 });
     expect(save.personagemAtivo).toBe('bandeira');
     expect(armazenamentoMap.has('neve-maluca-v1')).toBe(true);
     expect((JSON.parse(armazenamentoMap.get('neve-maluca-v1') as string) as { personagemAtivo?: string }).personagemAtivo).toBe('bandeira');
 
-    // Volta ao menu via Escape
+    // Volta ao menu via Escape (entrada "PERSONAGEM": sem destino, fica na própria seleção -- ver `selecao.ts`)
     janela.disparar('Escape');
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     // Entra no jogo: TREINO passa pela seleção de novo (feedback do dono) -- escolhe 'bandeira' outra vez e
     // confere que a cena de descida recebe o personagem escolhido (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('selecao');
-    canvas.disparar('pointerdown', { clientX: 255, clientY: 386 });
+    canvas.disparar('pointerdown', { clientX: 258, clientY: 470 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();
@@ -673,23 +801,28 @@ describe('Fase 1: Gerenciador de Cenas (Orquestrador)', () => {
 
     // No menu, toca em PISTA (x: 20..240, y: 496..536)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 516 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('selecao-pista');
 
-    // Escolhe o card 1 (segunda coluna, primeira linha = 'pico-do-picole'): x 350..610, y 112..262
-    canvas.disparar('pointerdown', { clientX: 450, clientY: 150 });
+    // Escolhe o card 1 ('pico-do-picole'): x 218..382, y 104..324, centro (300, 214)
+    canvas.disparar('pointerdown', { clientX: 300, clientY: 214 });
     expect(save.pistaAtiva).toBe('pico-do-picole');
     expect(armazenamentoMap.has('neve-maluca-v1')).toBe(true);
     expect((JSON.parse(armazenamentoMap.get('neve-maluca-v1') as string) as { pistaAtiva?: string }).pistaAtiva).toBe('pico-do-picole');
 
     // Volta ao menu via Escape
     janela.disparar('Escape');
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('menu');
 
     // Entra no jogo: TREINO passa pela seleção de personagem (feedback do dono) antes de chegar na descida, que
     // recebe a pista escolhida (sem lançar erro na composição)
     canvas.disparar('pointerdown', { clientX: 130, clientY: 224 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('selecao');
-    canvas.disparar('pointerdown', { clientX: 105, clientY: 386 });
+    // Cartão 0 ('capi'): x 42..178, y 416..524, centro (110, 470) -- redesenho premium §11.1 de `selecao.ts`
+    canvas.disparar('pointerdown', { clientX: 110, clientY: 470 });
+    avancarNevasca(gerenciador);
     expect(gerenciador.cenaAtual()).toBe('jogo');
 
     gerenciador.destruir?.();

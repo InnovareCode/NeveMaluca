@@ -38,8 +38,8 @@ test.describe('Seleção de Pista', () => {
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao-pista');
 
-    // Escolhe o 2º card (coluna 2, linha 1 = 'pico-do-picole'; card em x 350..610, y 112..262 -> centro x=480, y=180)
-    await clicarLogico(480, 180);
+    // Escolhe o 2º card ('pico-do-picole'; fileira única, x 218..382, y 104..324 -> centro x=300, y=214, ver selecao-pista.ts)
+    await clicarLogico(300, 214);
 
     const escolhida = await page.evaluate(
       () => (window as unknown as { __neve: { save: { dados: { pistaAtiva?: string } } } }).__neve.save.dados.pistaAtiva,
@@ -65,7 +65,7 @@ test.describe('Seleção de Pista', () => {
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('selecao');
-    await clicarLogico(105, 386); // miniatura 0 ('capi')
+    await clicarLogico(110, 470); // cartão 0 ('capi')
     await expect.poll(() =>
       page.evaluate(() => (window as unknown as { __neve: { cena: { cenaAtual: () => string } } }).__neve.cena.cenaAtual()),
     ).toBe('jogo');

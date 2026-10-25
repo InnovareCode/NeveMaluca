@@ -19,12 +19,14 @@ import { REGRAS_SAVE, VERSAO_PROVISORIA_DA_PISTA } from '../../data/regras-save'
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { AudioDestravavel } from '../../audio/index';
+import { criarTrilhaMusical, type TrilhaMusical } from '../../audio/index';
 import { iniciarCampeonato, registrarResultado, situacao } from '../../meta/campeonato';
 import type { ArmazenamentoLike, Recorde, ReplayOpaco, SaveV1 } from '../../meta/tipos';
 import { inserirFantasma, inserirRecorde, salvarSave } from '../../meta/storage';
 import type { Ctx } from '../../platform/canvas';
 import { alternarTelaCheia, situacaoDaTelaCheia, type AlvoTelaCheia } from '../../platform/tela-cheia';
 import type { Cena } from '../tipos';
+import { criarCortinaNevasca } from '../transicao';
 import { criarCenaAbertura } from './abertura';
 import { criarCenaCampeonato } from './campeonato';
 import type { ResultadoDescida } from './descida';
@@ -65,6 +67,16 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
 
   let cenaAtual: Cena | null = null;
   let idAtual: IdCenaFluxo = opcoes.cenaInicial ?? 'abertura';
+  // Trilha musical REAL (pedido do dono, 2026-10-24: "musicas reais" -- `docs/creditos-musica.md`), UM só
+  // ganho mestre pro fluxo inteiro (sobrevive à troca de cena, senão cada `irPara` cortaria o crossfade no meio).
+  // Quem decide QUAL faixa toca em cada cena de TOPO é este arquivo (menu/treino, abaixo) OU, pro campeonato (5
+  // pistas em sequência + pódio), a própria `campeonato.ts` (só ela sabe em qual etapa está).
+  const trilha: TrilhaMusical | null = opcoes.audio ? criarTrilhaMusical(opcoes.audio, { obterVolumeMusica: () => opcoes.save.cfg.musica }) : null;
+  // "Nevasca" (guia de UI premium do Apolo, `docs/direcao-ui-premium.md` §10.1): transição padrão entre TODAS as
+  // cenas de topo (menu <-> seleção <-> jogo/campeonato/opções) -- criada ANTES da 1ª cena pra seus ouvintes de
+  // bloqueio (toque/tecla) terem prioridade de registro sobre os de qualquer sub-cena (ver cabeçalho de
+  // `ui/transicao.ts`).
+  const nevasca = criarCortinaNevasca({ canvas: opcoes.canvas, janela });
   // Fluxo "escolha o personagem antes de correr" (feedback do dono): setado só quando TREINO/CAMPEONATO leva à
   // seleção; a entrada "PERSONAGEM" do menu (navegação livre, sem destino) deixa isto em `null` -- nesse caso
   // `aoEscolher` só persiste e fica na tela (comportamento de sempre, ver `ui/cenas/selecao.ts`).
@@ -135,6 +147,31 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
     opcoes.save.campeonato = novo;
     persistirConfig();
     return novo;
+  };
+
+  /** Campeonato em andamento (etapa < 5) pro menu oferecer "Continuar"; `null` se nunca começou ou já decidiu. */
+  const obterCampeonatoEmAndamento = (): EstadoCampeonato | null => {
+    const atual = opcoes.save.campeonato;
+    return atual && atual.etapa < 5 ? atual : null;
+  };
+
+  /** "Continuar" do menu (pedido do dono, playtest iPhone): pula a seleção de personagem -- o campeonato em
+   *  andamento já tem o SEU próprio personagem (`EstadoCampeonato.personagem`), que `iniciarOuRetomarCampeonato`
+   *  devolve de qualquer forma (ver comentário dela: "continuidade de progresso vale mais que a escolha mais
+   *  recente"). Vai direto pra `campeonato`, sem passar por `selecao`. */
+  const continuarCampeonato = (): void => {
+    proximaCenaAposSelecao = null;
+    trocar('campeonato');
+  };
+
+  /** "Novo jogo" do menu (pedido do dono): só é chamado depois que `ui/cenas/menu.ts` já confirmou com o jogador
+   *  que o progresso atual será perdido. Apaga o `EstadoCampeonato` salvo e segue o fluxo de sempre (escolhe
+   *  personagem -> `iniciarOuRetomarCampeonato` cria um novo, pois não há mais nenhum em andamento). */
+  const novoCampeonato = (): void => {
+    delete (opcoes.save as { campeonato?: EstadoCampeonato }).campeonato;
+    persistirConfig();
+    proximaCenaAposSelecao = 'campeonato';
+    trocar('selecao');
   };
 
   /**
@@ -239,9 +276,10 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           canvas,
           janela,
           documento: doc,
-          aoAvancar: () => irPara('menu'),
+          aoAvancar: () => trocar('menu'),
         });
       case 'menu':
+        trilha?.tocar('menu');
         return criarCenaMenu({
           canvas,
           janela,
@@ -251,20 +289,23 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           // continua só trocando o ativo, como sempre.
           aoJogar: () => {
             proximaCenaAposSelecao = 'jogo';
-            irPara('selecao');
+            trocar('selecao');
           },
           aoModos: () => {
             proximaCenaAposSelecao = 'campeonato';
-            irPara('selecao');
+            trocar('selecao');
           },
-          aoOpcoes: () => irPara('opcoes'),
+          aoOpcoes: () => trocar('opcoes'),
           aoPersonagem: () => {
             proximaCenaAposSelecao = null;
-            irPara('selecao');
+            trocar('selecao');
           },
-          aoPista: () => irPara('selecao-pista'),
+          aoPista: () => trocar('selecao-pista'),
           obterPersonagemAtivo,
           obterPistaAtiva,
+          obterCampeonatoEmAndamento,
+          aoContinuarCampeonato: continuarCampeonato,
+          aoNovoCampeonato: novoCampeonato,
         });
       case 'selecao':
         return criarCenaSelecao({
@@ -281,12 +322,12 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
             if (proximaCenaAposSelecao) {
               const destino = proximaCenaAposSelecao;
               proximaCenaAposSelecao = null;
-              irPara(destino);
+              trocar(destino);
             }
           },
           aoVoltar: () => {
             proximaCenaAposSelecao = null;
-            irPara('menu');
+            trocar('menu');
           },
         });
       case 'selecao-pista':
@@ -297,18 +338,22 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           catalogo: REGRAS_SAVE.pistas,
           obterPistaAtiva,
           aoEscolher: selecionarPista,
-          aoVoltar: () => irPara('menu'),
+          aoVoltar: () => trocar('menu'),
         });
       case 'opcoes':
-        return montarOpcoes(() => irPara('menu'));
-      case 'jogo':
+        return montarOpcoes(() => trocar('menu'));
+      case 'jogo': {
+        // Treino sempre roda a MESMA pista do início ao fim (sem etapas): dá pra decidir a faixa aqui mesmo, uma
+        // vez, sem `jogo.ts`/`descida.ts` precisarem saber de música (diferente do campeonato, 5 pistas em sequência).
+        const pistaDoTreino = PISTAS_DE_DADOS.find((p) => p.id === obterPistaAtiva());
+        trilha?.tocar(pistaDoTreino?.musica ?? 'menu');
         // `criarCenaJogo` já gerencia descida -> resultado -> descida internamente, e o próprio menu de pausa
         // (Esc/P, botão do HUD) por cima -- `criarTelaOpcoes` é o CONFIGURAÇÕES de dentro da pausa.
         return criarCenaJogo({
           canvas,
           janela,
           documento: doc,
-          aoMenu: () => irPara('menu'),
+          aoMenu: () => trocar('menu'),
           audio: opcoes.audio,
           save: opcoes.save,
           personagem: obterPersonagemAtivo(),
@@ -317,16 +362,20 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
           aoResultado: registrarResultadoDescida,
           criarTelaOpcoes: montarOpcoes,
         });
+      }
       case 'campeonato':
         // Campeonato completo (plano "corrida em campeonato" §C5b/C8b): as 5 pistas em sequência, com
         // standings/oficina entre elas e a tela final. A pista ativa do menu NÃO entra aqui -- o campeonato
         // sempre corre as 5 na ordem fixa de progressão, começando pela 1ª (ou retomando onde parou).
+        // `trilha` entra aqui (e só aqui) porque é a ÚNICA cena com várias pistas/pódio em sequência -- só ela
+        // sabe em qual etapa está pra trocar de faixa (ver `campeonato.ts`).
         return criarCenaCampeonato({
           canvas,
           janela,
           documento: doc,
-          aoMenu: () => irPara('menu'),
+          aoMenu: () => trocar('menu'),
           audio: opcoes.audio,
+          trilha: trilha ?? undefined,
           save: opcoes.save,
           personagem: obterPersonagemAtivo(),
           aoIniciarCampeonato: iniciarOuRetomarCampeonato,
@@ -342,15 +391,47 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
     }
   }
 
+  /**
+   * Troca "de verdade" (com a Nevasca, §10.1): usada por TODA navegação disparada por um toque/tecla real dentro
+   * das cenas (os callbacks de `construirCena`/`continuarCampeonato`/`novoCampeonato`, abaixo -- NUNCA pela API
+   * pública `irPara`, ver cabeçalho dela).
+   */
   function trocar(id: IdCenaFluxo): void {
+    if (id === idAtual && cenaAtual) return;
+    // Direção da Nevasca (§10.1): "voltar" é sempre o destino 'menu' (todo caminho de volta deste fluxo leva lá
+    // -- selecao/selecao-pista/opcoes/jogo/campeonato só voltam PRO menu, nunca um pro outro); qualquer outro
+    // destino é "pra frente".
+    const direcao = id === 'menu' ? 'volta' : 'frente';
+    // A cena antiga é destruída JÁ (seus ouvintes não podem sobreviver) -- o que fica visível por baixo da
+    // Nevasca enquanto ela cobre é só o ÚLTIMO QUADRO already desenhado (nada limpa o canvas entre quadros, ver
+    // cabeçalho de `ui/transicao.ts`). BUG achado pela Lyra das telas premium (memória
+    // `nevasca-cortina-bloqueia-input-apos-cenaatual-flip`): `idAtual` NÃO pode virar o destino antes da hora --
+    // um teste/jogador que espera `cenaAtual() === destino` e só então toca cairia na janela de "cobrir/segurar"
+    // (toque bloqueado) e o toque seria engolido em silêncio. Por isso `idAtual` só é atualizado DENTRO do
+    // callback de `nevasca.iniciar`, junto com `construirCena` -- no exato instante em que o bloqueio de entrada
+    // já caiu (início de "revelar"). `cenaAtual()`/o hook de depuração passam a refletir com fidelidade "dá pra
+    // tocar agora", não "o pedido de troca foi feito".
+    cenaAtual?.destruir?.();
+    cenaAtual = null;
+    nevasca.iniciar(direcao, () => {
+      idAtual = id;
+      cenaAtual = construirCena(id);
+    });
+  }
+
+  /**
+   * API pública (`GerenciadorCenas.irPara`, usada por testes e pelo hook de depuração `window.__neve`): troca
+   * INSTANTÂNEA, sem Nevasca -- contrato de sempre, preservado de propósito. Ferramentas que pulam direto entre
+   * cenas (ex. `tests/e2e/fantasma.spec.ts` chamando `irPara('menu'); irPara('jogo');` de volta a volta, sem
+   * ticks entre as chamadas) não podem ficar à mercê de uma animação de ~0,67s nem da regra "só uma transição
+   * por vez" da Nevasca -- por isso a navegação real (toque/tecla, via `trocar` acima) e o atalho de teste/devtool
+   * são dois caminhos deliberadamente separados.
+   */
+  function irPara(id: IdCenaFluxo): void {
     if (id === idAtual && cenaAtual) return;
     cenaAtual?.destruir?.();
     idAtual = id;
     cenaAtual = construirCena(id);
-  }
-
-  function irPara(id: IdCenaFluxo): void {
-    trocar(id);
   }
 
   // monta a primeira cena já na criação
@@ -359,13 +440,20 @@ export function criarGerenciadorCenas(opcoes: OpcoesGerenciador): GerenciadorCen
   return {
     id: 'gerenciador',
     atualizar() {
-      cenaAtual?.atualizar();
+      // Sempre (qualquer cena de topo, inclusive transição): sincroniza volume/mudo/duck com as Opções a cada
+      // quadro -- é só AQUI, não em cada cena, porque é o único ponto que sobrevive à troca de cena inteira.
+      trilha?.atualizar();
+      nevasca.atualizar(); // no-op fora de transição; chama `construirCena` por dentro ao fim de cobrir+segurar
+      if (!nevasca.congelando) cenaAtual?.atualizar(); // 'revelando': a cena NOVA já tica a própria entrada
     },
     desenhar(ctx: Ctx, alpha: number) {
-      cenaAtual?.desenhar(ctx, alpha);
+      if (nevasca.emTransicao) nevasca.desenhar(ctx, alpha, (c, a) => cenaAtual?.desenhar(c, a));
+      else cenaAtual?.desenhar(ctx, alpha);
     },
     destruir() {
       cenaAtual?.destruir?.();
+      nevasca.destruir();
+      trilha?.parar();
     },
     // Repassa a perda de foco/visibilidade pra cena de verdade (main.ts chama isto além de `laco.pausar`): só
     // `jogo.ts`/`campeonato.ts` fazem algo com isto (abrem o menu de pausa se houver uma corrida rolando).

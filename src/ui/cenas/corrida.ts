@@ -53,7 +53,7 @@ import {
 import { desenharEntidadesItens, desenharEscudo, desenharAvisoAlvo, type EntidadeItemVisual } from '../../render/itens';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
-import { desenharPiloto } from '../../render/piloto';
+import { desenharMarcadorPouso, desenharPiloto } from '../../render/piloto';
 import { criarRastreadorPoseVisual, type RastreadorPoseVisual } from '../../render/pose-visual';
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
@@ -200,7 +200,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   void precarregarAssetsItens();
 
   let leitura = corrida.leitura();
-  camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual);
+  camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual, pista);
 
   let ticksContagem = 0;
   let contagemConcluida = false;
@@ -231,7 +231,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       // `Corrida.processar` já aceita o campo desde a I2 (Vega), aqui é só o sinal de verdade chegando.
       const usarItem = entrada.usarItemBorda();
       leitura = corrida.processar({ descida: cmd, usarItem });
-      camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual);
+      camera.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, rngVisual, pista);
       particulas.atualizar(leitura.jogador.piloto, leitura.jogador.eventos);
       popupsManobra.atualizar(leitura.jogador.piloto, leitura.jogador.eventos, leitura.jogador.tick);
       avisosObstaculo.atualizar(leitura.jogador.eventos);
@@ -301,6 +301,7 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       });
 
       turboPouso.desenhar(ctx, camLeitura); // ANTES do piloto: o flash fica atrás, nunca cobre o sprite
+      desenharMarcadorPouso(ctx, camLeitura, camera.previsaoPouso()); // idem: é chão, fica atrás
       desenharPiloto(
         ctx,
         leitura.jogador.piloto,

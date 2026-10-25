@@ -28,11 +28,16 @@ import { hashDeValor } from '../core/hash';
 import { rngDoCanal } from '../core/rng';
 import { alturaEm, inclinacaoGrausEm, trilhoEm } from './consulta';
 
-// '3' (plano itens-corrida, I0/I2): a MESMA forma de '2', mais `caixas` (posições reais plantadas na I2, abaixo) —
-// bump só marcou a mudança de FORMA (nenhum compat-check lê este campo hoje; `ReplayV2` nunca serializa
-// `CamadaJogo`, ela é sempre regerada de `pista`+`def`, puro e determinístico — ver `criarCorrida`). Não bumpa de
-// novo aqui: só os VALORES de `caixas` mudaram (antes sempre `[]`), a forma do tipo é a mesma desde a I0.
-export const VERSAO_CAMADA_JOGO = '3';
+// '4' (calibragem "cai sobre obstáculo", dono/iPhone, 2026-10-24): `perigosoParaObstaculo` passou a proteger a
+// zona de POUSO de QUALQUER rampa de verdade (não só das promovidas a `kicker`) — antes só olhava `kickers` e
+// `trilho`, então uma rampa comum (que também dá pulo, via `bonusRampa` do motor, sem precisar virar kicker) não
+// tinha NENHUMA proteção depois de si. Medido num diagnóstico tipo-harness (bot manobreiro/cuidadoso, Capi
+// `impulsoPuloMs=9` pós-I6, 5 pistas oficiais x 5 sementes de corrida): pulos de rampa comum pousam ~25-42m
+// adiante (p50/p90); em 2,8% das vezes o pouso caía LITERALMENTE dentro do galho seguinte, sempre na MESMA rampa,
+// sempre na mesma pista (determinístico — não "má sorte", falha de geração). `VALORES` de `obstaculosAltos`/
+// `caixas` mudam com isso (forma do tipo é a mesma) — bump por ser mudança de FEATURE aprovada, não só valor
+// (mesmo padrão do bump '2'->'3'); goldens que gravam `CamadaJogo` regerados no mesmo commit.
+export const VERSAO_CAMADA_JOGO = '4';
 
 /** Passo do varredor de rampas, em metros: fino o bastante para não pular picos curtos (vão/kicker-duplo). */
 const PASSO_VARREDURA_M = 1;
@@ -81,8 +86,28 @@ const PASSO_OBSTACULO_MIN_M = 30;
 const LARGURA_OBSTACULO_ALTO_M = 1.4;
 /** Altura visual do galho sobre o chão (metros); a física SÓ olha o `x`/`largura` (ver `descida/motor.ts`). */
 const ALTURA_OBSTACULO_ALTO_M = 1.3;
-/** Nunca mais perto de um kicker que isto (de qualquer lado): agachar no meio de um voo de kicker não é a ideia. */
+/** Nunca mais perto de uma rampa (de verdade, qualquer uma — não só a promovida a kicker) que isto, do lado de
+ *  ANTES dela: agachar no meio da subida/decolagem não é a ideia, e cobre a antecipação do bot (`bot.ts`,
+ *  `MARGEM_ANTECIPACAO_BOT_M=8`, a decolagem real já pode acontecer um pouco antes do início geométrico da rampa). */
 const MARGEM_KICKER_OBSTACULO_M = 10;
+/**
+ * Depois de QUALQUER rampa de verdade (`encontrarRampas`, >15°, não só as promovidas a `kicker`): janela livre de
+ * galho na distância TÍPICA de pouso de um salto "comum" (sem o bônus de `IMPULSO_KICKER_MS`, só `impulsoPuloMs`
+ * + `bonusRampa` — o pulo do dia a dia, I6: "pulo mais forte"). Medido (não teórico, mesmo método do I6): bot
+ * manobreiro/cuidadoso, Capi, 5 pistas oficiais x 5 sementes de corrida — distância de voo fora de kicker tem
+ * mediana ~25-29m e p90 ~32-42m; 45m dá folga sobre o p90 das duas estratégias de bot sem comer o espaçamento de
+ * obstáculo inteiro (`PASSO_OBSTACULO_MIN_M=30`, só 1 "slot" de galho fica protegido por rampa, não a pista toda).
+ * Sem esta margem, QUALQUER rampa (a maioria nem chega a ser kicker: falha largura/espaçamento mínimo) podia ter
+ * um galho plantado exatamente onde o salto pousa — e isso é DETERMINÍSTICO por pista, não "má sorte": a mesma
+ * rampa sempre pousa (e sempre batia) no mesmo galho, toda corrida.
+ *
+ * Kickers de verdade (impulso +32) pousam MUITO mais longe (~135-170m medido) — fora do alcance prático de
+ * qualquer janela de proteção sem apagar a densidade de obstáculo da pista inteira; o motor já evita o TOMBO ali
+ * por outro caminho (`descida/motor.ts`: `p.agachado` é decidido e aplicado no MESMO tick em que o pouso é
+ * checado, então mesmo pousando em cima na mira o bot nunca bate — medido 0% de tombo nesses 129 pousos de
+ * kicker). Esta margem cobre o pulo comum, que é o caso sem essa rede de segurança embutida.
+ */
+const MARGEM_POUSO_ALTO_M = 45;
 
 /** Espaçamento entre caixas de item (plano itens-corrida, I-D5): generoso o bastante pra não virar chuva de itens
  *  numa pista de 900-1200 m, raro o bastante pra cada caixa valer a rota. Mesma variação por `rng` (canal
@@ -175,11 +200,21 @@ function dificuldadeLocalEm(x: number, pista: PistaGerada, def: DefPista): numbe
   return inicio + (fim - inicio) * frac;
 }
 
-/** Esse `x` cai dentro (+ margem) de algum kicker, ou sobre um trilho? Nenhum dos dois é lugar pra um galho. */
-function perigosoParaObstaculo(pista: PistaGerada, kickers: readonly KickerCamada[], x: number): boolean {
+/**
+ * Esse `x` cai sobre um trilho, ou perto demais de QUALQUER rampa de verdade (antes dela, ou na janela de pouso
+ * depois)? Nenhum dos dois é lugar pra um galho. `rampas` é a lista BRUTA (`encontrarRampas`, antes do corte de
+ * `kickersDe` por largura/espaçamento/teto) — a decolagem acontece na rampa física, não na versão filtrada que
+ * só serve pra decidir qual ganha o bônus de impulso extra.
+ */
+function perigosoParaObstaculo(pista: PistaGerada, rampas: readonly Rampa[], x: number): boolean {
   if (trilhoEm(pista, x) !== null) return true;
-  for (const k of kickers) {
-    if (x >= k.x - MARGEM_KICKER_OBSTACULO_M && x <= k.x + k.largura + MARGEM_KICKER_OBSTACULO_M) return true;
+  for (const r of rampas) {
+    // Mesma conta de `kickersDe` pro início: a decolagem de verdade (vista pelo bot) pode ser até
+    // `MARGEM_ANTECIPACAO_BOT_M` ANTES do começo geométrico da rampa — sem repetir essa conta aqui, o lado "antes"
+    // ficava mais curto do que o kicker já cobria (regressão medida: galho a 267m passava a entrar a 0,002m do
+    // início da janela, contra os 8m de antecipação que o kicker original já descontava).
+    const inicioDecolagem = Math.max(MARGEM_ABERTURA_M, r.x0 - MARGEM_ANTECIPACAO_BOT_M);
+    if (x >= inicioDecolagem - MARGEM_KICKER_OBSTACULO_M && x <= r.x1 + MARGEM_POUSO_ALTO_M) return true;
   }
   return false;
 }
@@ -191,12 +226,12 @@ function perigosoParaObstaculo(pista: PistaGerada, kickers: readonly KickerCamad
  * sem essa variação, pistas com `dificuldade` igual em todo o trecho (ex. [0.3, 0.3]) sempre dariam o MESMO passo,
  * byte a byte — inofensivo para o hash, mas template demais para o olho.
  */
-function obstaculosAltosDe(pista: PistaGerada, def: DefPista, kickers: readonly KickerCamada[], rng: ReturnType<typeof rngDoCanal>): ObjetoPista[] {
+function obstaculosAltosDe(pista: PistaGerada, def: DefPista, rampas: readonly Rampa[], rng: ReturnType<typeof rngDoCanal>): ObjetoPista[] {
   const obstaculos: ObjetoPista[] = [];
   const fim = pista.chegadaX - MARGEM_CHEGADA_M;
   let x = MARGEM_ABERTURA_M + rng.entre(PASSO_OBSTACULO_MIN_M, PASSO_OBSTACULO_MAX_M);
   while (x <= fim) {
-    if (!perigosoParaObstaculo(pista, kickers, x)) {
+    if (!perigosoParaObstaculo(pista, rampas, x)) {
       obstaculos.push({ tipo: 'galho', x, largura: LARGURA_OBSTACULO_ALTO_M, altura: ALTURA_OBSTACULO_ALTO_M, variante: 0 });
     }
     const dificuldade = dificuldadeLocalEm(x, pista, def);
@@ -212,12 +247,12 @@ function obstaculosAltosDe(pista: PistaGerada, def: DefPista, kickers: readonly 
  * competir com decolar ou grindar). 1 espaço por CORREDOR é regra de `corrida/itens.ts`, não daqui — esta função só
  * planta ONDE as caixas ficam, igual a `obstaculosAltosDe`.
  */
-function caixasDe(pista: PistaGerada, kickers: readonly KickerCamada[], rng: ReturnType<typeof rngDoCanal>): CaixaCamada[] {
+function caixasDe(pista: PistaGerada, rampas: readonly Rampa[], rng: ReturnType<typeof rngDoCanal>): CaixaCamada[] {
   const caixas: CaixaCamada[] = [];
   const fim = pista.chegadaX - MARGEM_CHEGADA_M;
   let x = MARGEM_ABERTURA_M + rng.entre(PASSO_CAIXA_MIN_M, PASSO_CAIXA_MAX_M);
   while (x <= fim) {
-    if (!perigosoParaObstaculo(pista, kickers, x)) {
+    if (!perigosoParaObstaculo(pista, rampas, x)) {
       caixas.push({ x, y: alturaEm(pista, x) + 0.8, raio: RAIO_CAIXA_M });
     }
     x += rng.entre(PASSO_CAIXA_MIN_M, PASSO_CAIXA_MAX_M);
@@ -228,16 +263,19 @@ function caixasDe(pista: PistaGerada, kickers: readonly KickerCamada[], rng: Ret
 /** Gera a camada de jogo para uma `PistaGerada` já pronta. Pura: nunca lança, nunca confere hash esperado. */
 export function gerarCamadaJogo(pista: PistaGerada, def: DefPista): CamadaJogo {
   const rng = rngDoCanal(def.semente, 'camada');
-  const kickers = kickersDe(encontrarRampas(pista));
+  const rampas = encontrarRampas(pista);
+  const kickers = kickersDe(rampas);
   const itens: ItemCamada[] = [];
   for (const k of kickers) itens.push(...itensDoKicker(pista, k));
   for (const t of pista.trilhos) itens.push(...itensDoTrilho(pista, t));
   const douradoDaPista = dourado(pista, kickers, rng);
   if (douradoDaPista !== null) itens.push(douradoDaPista);
-  const obstaculosAltos = obstaculosAltosDe(pista, def, kickers, rng);
+  // `obstaculosAltos`/`caixas` (C4/I2): longe de QUALQUER rampa de verdade (`rampas`, lista bruta — ver
+  // `perigosoParaObstaculo`), não só das promovidas a `kicker` (correção "cai sobre obstáculo", VERSAO '4').
+  const obstaculosAltos = obstaculosAltosDe(pista, def, rampas, rng);
   // Posicionamento real das caixas (plano itens-corrida, I2) — continua o MESMO `rng` de canal `'camada'`, depois
   // de kickers/dourado/obstáculos (ordem importa pro determinismo, nunca pro resultado em si).
-  const caixas = caixasDe(pista, kickers, rng);
+  const caixas = caixasDe(pista, rampas, rng);
 
   const semHash = { itens, kickers, obstaculosAltos, caixas, porticoX: pista.chegadaX, versao: VERSAO_CAMADA_JOGO };
   const hash = hashDeValor(semHash);

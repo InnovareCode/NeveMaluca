@@ -19,10 +19,11 @@ import type { EstadoCampeonato, Evolucao, IdPersonagem, ResultadoCorrida } from 
 import { PERSONAGENS_DE_DADOS, PISTAS_DE_DADOS } from '../../data/index';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
-import type { AudioDestravavel } from '../../audio/index';
+import type { AudioDestravavel, TrilhaMusical } from '../../audio/index';
 import { classificacao, iniciarCampeonato, registrarResultado, situacao } from '../../meta/campeonato';
 import type { SaveV1 } from '../../meta/tipos';
 import type { Cena } from '../tipos';
+import { criarCortinaNevasca } from '../transicao';
 import { criarCenaAberturaCampeonato } from './abertura-campeonato';
 import { criarCenaCorrida } from './corrida';
 import { criarCenaFinalCampeonato } from './final-campeonato';
@@ -47,6 +48,9 @@ export interface OpcoesCenaCampeonato {
   readonly documento?: Document | undefined;
   readonly aoMenu?: (() => void) | undefined;
   readonly audio?: AudioDestravavel | undefined;
+  /** Trilha musical real (gerenciador.ts, instância ÚNICA pro fluxo inteiro): esta cena decide qual faixa toca
+   *  em cada etapa (corrida da pista x menu.mp3 nas telas entre pistas) e abaixa (duck) no pódio. */
+  readonly trilha?: TrilhaMusical | undefined;
   readonly save?: SaveV1 | undefined;
   readonly personagem?: string | undefined;
   /** Inicia/retoma o `EstadoCampeonato` e persiste (gerenciador.ts). Sem ele: só em memória (teste). */
@@ -80,6 +84,21 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
   const nomeDaPista = (id: string): string => PISTAS_ORDENADAS.find((p) => p.id === id)?.nome ?? id;
   const nomePersonagem = NOMES_POR_ID[idJogador] ?? idJogador;
 
+  // "Nevasca" (§10.1) entre as etapas internas (abertura -> corrida -> pódio -> standings -> oficina -> corrida
+  // -> ... -> final) -- sempre "pra frente" (não há caminho de volta dentro desta cena): ver cabeçalho de
+  // `ui/transicao.ts` sobre a cena antiga ser destruída já (ninguém testa o `id` destas sub-cenas no meio do
+  // caminho).
+  const nevasca = criarCortinaNevasca({ canvas: opcoes.canvas, janela: opcoes.janela });
+
+  /** Destrói a sub-cena atual JÁ e só constrói a próxima no início da revelação (§10.1 passo 4). */
+  function trocarComNevasca(construir: () => Cena): void {
+    atual?.destruir?.();
+    atual = null;
+    nevasca.iniciar('frente', () => {
+      atual = construir();
+    });
+  }
+
   function obterEvolucao(): Evolucao {
     return opcoes.obterEvolucao?.() ?? opcoes.save?.evolucao ?? EVOLUCAO_VAZIA;
   }
@@ -90,7 +109,7 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
     podeReiniciar: () => !jaChegouEtapa,
     aoContinuar: () => undefined,
     aoReiniciar: () => {
-      atual = montarCorrida();
+      trocarComNevasca(montarCorrida);
     },
     aoAbrirConfiguracoes: () => {
       if (!opcoes.criarTelaOpcoes) return;
@@ -109,6 +128,8 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
 
   function montarAbertura(): Cena {
     atual?.destruir?.();
+    opcoes.trilha?.ducar(false);
+    opcoes.trilha?.tocar('menu');
     return criarCenaAberturaCampeonato({
       canvas: opcoes.canvas,
       janela: opcoes.janela,
@@ -118,7 +139,7 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
       pistas: PISTAS_ORDENADAS.map((p) => ({ id: p.id, nome: p.nome, tema: p.tema })),
       etapaAtual: estado.etapa,
       aoComecar: () => {
-        atual = montarCorrida();
+        trocarComNevasca(montarCorrida);
       },
       aoVoltar: () => opcoes.aoMenu?.(),
     });
@@ -132,6 +153,8 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
       atual = montarFinal();
       return atual;
     }
+    opcoes.trilha?.ducar(false);
+    opcoes.trilha?.tocar(pista.musica);
     return criarCenaCorrida({
       canvas: opcoes.canvas,
       janela: opcoes.janela,
@@ -147,23 +170,28 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
       nivelIA: NIVEL_IA_POR_ETAPA[estado.etapa] ?? 0,
       aoTerminar: (resultado) => {
         estado = opcoes.aoRegistrarResultadoCampeonato ? opcoes.aoRegistrarResultadoCampeonato(resultado) : registrarResultado(estado, resultado, idJogador);
-        atual?.destruir?.();
-        atual = criarCenaPodio({
-          resultado,
-          nomesPorId: NOMES_POR_ID,
-          idJogador,
-          canvas: opcoes.canvas,
-          janela: opcoes.janela,
-          aoContinuar: () => {
-            atual = montarStandings();
-          },
-        });
+        // Pódio (fanfarra de chegada entra ainda na corrida, mas o pódio é a comemoração "parada" -- pedido do
+        // dono: menu.mp3 por baixo, abaixado, pra não embolar com os efeitos da tela).
+        opcoes.trilha?.tocar('menu');
+        opcoes.trilha?.ducar(true);
+        trocarComNevasca(() =>
+          criarCenaPodio({
+            resultado,
+            nomesPorId: NOMES_POR_ID,
+            idJogador,
+            canvas: opcoes.canvas,
+            janela: opcoes.janela,
+            aoContinuar: () => trocarComNevasca(montarStandings),
+          }),
+        );
       },
     });
   }
 
   function montarStandings(): Cena {
     atual?.destruir?.();
+    opcoes.trilha?.ducar(false);
+    opcoes.trilha?.tocar('menu');
     const ultimaConcluida = estado.pistasConcluidas[estado.pistasConcluidas.length - 1];
     const terminou = estado.etapa >= PISTAS_ORDENADAS.length;
     const proxima = terminou ? undefined : PISTAS_ORDENADAS[estado.etapa];
@@ -179,13 +207,14 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
       proximaPistaNome: proxima?.nome,
       temaFundo,
       aoContinuar: () => {
-        atual = terminou ? montarFinal() : montarOficina();
+        trocarComNevasca(terminou ? montarFinal : montarOficina);
       },
     });
   }
 
   function montarOficina(): Cena {
     atual?.destruir?.();
+    opcoes.trilha?.tocar('menu');
     return criarCenaOficina({
       canvas: opcoes.canvas,
       janela: opcoes.janela,
@@ -197,13 +226,15 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
         opcoes.aoComprarUpgrade?.(idJogador);
       },
       aoContinuar: () => {
-        atual = montarCorrida();
+        trocarComNevasca(montarCorrida);
       },
     });
   }
 
   function montarFinal(): Cena {
     atual?.destruir?.();
+    opcoes.trilha?.ducar(false);
+    opcoes.trilha?.tocar('menu');
     const resultadoSituacao = situacao(estado.pistasConcluidas, idJogador, PISTAS_ORDENADAS.length);
     const venceu = resultadoSituacao === 'vencido';
     const ultimaPista = PISTAS_ORDENADAS[PISTAS_ORDENADAS.length - 1];
@@ -235,20 +266,23 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
         return;
       }
       if (pausa.pausado) return; // congela a corrida por baixo (abertura/pódio/standings/oficina/final nunca pausam)
-      atual?.atualizar();
+      nevasca.atualizar(); // no-op fora de transição; constrói a sub-cena nova ao fim de cobrir+segurar
+      if (!nevasca.congelando) atual?.atualizar(); // 'revelando': a sub-cena nova já tica a própria entrada
     },
     desenhar(ctx, alpha) {
       if (telaConfig) {
         telaConfig.desenhar(ctx, alpha);
         return;
       }
-      atual?.desenhar(ctx, alpha);
+      if (nevasca.emTransicao) nevasca.desenhar(ctx, alpha, (c, a) => atual?.desenhar(c, a));
+      else atual?.desenhar(ctx, alpha);
       pausa.desenhar(ctx);
     },
     destruir() {
       atual?.destruir?.();
       telaConfig?.destruir?.();
       pausa.destruir();
+      nevasca.destruir();
     },
     aoPausarAutomatico() {
       if (!telaConfig && atual?.id === 'corrida') pausa.abrir();

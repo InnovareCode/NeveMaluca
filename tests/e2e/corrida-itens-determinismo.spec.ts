@@ -28,6 +28,13 @@
  * temp.mjs` (script descartável, mesma técnica do `PROGRAMA` abaixo rodando via Vite SSR no Node em vez do
  * navegador).
  *
+ * REGERADO DE NOVO em 2026-10-24 (calibragem "cai sobre obstáculo", dono/iPhone — ver `pista/camada-jogo.ts`,
+ * `VERSAO_CAMADA_JOGO` '3'->'4'): `perigosoParaObstaculo` passou a proteger a janela de pouso de QUALQUER rampa
+ * de verdade, não só da promovida a kicker — muda ONDE `galho`/caixa entram na pista do Morro, então a trilha de
+ * `hashEstado()` diverge do valor anterior a partir do ponto em que a Capi passa perto de um obstáculo que mudou
+ * de lugar (primeiros ~1000 ticks batem igual; diverge dali pra frente — esperado, não regressão). Mesma técnica
+ * descartável (Vite SSR/Node) de antes; `pistaHash` do terreno continua INTACTO (camada nunca toca o terreno).
+ *
  * Mesmo truque de `core-determinismo.spec.ts`: o código roda como TEXTO no navegador (não como função do teste)
  * pro Playwright não reescrever os `import()`.
  */
@@ -83,24 +90,24 @@ const TRILHA_DOURADA = [
   '3331ed2b0bc71017', '1d4c732fe2ca44b2', 'da277c87c8c1f07b', 'dd47a2921f5fb1b1', 'd554012d48a5080a',
   '4033ee40368f70a1', 'a5c57911b3995bbb', '8c22e24bb89985c1', '74ae40670efd4232', '304928657890d97c',
   'dee61c70b09ee13d', 'd760a09d6df2f272', 'ec2c51f35a0b41b6', '6dd91621aafc62d9', '0eea987b45747265',
-  'a585a7567d8793b8', '8712190e1fd42cd1', 'bd50e81dac3449e2', '5bc766235c76dc42', '9d6f02b69c298e04',
-  '2be64eee97684d15', '7a337545a7329b00', '0e8a350c7034c167', '66c832298dbad4c2', '6fb4aeaceb6d4cb1',
-  'bffd58d9781d5bb3', '59a23fde0cb5cfbf', 'c656c5478f6fe759', '8ad4cf8a6dfb630b', '94fe7b195c75fac6',
-  '2aca7aac3b7605e9', 'e2e8390f8b987eb7', '80d0d3ce425792a2', '1c199c82f6a9ef53', 'c530072c41058791',
-  'a47a8c1bf42e841f', '8c1b7c820593dbd0', '19316af2a6401f60', 'fde6f2e067fc5fa6', 'e634b90dc72f3c74',
-  'afd49e43bf7349d6', '10ae258ef2427e78', '5a28b286c381349f', 'ad4aa46acdd4c793', 'd51808d5d5153b47',
-  '9e4e05ea1a6b5b39', 'fdf3ba72c6f2e2a7', 'ad5f2985538523a2', '0a8a06bf94c183c6', '7dcdb4a8729320ed',
-  'e50f95a003298e02', '283b27d5fdffe39a', 'dbd9c998d9b71361', '91e690b73e5e0edc', '036ac09dc5c411e7',
-  '7bdf92bf241a1024', '1f926796f851c05c', '002b02af34403f6f', '03f69f4d92b92fd7', '9b68cd696268057f',
-  '0ee937db9611cb92',
+  'a585a7567d8793b8', '666f524780b39e98', '04c358888bc32786', '6a8deb241bc9ba1f', 'b1fee5a94c118e30',
+  '411c36cff12e7c3b', 'e25df8895ad24b9b', '07927b2936bc855c', 'a1b26ce0be410b0c', '8de23f8781123e1b',
+  '5a1b329b4089ab08', '8a1d11ef899ca241', 'b5328c0d37456cdd', '43cee8dfafa21e89', '43ceecee9b7aae75',
+  '4c2c092e9e35652b', 'a41d791aa7f17a43', '949300353ff2a357', '968d15381bf3c128', '31d12436b90a15e6',
+  'd40c2b40a91f5d5c', 'a73041725c338896', '208645c4112fbc82', 'a4ac559b690de777', '8601dacdd891d013',
+  '6adc7b39b2846cf8', '8f046eae506a5bc1', '23fb81a0e3a848c9', '3428fe3e1f11c10e', 'be8e4d6bb2b83594',
+  'cb93ec625ea185b3', '657ec1780a985b7d', '14b6e19367e57a8a', '4bdbab6b4756e320', '2bdcd6e51fa91a74',
+  'c85ba08e3af4df1c', 'ce1a0a0f0e65eb70', 'a0c6b46c3b988aae', 'b941bf9469ac56c0', '758b81427a321650',
+  'a5c00fccceb685a9', '336e58790e7f3bc0', '876ef953f59e2d44', '669e655b5e784bb9', '46ed51de41b0a3e1',
+  'c8b9a1a438094eeb', '62472530b1ffa3c9', 'e48c192d92924257',
 ];
 
 const RESULTADO_DOURADO = {
   pista: 'morro-do-pinhao',
-  ordem: ['queque', 'cidinha', 'bandeira', 'bia', 'beto', 'capi'],
-  ticks: { capi: 2124, bandeira: 1863, cidinha: 1858, beto: 1941, queque: 1854, bia: 1925 },
+  ordem: ['beto', 'bia', 'cidinha', 'queque', 'bandeira', 'capi'],
+  ticks: { capi: 2174, bandeira: 1864, cidinha: 1846, beto: 1825, queque: 1860, bia: 1837 },
   resumoJogador: {
-    pontos: 3080, ticks: 2124, tombos: 0, maiorVoltasNumSalto: 0, maiorTicksNoAr: 214, maiorGrindTicks: 0,
+    pontos: 3080, ticks: 2174, tombos: 0, maiorVoltasNumSalto: 0, maiorTicksNoAr: 214, maiorGrindTicks: 0,
     pousosPerfeitos: 0, maiorMult: 2, maiorComboManobras: 1, bonecos: 2, concluiu: true,
   },
   flocosGanhos: 15,
@@ -114,14 +121,14 @@ test('corrida + itens: mesma semente/comandos do jogador (bot cuidadoso, usarIte
   const r = (await page.evaluate(PROGRAMA)) as Record<string, unknown>;
   expect(erros).toEqual([]);
   expect(r['pistaHash']).toBe('1c4d551601d3a6ae');
-  expect(r['totalTicks']).toBe(2125);
+  expect(r['totalTicks']).toBe(2175);
   // Comparação ponto a ponto (não só `toEqual` da lista inteira) pra apontar o ÍNDICE exato (tick = índice*25,
   // exceto o último) onde este motor divergiu do Node, se divergir.
   const trilha = r['trilha'] as string[];
   for (let idx = 0; idx < TRILHA_DOURADA.length; idx++) {
     expect(trilha[idx], `hashEstado diverge no índice ${idx} (tick ~${idx * 25}, semente=2026, pista=morro-do-pinhao)`).toBe(TRILHA_DOURADA[idx]);
   }
-  expect(r['hashNaChegada']).toBe('0ee937db9611cb92');
+  expect(r['hashNaChegada']).toBe('e48c192d92924257');
   expect(r['resultado']).toEqual(RESULTADO_DOURADO);
-  expect(r['hashAposFinalizar']).toBe('0ee937db9611cb92');
+  expect(r['hashAposFinalizar']).toBe('e48c192d92924257');
 });

@@ -20,14 +20,16 @@
  */
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import { ALTURA, LARGURA, TICKS_POR_SEGUNDO } from '../../core/constantes';
+import type { EstadoCampeonato } from '../../core/contratos';
 import { seno } from '../../core/trig';
-import { PISTA_MORRO_DO_PINHAO, obterPistaDeDados } from '../../data/pistas';
+import { PERSONAGENS_DE_DADOS } from '../../data/personagens';
+import { PISTA_MORRO_DO_PINHAO, PISTAS_DE_DADOS, obterPistaDeDados } from '../../data/pistas';
 import { REGRAS_SAVE } from '../../data/regras-save';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
 import { precarregarAssetsDoTema } from '../../render/temas/catalogo';
-import { caminhoArredondado, criarCamadaEstatica, desenharBotaoBala, desenharFlocos, desenharTexto, type CamadaEstatica, type Retangulo } from '../desenho';
+import { caminhoArredondado, criarCamadaEstatica, desenharBotao, desenharBotaoBala, desenharFlocos, desenharTexto, type CamadaEstatica, type Retangulo } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import type { Cena } from '../tipos';
 import { assetsMenuCapaProntos, precarregarAssetsMenuCapa } from './menu-capa';
@@ -49,6 +51,15 @@ export interface OpcoesCenaMenu {
    * CAMPEONATO pulam `selecao-pista.ts` e, até o polimento "Pixar no gameplay", só `descida.ts`/`corrida.ts`
    * disparavam isto, já tarde demais pro 1º quadro deles. O menu dá o maior tempo de folga possível. */
   readonly obterPistaAtiva?: (() => string) | undefined;
+  /** Campeonato em andamento (etapa < 5), pra oferecer "Continuar" em vez de ir direto pra seleção de personagem
+   *  (pedido do dono, playtest iPhone: "quem não terminou as 5 pistas precisa ver Continuar ou Novo jogo").
+   *  `null`/ausente: nenhum campeonato em andamento -- o botão CAMPEONATO funciona como sempre. */
+  readonly obterCampeonatoEmAndamento?: (() => EstadoCampeonato | null) | undefined;
+  /** Retoma o campeonato salvo (mesma etapa, mesmo personagem), pulando a seleção de personagem. */
+  readonly aoContinuarCampeonato?: (() => void) | undefined;
+  /** Apaga o campeonato em andamento e segue o fluxo de sempre (escolhe personagem -> começa do zero). Só chamado
+   *  depois que o jogador confirma "sim" no sub-painel (ver `overlayCampeonato` abaixo) -- nunca direto do clique. */
+  readonly aoNovoCampeonato?: (() => void) | undefined;
 }
 
 const COR_TEXTO = '#f4f9ff';
@@ -67,6 +78,108 @@ const BOTAO_PISTA: BotaoRetangular = { id: 'pista', x: BOTOES_X, y: 496, w: BOTO
 /** Cartão pequeno do personagem ativo (brief: "se o menu mostrava o personagem ativo, um cartão pequeno basta"),
  *  ao lado do botão PERSONAGEM -- substitui o antigo pelotão inteiro como forma de mostrar quem está selecionado. */
 const CARTAO_PERSONAGEM: Retangulo = { x: BOTAO_PERSONAGEM.x + BOTOES_LARGURA + 10, y: BOTAO_PERSONAGEM.y, w: 56, h: BOTAO_H };
+
+// Painel "Campeonato em andamento" (overlay central, pedido do dono: "Continuar ou Novo jogo") -- mesma receita
+// visual do sub-painel de confirmação de `ui/cenas/pausa.ts` (véu + painel escuro arredondado), independente da
+// geometria medida na key art acima (é um véu sólido cobrindo a tela inteira, não compete com o elenco da capa).
+const PAINEL_CAMP_W = 420;
+const PAINEL_CAMP_H = 230;
+const PAINEL_CAMP_X = LARGURA / 2 - PAINEL_CAMP_W / 2;
+const PAINEL_CAMP_Y = ALTURA / 2 - PAINEL_CAMP_H / 2;
+
+const BOTAO_CONTINUAR_CAMP: BotaoRetangular = { id: 'continuar-campeonato', x: LARGURA / 2 - 160, y: PAINEL_CAMP_Y + 92, w: 320, h: 48 };
+const BOTAO_NOVO_CAMP: BotaoRetangular = { id: 'novo-campeonato', x: LARGURA / 2 - 160, y: PAINEL_CAMP_Y + 148, w: 320, h: 48 };
+const BOTAO_CANCELAR_CAMP: BotaoRetangular = { id: 'cancelar-campeonato', x: LARGURA / 2 - 160, y: PAINEL_CAMP_Y + 200, w: 320, h: 24 };
+
+// Sub-painel "tem certeza?" do Novo Jogo (mesma geometria de `BOTAO_CONFIRMAR_SAIDA`/`BOTAO_CANCELAR_SAIDA` de
+// `ui/cenas/pausa.ts`): dois botões lado a lado, dentro do MESMO painel (só o conteúdo muda).
+const BOTAO_CONFIRMAR_NOVO: BotaoRetangular = { id: 'confirmar-novo', x: LARGURA / 2 - 170, y: PAINEL_CAMP_Y + 130, w: 150, h: 52 };
+const BOTAO_CANCELAR_NOVO: BotaoRetangular = { id: 'cancelar-novo', x: LARGURA / 2 + 20, y: PAINEL_CAMP_Y + 130, w: 150, h: 52 };
+
+type OverlayCampeonato = 'nenhum' | 'escolha' | 'confirmar-novo';
+
+const NOMES_PERSONAGEM: Readonly<Record<string, string>> = Object.fromEntries(PERSONAGENS_DE_DADOS.map((d) => [d.id, d.nome]));
+const TOTAL_PISTAS_CAMPEONATO = PISTAS_DE_DADOS.length;
+
+/** Painel "Campeonato em andamento": Continuar/Novo jogo, e o sub-painel de confirmação deste último. */
+function desenharOverlayCampeonato(ctx: Ctx, overlay: OverlayCampeonato, estado: EstadoCampeonato | null, hover: string | null): void {
+  if (overlay === 'nenhum') return;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(5, 12, 26, 0.72)';
+  ctx.fillRect(0, 0, LARGURA, ALTURA);
+  ctx.fillStyle = '#162b47';
+  caminhoArredondado(ctx, { x: PAINEL_CAMP_X, y: PAINEL_CAMP_Y, w: PAINEL_CAMP_W, h: PAINEL_CAMP_H }, 18);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#2a517f';
+  ctx.stroke();
+  ctx.restore();
+
+  const nome = estado ? (NOMES_PERSONAGEM[estado.personagem] ?? estado.personagem) : '';
+  const etapaExibida = estado ? Math.min(estado.etapa + 1, TOTAL_PISTAS_CAMPEONATO) : 0;
+
+  if (overlay === 'escolha') {
+    desenharTexto(ctx, 'CAMPEONATO EM ANDAMENTO', LARGURA / 2, PAINEL_CAMP_Y + 38, {
+      fonte: 'italic 800 26px "Barlow Condensed", Impact, sans-serif',
+      cor: COR_TEXTO,
+      contorno: 5,
+      alinhamento: 'center',
+    });
+    desenharTexto(ctx, `${nome} · pista ${etapaExibida} de ${TOTAL_PISTAS_CAMPEONATO}`, LARGURA / 2, PAINEL_CAMP_Y + 66, {
+      fonte: '600 15px Barlow, sans-serif',
+      cor: '#8fb6e0',
+      alinhamento: 'center',
+    });
+    desenharBotao(ctx, {
+      ...BOTAO_CONTINUAR_CAMP,
+      texto: 'CONTINUAR',
+      corTopo: hover === 'continuar-campeonato' ? '#4ad17d' : '#31c66d',
+      corBase: hover === 'continuar-campeonato' ? '#239254' : '#1d7f45',
+      aoVivo: hover === 'continuar-campeonato',
+      destaque: true,
+    });
+    desenharBotao(ctx, {
+      ...BOTAO_NOVO_CAMP,
+      texto: 'NOVO JOGO',
+      corTopo: hover === 'novo-campeonato' ? '#e85d4a' : '#c0392b',
+      corBase: hover === 'novo-campeonato' ? '#b03a26' : '#7d241a',
+      aoVivo: hover === 'novo-campeonato',
+    });
+    desenharTexto(ctx, 'cancelar', LARGURA / 2, BOTAO_CANCELAR_CAMP.y + 16, {
+      fonte: '600 14px Barlow, sans-serif',
+      cor: hover === 'cancelar-campeonato' ? '#f4f9ff' : '#8fb6e0',
+      alinhamento: 'center',
+    });
+    return;
+  }
+
+  // 'confirmar-novo': mesmo painel, conteúdo de confirmação (perder progresso é irreversível -- pedido do dono).
+  desenharTexto(ctx, 'Apagar o campeonato atual?', LARGURA / 2, PAINEL_CAMP_Y + 46, {
+    fonte: '700 20px Barlow, sans-serif',
+    cor: COR_TEXTO,
+    alinhamento: 'center',
+  });
+  desenharTexto(ctx, `O progresso de ${nome} nas ${TOTAL_PISTAS_CAMPEONATO} pistas será perdido.`, LARGURA / 2, PAINEL_CAMP_Y + 74, {
+    fonte: '500 15px Barlow, sans-serif',
+    cor: '#8fb6e0',
+    alinhamento: 'center',
+  });
+  desenharBotao(ctx, {
+    ...BOTAO_CONFIRMAR_NOVO,
+    texto: 'SIM, NOVO JOGO',
+    corTopo: hover === 'confirmar-novo' ? '#e85d4a' : '#c0392b',
+    corBase: hover === 'confirmar-novo' ? '#b03a26' : '#7d241a',
+    aoVivo: hover === 'confirmar-novo',
+  });
+  desenharBotao(ctx, {
+    ...BOTAO_CANCELAR_NOVO,
+    texto: 'CANCELAR',
+    corTopo: hover === 'cancelar-novo' ? '#4da2ff' : '#2a7de1',
+    corBase: hover === 'cancelar-novo' ? '#1f6fd0' : '#144d8f',
+    aoVivo: hover === 'cancelar-novo',
+  });
+}
 
 /** Logo (`logo.webp`) no canto superior esquerdo livre da capa, ~34% da largura (818x433 de origem: razão 1,889). */
 const LOGO_X = 24;
@@ -117,6 +230,10 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
   let ticks = 0;
   let botaoHover: string | null = null;
   let fundoCarregamento: CamadaEstatica | null = null;
+  // Overlay "Campeonato em andamento" (ver constantes acima): só existe enquanto o jogador está decidindo entre
+  // Continuar/Novo jogo -- nenhum dos botões normais do menu reage a toque/tecla nesse meio tempo.
+  let overlayCampeonato: OverlayCampeonato = 'nenhum';
+  let hoverOverlay: string | null = null;
 
   void precarregarAssetsMenuCapa();
 
@@ -139,9 +256,29 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
       // fallback silencioso: o cartão mostra a cápsula genérica
     });
 
+  /** Acha qual botão (se algum) está sob o ponto, de acordo com a sub-tela do overlay atual. */
+  const botaoOverlayEm = (pt: { x: number; y: number }): string | null => {
+    if (overlayCampeonato === 'escolha') {
+      if (pontoDentroDoBotao(pt, BOTAO_CONTINUAR_CAMP)) return 'continuar-campeonato';
+      if (pontoDentroDoBotao(pt, BOTAO_NOVO_CAMP)) return 'novo-campeonato';
+      if (pontoDentroDoBotao(pt, BOTAO_CANCELAR_CAMP)) return 'cancelar-campeonato';
+      return null;
+    }
+    if (overlayCampeonato === 'confirmar-novo') {
+      if (pontoDentroDoBotao(pt, BOTAO_CONFIRMAR_NOVO)) return 'confirmar-novo';
+      if (pontoDentroDoBotao(pt, BOTAO_CANCELAR_NOVO)) return 'cancelar-novo';
+      return null;
+    }
+    return null;
+  };
+
   const aoMover = (e: Event): void => {
     const ev = e as PointerEvent;
     const pt = eventoParaPontoLogico(ev, opcoes.canvas);
+    if (overlayCampeonato !== 'nenhum') {
+      hoverOverlay = botaoOverlayEm(pt);
+      return;
+    }
     if (pontoDentroDoBotao(pt, BOTAO_JOGAR)) botaoHover = 'jogar';
     else if (pontoDentroDoBotao(pt, BOTAO_MODOS)) botaoHover = 'modos';
     else if (pontoDentroDoBotao(pt, BOTAO_OPCOES)) botaoHover = 'opcoes';
@@ -155,12 +292,35 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
     const ev = e as PointerEvent;
     const pt = eventoParaPontoLogico(ev, opcoes.canvas);
 
+    // Overlay "Campeonato em andamento" ativo: só os botões DELE reagem -- os botões normais do menu (inclusive
+    // CAMPEONATO, que fica embaixo do véu) ficam surdos enquanto o jogador decide.
+    if (overlayCampeonato !== 'nenhum') {
+      const alvo = botaoOverlayEm(pt);
+      if (alvo === 'continuar-campeonato') {
+        overlayCampeonato = 'nenhum';
+        opcoes.aoContinuarCampeonato?.();
+      } else if (alvo === 'novo-campeonato') {
+        overlayCampeonato = 'confirmar-novo';
+      } else if (alvo === 'cancelar-campeonato') {
+        overlayCampeonato = 'nenhum';
+      } else if (alvo === 'confirmar-novo') {
+        overlayCampeonato = 'nenhum';
+        opcoes.aoNovoCampeonato?.();
+      } else if (alvo === 'cancelar-novo') {
+        overlayCampeonato = 'escolha';
+      }
+      return;
+    }
+
     if (pontoDentroDoBotao(pt, BOTAO_JOGAR)) {
       opcoes.aoJogar();
     } else if (pontoDentroDoBotao(pt, BOTAO_MODOS)) {
-      // CAMPEONATO (posição que era MODOS): sem `aoModos`, fica inerte, nunca cai de volta pra `aoJogar` (mentiria
-      // pro jogador que campeonato = descida solo).
-      opcoes.aoModos?.();
+      // CAMPEONATO (posição que era MODOS): com um campeonato em andamento, abre o overlay Continuar/Novo jogo
+      // (pedido do dono) em vez de ir direto pra seleção de personagem. Sem `aoModos`, fica inerte, nunca cai de
+      // volta pra `aoJogar` (mentiria pro jogador que campeonato = descida solo).
+      const emAndamento = opcoes.obterCampeonatoEmAndamento?.();
+      if (emAndamento) overlayCampeonato = 'escolha';
+      else opcoes.aoModos?.();
     } else if (pontoDentroDoBotao(pt, BOTAO_OPCOES)) {
       opcoes.aoOpcoes();
     } else if (pontoDentroDoBotao(pt, BOTAO_PERSONAGEM)) {
@@ -172,10 +332,16 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
 
   const aoTeclar = (e: Event): void => {
     const ev = e as KeyboardEvent;
+    if (overlayCampeonato !== 'nenhum') {
+      if (ev.code === 'Escape') overlayCampeonato = overlayCampeonato === 'confirmar-novo' ? 'escolha' : 'nenhum';
+      return;
+    }
     if (ev.code === 'Enter' || ev.code === 'Space') {
       opcoes.aoJogar();
     } else if (ev.code === 'KeyC') {
-      opcoes.aoModos?.();
+      const emAndamento = opcoes.obterCampeonatoEmAndamento?.();
+      if (emAndamento) overlayCampeonato = 'escolha';
+      else opcoes.aoModos?.();
     } else if (ev.code === 'KeyO') {
       opcoes.aoOpcoes();
     } else if (ev.code === 'KeyP') {
@@ -324,6 +490,8 @@ export function criarCenaMenu(opcoes: OpcoesCenaMenu): Cena {
         contorno: 3,
         alinhamento: 'right',
       });
+
+      desenharOverlayCampeonato(ctx, overlayCampeonato, opcoes.obterCampeonatoEmAndamento?.() ?? null, hoverOverlay);
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);

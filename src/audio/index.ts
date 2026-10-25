@@ -5,6 +5,7 @@ export * from './audio-destravavel';
 export * from './sintese';
 export * from './som-manobras';
 export * from './musica-adaptativa';
+export * from './musica-trilha';
 export * from './som-descida';
 export * from './som-itens';
 export * from './som-contagem';

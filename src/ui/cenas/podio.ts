@@ -117,7 +117,9 @@ export function criarCenaPodio(opcoes: OpcoesCenaPodio): Cena {
 
       desenharBotao(ctx, {
         ...BOTAO_CONTINUAR,
-        texto: 'MENU',
+        // "CONTINUAR" (não "MENU" -- rótulo antigo mentia: `aoContinuar` leva à classificação do campeonato,
+        // `ui/cenas/campeonato.ts`, nunca ao menu principal; corrigido junto da fluidez da transição campeonato).
+        texto: 'CONTINUAR',
         corTopo: hoverContinuar ? '#4da2ff' : '#2a7de1',
         corBase: hoverContinuar ? '#1f6fd0' : '#144d8f',
         aoVivo: hoverContinuar,

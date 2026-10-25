@@ -30,7 +30,7 @@ import { criarConfete, type SistemaConfete } from '../../render/confete';
 import { desenharBotaoPausa, desenharContagemRegressiva, desenharHud, desenharLegendaCarregandoCenario, RETANGULO_BOTAO_PAUSA } from '../../render/hud';
 import { criarSistemaPopupsManobra, type SistemaPopupsManobra } from '../../render/manobra';
 import { desenharObjetos, desenharTrilhos } from '../../render/objetos';
-import { desenharPiloto } from '../../render/piloto';
+import { desenharMarcadorPouso, desenharPiloto } from '../../render/piloto';
 import { criarRastreadorPoseVisual, type RastreadorPoseVisual } from '../../render/pose-visual';
 import { criarParallax, type Parallax } from '../../render/parallax';
 import { criarSistemaParticulas, type SistemaParticulas } from '../../render/particulas';
@@ -178,7 +178,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
 
   // leitura inicial fora do `desenhar()`: a cena nunca tica o motor no quadro, só no tick (ver `ui/tipos.ts`)
   let leitura = motor.leitura();
-  camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
+  camera.atualizar(leitura.piloto, leitura.eventos, rngVisual, pista);
 
   // UI local, nunca no replay: contagem "3-2-1-JÁ" ANTES do motor rodar, e a comemoração DEPOIS do motor
   // congelar (§C1). `resultadoPendente` guarda o resultado já calculado no tick da chegada; só sai pra
@@ -213,7 +213,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       comandosGravados.push(cmd);
       leitura = motor.processar(cmd);
       leituraFantasma = reprodutorFantasma ? reprodutorFantasma.avancar() : null;
-      camera.atualizar(leitura.piloto, leitura.eventos, rngVisual);
+      camera.atualizar(leitura.piloto, leitura.eventos, rngVisual, pista);
       particulas.atualizar(leitura.piloto, leitura.eventos);
       popupsManobra.atualizar(leitura.piloto, leitura.eventos, leitura.tick);
       avisosObstaculo.atualizar(leitura.eventos);
@@ -248,6 +248,7 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       desenharChegada(ctx, pista, camLeitura, pintorTema);
       desenharItensCamada(ctx, camada, camLeitura, pintorTema, leitura.tick);
       particulas.desenharSpray(ctx, camLeitura);
+      desenharMarcadorPouso(ctx, camLeitura, camera.previsaoPouso()); // ANTES do piloto: é chão, fica atrás
       if (leituraFantasma) {
         // translúcido e ANTES do piloto real: nunca deve confundir qual é o jogador de verdade
         ctx.save();

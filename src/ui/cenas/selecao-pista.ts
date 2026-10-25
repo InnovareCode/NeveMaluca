@@ -1,31 +1,31 @@
 /**
- * Tela de Seleção de Pista (Canvas 2D), acessível pelo botão PISTA do Menu. Mesmo molde de `selecao.ts`
- * (seleção de PERSONAGEM): painel escuro, grade de cartões, ESC/VOLTAR, escolher grava na hora (a tela só avisa,
- * quem grava é `gerenciador.ts`, ponto único de escrita do save).
+ * Tela de Seleção de Pista (Canvas 2D), acessível pelo botão PISTA do Menu. Redesenho "premium estilo Pixar"
+ * (`docs/direcao-ui-premium.md` §11.9, Fase 2): espelha `selecao.ts` (mesmo molde de VOLTAR redondo + Painel
+ * Geada + CTA), mas a arte dos 5 cartões-postais e do fundo vem do cenário raster real da pista (reaproveita o
+ * MESMO `Parallax`/`PintorTema` que `ui/cenas/corrida.ts`/`descida.ts` pintam de verdade -- `render/temas/
+ * catalogo.ts`, ver memória `pintor-tema-wire-por-defpista-tema`), renderizado UMA vez por pista num canvas
+ * offscreen e reaproveitado tanto para o cartão (recorte "cover") quanto para o Fundo B borrado (`kit-premium.ts`).
+ * Zero placeholder feio: enquanto o raster daquela pista não carregou, o cartão cai no swatch de cor do tema
+ * (gradiente do céu + silhueta), nunca uma caixa cinza.
  *
  * Mostra o catálogo INTEIRO (as 5 pistas de `REGRAS_SAVE.pistas`), não só `prog.pistas`: o gating de desbloqueio
- * por objetivos ainda não existe (M3-futuro, mesmo estado que a seleção de personagem — ver
- * `selecao-personagem-catalogo-inteiro-vs-desbloqueados` na memória), então toda pista é escolhível desde já para
- * poder testar o recurso. Cada cartão mostra nome amigável (`DefPista.nome`) + um swatch do tema (`DefTema.cores`,
- * via `render/temas/catalogo.ts`: mesmo mapa que `ui/cenas/descida.ts` usa para pintar a pista de verdade, não
- * duplica a escolha de cor aqui).
+ * por objetivos ainda não existe (M3-futuro, mesmo estado que a seleção de personagem -- memória
+ * `selecao-personagem-catalogo-inteiro-vs-desbloqueados`). Texto de desenvolvedor removido (feedback do dono):
+ * nada de "Todas liberadas por enquanto".
  */
-import { ALTURA, LARGURA } from '../../core/constantes';
+import { ALTURA, ALTURA_BUFFER, LARGURA, LARGURA_BUFFER, RS } from '../../core/constantes';
+import type { IdTema } from '../../core/contratos';
 import { obterPistaDeDados, PISTAS_DE_DADOS } from '../../data/pistas';
-import {
-  precarregarAssetsBosqueRaster,
-  precarregarAssetsCumeRaster,
-  precarregarAssetsVilaRaster,
-  precarregarAssetsVulcaoRaster,
-  temaDeRenderDoTema,
-} from '../../render/temas/catalogo';
-import { precarregarAssetsParqueRaster } from '../../render/temas/parque-raster';
+import type { Parallax } from '../../render/parallax';
+import { precarregarAssetsDoTema, rasterProntoParaTema, temaDeRenderDoTema } from '../../render/temas/catalogo';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { caminhoArredondado, desenharBotao, desenharTexto } from '../desenho';
+import { caminhoArredondado, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, painelGeada } from '../kit-premium';
 import type { Cena } from '../tipos';
+import { criarFundoCampeonato } from './fundo-campeonato';
 
 export interface OpcoesCenaSelecaoPista {
   readonly canvas: AlvoToque;
@@ -39,54 +39,98 @@ export interface OpcoesCenaSelecaoPista {
   readonly aoVoltar: () => void;
 }
 
+/** Uma linha de clima por pista (texto de apresentação, não é dado de jogo -- inspirado nas fichas de
+ *  `docs/temas-pistas-m3.md`). Id cru como fallback para uma pista futura sem entrada aqui. */
+const CLIMA_POR_PISTA: Readonly<Record<string, string>> = {
+  'morro-do-pinhao': 'Araucárias, pinhão assando e o friozinho do vanerão.',
+  'pico-do-picole': 'Confete de sorvete e paredes de casquinha açucarada.',
+  'vila-chocolate': 'Neve de chocolate quente sob luzes de lampião.',
+  'vulcao-pe-gelado': 'Vapor gelado subindo entre blocos de basalto.',
+  'cume-da-ventania': 'Rajadas de vento e aurora lá no alto da serra.',
+};
+
 const COR_FUNDO = '#0c1b30';
-const COR_PAINEL = '#162b47';
-const COR_BORDA = '#2a517f';
 const COR_TEXTO = '#f4f9ff';
-const COR_CONTORNO = '#0b1a33';
-const COR_SELECIONADO = '#f6c90e';
+const COR_SOL = '#FFD23F';
+const COR_MUTED = '#aed0ef';
 
-const PAINEL_X = 40;
-const PAINEL_Y = 28;
-const PAINEL_W = 880;
-const PAINEL_H = 484;
+const CARD_W = 164;
+const CARD_H = 220;
+const CARD_GAP = 16;
+const CARD_X0 = 38;
+const CARD_Y = 104;
 
-const COLUNAS = 3;
-const GRID_X = 70;
-const GRID_Y = 112;
-const CARD_W = 260;
-const CARD_H = 150;
-const GAP_X = 20;
-const GAP_Y = 16;
+const PAINEL_X = 160;
+const PAINEL_Y = 344;
+const PAINEL_W = 640;
+const PAINEL_H = 92;
 
-const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: LARGURA / 2 - 100, y: 452, w: 200, h: 46 };
+const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: 32, y: 20, w: 56, h: 56 };
+const BOTAO_PRONTO: BotaoRetangular = { id: 'pronto', x: LARGURA / 2 - 150, y: 456, w: 300, h: 64 };
 
 function cartao(indice: number): BotaoRetangular {
-  const coluna = indice % COLUNAS;
-  const linha = Math.floor(indice / COLUNAS);
-  return {
-    id: `card-${indice}`,
-    x: GRID_X + coluna * (CARD_W + GAP_X),
-    y: GRID_Y + linha * (CARD_H + GAP_Y),
-    w: CARD_W,
-    h: CARD_H,
-  };
+  return { id: `card-${indice}`, x: CARD_X0 + indice * (CARD_W + CARD_GAP), y: CARD_Y, w: CARD_W, h: CARD_H };
 }
 
 export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
+  const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
   let hover: string | null = null;
+  let ticks = 0;
 
-  // Dispara o carregamento dos 5 cenários raster (Picolé, Morro, Vila, Vulcão, Cume) aqui (fire-and-forget,
-  // decodificado ANTES de montar o tema -- docs/piloto-cenario-pixar.md §6 / docs/rollout-cenarios-pixar.md §4): por
-  // quando o jogador escolher a pista e descer, os assets já estão prontos (ou o pintor cai sozinho no vetorial se
-  // ainda não deu tempo/falhou). `precarregarAssetsBosqueRaster` entra pelo MESMO módulo (`catalogo.ts`) que
-  // `pintorDoTema` usa para o Morro -- ver memória `dynamic-import-mesmo-caminho-mesma-instancia-vite`.
-  void precarregarAssetsParqueRaster(opcoes.documento);
-  void precarregarAssetsBosqueRaster(opcoes.documento);
-  void precarregarAssetsVilaRaster(opcoes.documento);
-  void precarregarAssetsVulcaoRaster(opcoes.documento);
-  void precarregarAssetsCumeRaster(opcoes.documento);
+  const parallaxPorTema = new Map<IdTema, Parallax>();
+  const framesPorPista = new Map<string, HTMLCanvasElement>();
+  const fundoPorPista = new Map<string, CamadaEstatica>();
+
+  // Dispara o carregamento dos cenários raster das 5 pistas (fire-and-forget): por quando o frame estiver
+  // pronto, `tentarConstruirFrame` monta o canvas offscreen reaproveitado pelo cartão E pelo Fundo B.
+  for (const id of opcoes.catalogo) {
+    const tema = obterPistaDeDados(id, PISTAS_DE_DADOS)?.tema;
+    if (tema) void precarregarAssetsDoTema(tema, opcoes.documento);
+  }
+
+  function obterParallax(tema: IdTema): Parallax | null {
+    if (!doc) return null;
+    let p = parallaxPorTema.get(tema);
+    if (!p) {
+      p = criarFundoCampeonato(tema, doc);
+      parallaxPorTema.set(tema, p);
+    }
+    return p;
+  }
+
+  /** Um quadro (960x540 lógico) do cenário real da pista, renderizado offscreen UMA vez (depois que o raster
+   *  daquele tema estiver pronto) -- reaproveitado pelo cartão (recorte) e pelo Fundo B (`construirFundoFosco`). */
+  function obterFrame(id: string): HTMLCanvasElement | null {
+    const existente = framesPorPista.get(id);
+    if (existente) return existente;
+    if (!doc) return null;
+    const tema = obterPistaDeDados(id, PISTAS_DE_DADOS)?.tema;
+    if (!tema || !rasterProntoParaTema(tema)) return null;
+    const parallax = obterParallax(tema);
+    if (!parallax) return null;
+
+    const canvas = doc.createElement('canvas');
+    canvas.width = LARGURA_BUFFER;
+    canvas.height = ALTURA_BUFFER;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return null;
+    ctx.setTransform(RS, 0, 0, RS, 0, 0);
+    parallax.desenhar(ctx, 0, 0);
+    framesPorPista.set(id, canvas);
+    return canvas;
+  }
+
+  function obterFundo(id: string): CamadaEstatica | null {
+    const existente = fundoPorPista.get(id);
+    if (existente) return existente;
+    if (!doc) return null;
+    const frame = obterFrame(id);
+    if (!frame) return null;
+    const fundo = construirFundoFosco(doc, frame, { reducao: 8, veuTopo: 0.25, veuBase: 0.45, zoom: 1.02 });
+    fundoPorPista.set(id, fundo);
+    return fundo;
+  }
 
   const cartaoNoPonto = (pt: { x: number; y: number }): number | null => {
     for (let i = 0; i < opcoes.catalogo.length; i += 1) {
@@ -100,6 +144,7 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
     const indice = cartaoNoPonto(pt);
     if (indice !== null) hover = `card-${indice}`;
     else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR)) hover = 'voltar';
+    else if (pontoDentroDoBotao(pt, BOTAO_PRONTO)) hover = 'pronto';
     else hover = null;
   };
 
@@ -109,7 +154,7 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
     const indice = cartaoNoPonto(pt);
     if (indice !== null) {
       opcoes.aoEscolher(opcoes.catalogo[indice] as string);
-    } else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR)) {
+    } else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR) || pontoDentroDoBotao(pt, BOTAO_PRONTO)) {
       opcoes.aoVoltar();
     }
   };
@@ -126,114 +171,154 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   opcoes.canvas.addEventListener('pointermove', aoMover);
   janela?.addEventListener('keydown', aoTeclar);
 
+  /** Swatch do tema (céu + silhueta + chip de destaque) -- fallback enquanto o raster daquela pista não chegou. */
+  function desenharSwatch(ctx: Ctx, x: number, y: number, w: number, h: number, tema: IdTema): void {
+    const def = temaDeRenderDoTema(tema);
+    const grad = ctx.createLinearGradient(x, y, x, y + h);
+    grad.addColorStop(0, def.cores.ceu[0]);
+    grad.addColorStop(1, def.cores.ceu[1]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    ctx.fillStyle = def.cores.silhueta;
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + h * 0.55);
+    ctx.lineTo(x + w * 0.4, y + h * 0.3);
+    ctx.lineTo(x + w * 0.7, y + h * 0.6);
+    ctx.lineTo(x + w, y + h * 0.4);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = def.cores.destaque;
+    ctx.beginPath();
+    ctx.ellipse(x + w - 18, y + 20, 8, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function desenharCartao(ctx: Ctx, indice: number, id: string): void {
     const r = cartao(indice);
     const ativo = opcoes.obterPistaAtiva() === id;
     const aoVivo = hover === `card-${indice}`;
     const def = obterPistaDeDados(id, PISTAS_DE_DADOS);
     const nome = def?.nome ?? id;
-    const tema = temaDeRenderDoTema(def?.tema ?? 'bosque');
+    const tema = def?.tema ?? 'bosque';
+    const dificuldade = Math.max(1, Math.min(5, def?.ordem ?? 1));
+    const elevacao = ativo ? -10 : aoVivo ? -4 : 0;
+    const escala = ativo ? 1.08 : 1;
 
     ctx.save();
-    ctx.fillStyle = ativo ? '#1d3a5c' : COR_PAINEL;
-    caminhoArredondado(ctx, r, 14);
-    ctx.fill();
-    ctx.lineWidth = ativo ? 4 : 2;
-    ctx.strokeStyle = ativo ? COR_SELECIONADO : aoVivo ? '#ffffff' : COR_BORDA;
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2 + elevacao);
+    ctx.scale(escala, escala);
+    ctx.translate(-r.w / 2, -r.h / 2);
+
+    ctx.save();
+    caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
+    ctx.clip();
+    const frame = obterFrame(id);
+    if (frame) {
+      // "Cover": recorta o quadro 960x540 pela faixa vertical central (a pista é mais alta que larga no
+      // cartão) e amplia pra cobrir o cartão inteiro, sem distorcer.
+      const escalaFonte = r.h / ALTURA;
+      const larguraFonteNoDestino = r.w / escalaFonte;
+      const sx = Math.max(0, (LARGURA - larguraFonteNoDestino) / 2);
+      ctx.drawImage(frame, sx, 0, Math.min(LARGURA, larguraFonteNoDestino), ALTURA, 0, 0, r.w, r.h);
+      ctx.fillStyle = 'rgba(6, 14, 36, 0.18)';
+      ctx.fillRect(0, 0, r.w, r.h);
+    } else {
+      desenharSwatch(ctx, 0, 0, r.w, r.h, tema);
+    }
+    ctx.restore();
+
+    // faixa do nome
+    const faixa = ctx.createLinearGradient(0, r.h - 56, 0, r.h);
+    faixa.addColorStop(0, 'rgba(6, 14, 36, 0)');
+    faixa.addColorStop(1, 'rgba(6, 14, 36, 0.85)');
+    ctx.save();
+    caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
+    ctx.clip();
+    ctx.fillStyle = faixa;
+    ctx.fillRect(0, r.h - 56, r.w, 56);
+    ctx.restore();
+
+    ctx.lineWidth = ativo ? 3 : 2;
+    ctx.strokeStyle = ativo ? COR_SOL : aoVivo ? '#ffffff' : 'rgba(255,255,255,0.25)';
+    caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
     ctx.stroke();
-    ctx.restore();
 
-    // Swatch do tema: miniatura do céu (gradiente de `DefTema.cores.ceu`) + um chip da cor de destaque,
-    // mesmas cores que `ui/cenas/descida.ts` usa para pintar a pista de verdade.
-    const swatchX = r.x + 14;
-    const swatchY = r.y + 14;
-    const swatchW = r.w - 28;
-    const swatchH = 72;
-
-    ctx.save();
-    const grad = ctx.createLinearGradient(swatchX, swatchY, swatchX, swatchY + swatchH);
-    grad.addColorStop(0, tema.cores.ceu[0]);
-    grad.addColorStop(1, tema.cores.ceu[1]);
-    ctx.fillStyle = grad;
-    caminhoArredondado(ctx, { x: swatchX, y: swatchY, w: swatchW, h: swatchH }, 10);
-    ctx.fill();
-
-    ctx.fillStyle = tema.cores.silhueta;
-    ctx.beginPath();
-    ctx.moveTo(swatchX, swatchY + swatchH);
-    ctx.lineTo(swatchX, swatchY + swatchH * 0.55);
-    ctx.lineTo(swatchX + swatchW * 0.4, swatchY + swatchH * 0.3);
-    ctx.lineTo(swatchX + swatchW * 0.7, swatchY + swatchH * 0.6);
-    ctx.lineTo(swatchX + swatchW, swatchY + swatchH * 0.4);
-    ctx.lineTo(swatchX + swatchW, swatchY + swatchH);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = tema.cores.destaque;
-    ctx.beginPath();
-    ctx.ellipse(swatchX + swatchW - 14, swatchY + 14, 8, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    const centroX = r.x + r.w / 2;
-    desenharTexto(ctx, nome, centroX, r.y + r.h - 16, {
-      fonte: '700 19px Barlow, sans-serif',
-      cor: ativo ? COR_SELECIONADO : COR_TEXTO,
+    desenharTexto(ctx, nome, r.w / 2, r.h - 34, {
+      fonte: 'italic 800 20px "Barlow Condensed", Impact, sans-serif',
+      cor: ativo ? COR_SOL : '#ffffff',
       alinhamento: 'center',
     });
 
-    if (ativo) {
-      desenharTexto(ctx, 'PISTA ATUAL', centroX, r.y + r.h - 36, {
-        fonte: '700 12px Barlow, sans-serif',
-        cor: COR_SELECIONADO,
-        alinhamento: 'center',
-      });
+    // flocos de dificuldade (= ordem da pista)
+    const flocosW = 14;
+    const inicioX = r.w / 2 - (flocosW * dificuldade) / 2 + flocosW / 2;
+    for (let i = 0; i < dificuldade; i += 1) {
+      ctx.save();
+      ctx.translate(inicioX + i * flocosW, r.h - 14);
+      ctx.strokeStyle = '#9FE3FF';
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      for (let b = 0; b < 3; b += 1) {
+        ctx.save();
+        ctx.rotate((Math.PI / 3) * b);
+        ctx.beginPath();
+        ctx.moveTo(0, -4);
+        ctx.lineTo(0, 4);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
     }
+
+    ctx.restore();
   }
 
   return {
     id: 'selecao-pista',
     atualizar() {
-      // nada a avançar: a tela é controlada pelos eventos
+      ticks += 1;
     },
-    desenhar(ctx: Ctx) {
-      ctx.save();
-      ctx.fillStyle = COR_FUNDO;
-      ctx.fillRect(0, 0, LARGURA, ALTURA);
+    desenhar(ctx: Ctx, alpha: number) {
+      const t = ticks + alpha;
+      const ativo = opcoes.obterPistaAtiva();
+      const fundo = obterFundo(ativo);
 
-      ctx.fillStyle = COR_PAINEL;
-      caminhoArredondado(ctx, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, 18);
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = COR_BORDA;
-      ctx.stroke();
+      if (fundo) fundo.desenhar(ctx);
+      else {
+        ctx.save();
+        ctx.fillStyle = COR_FUNDO;
+        ctx.fillRect(0, 0, LARGURA, ALTURA);
+        ctx.restore();
+      }
+      desenharFlocos(ctx, 20, t, 0.7);
 
-      desenharTexto(ctx, 'ESCOLHA SUA PISTA', LARGURA / 2, PAINEL_Y + 48, {
-        fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif',
-        cor: COR_TEXTO,
-        contorno: 6,
-        corContorno: COR_CONTORNO,
-        alinhamento: 'center',
-      });
-      desenharTexto(ctx, 'Todas liberadas por enquanto — escolha e desça a montanha', LARGURA / 2, PAINEL_Y + 74, {
-        fonte: '600 16px Barlow, sans-serif',
-        cor: '#8fb6e0',
-        alinhamento: 'center',
-      });
-      ctx.restore();
+      if (doc) desenharLetreiro(ctx, doc, 'ESCOLHA SUA PISTA', LARGURA / 2, 66, 40, 'gelo');
+      else desenharTexto(ctx, 'ESCOLHA SUA PISTA', LARGURA / 2, 66, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 6, alinhamento: 'center' });
 
       opcoes.catalogo.forEach((id, indice) => desenharCartao(ctx, indice, id));
 
-      desenharBotao(ctx, {
-        ...BOTAO_VOLTAR,
-        texto: 'VOLTAR',
-        corTopo: hover === 'voltar' ? '#e85d4a' : '#c0392b',
-        corBase: hover === 'voltar' ? '#b03a26' : '#7d241a',
-        aoVivo: hover === 'voltar',
-      });
-      desenharTexto(ctx, 'ESC volta ao menu', LARGURA / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h + 18, {
-        fonte: '500 14px Barlow, sans-serif',
-        cor: '#8fb6e0',
+      const def = obterPistaDeDados(ativo, PISTAS_DE_DADOS);
+      if (doc) painelGeada(ctx, doc, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, { tampa: false });
+      else {
+        ctx.save();
+        ctx.fillStyle = 'rgba(12, 27, 48, 0.82)';
+        caminhoArredondado(ctx, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, 18);
+        ctx.fill();
+        ctx.restore();
+      }
+      desenharTexto(ctx, def?.nome ?? ativo, PAINEL_X + 28, PAINEL_Y + 38, { fonte: 'italic 800 30px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 4 });
+      desenharTexto(ctx, CLIMA_POR_PISTA[ativo] ?? '', PAINEL_X + 28, PAINEL_Y + 66, { fonte: '600 16px Barlow, sans-serif', cor: COR_MUTED });
+
+      botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
+      botao3D(ctx, { ...BOTAO_PRONTO, texto: 'PRONTO', tipo: 'primario', destaque: true, aoVivo: hover === 'pronto', t });
+
+      desenharTexto(ctx, 'ESC volta ao menu', LARGURA / 2, BOTAO_PRONTO.y + BOTAO_PRONTO.h + 18, {
+        fonte: '600 14px Barlow, sans-serif',
+        cor: COR_MUTED,
         alinhamento: 'center',
       });
     },

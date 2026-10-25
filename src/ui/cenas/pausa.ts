@@ -2,7 +2,8 @@
  * Overlay de pausa (feedback do dono, playtest iPhone: "durante a partida não dá pra pausar, voltar ao menu,
  * abrir configuração nem reiniciar"). Compartilhado por `ui/cenas/jogo.ts` (Treino) e `ui/cenas/campeonato.ts`
  * (Corrida): os dois compõem a descida/corrida real por baixo (congelada, nunca destruída) com este painel por
- * cima, mesma receita de `opcoes.ts`/`selecao.ts` (painel escuro, `desenho.ts`, ESC volta).
+ * cima -- redesenho "premium estilo Pixar" (`docs/direcao-ui-premium.md` §11.8, Fase 1): Fundo C (a própria
+ * corrida congelada, desfocada -- `kit-premium.ts: construirFundoCongelado`), Painel Geada, botão 3D e letreiro.
  *
  * Congelar o motor (o compositor para de chamar `atualizar()`) não basta pra isolar o INPUT: o toque/teclado da
  * descida/corrida por baixo continua com os PRÓPRIOS ouvintes vivos no mesmo `canvas`/`janela` (nunca destruído,
@@ -20,35 +21,32 @@ import { ALTURA, LARGURA } from '../../core/constantes';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { caminhoArredondado, desenharBotao, desenharTexto } from '../desenho';
+import type { CamadaEstatica } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { botao3D, construirFundoCongelado, desenharLetreiro, painelGeada, type TipoBotao3D } from '../kit-premium';
+import { desenharTexto } from '../desenho';
 
-const COR_VEU = 'rgba(5, 12, 26, 0.72)';
-const COR_PAINEL = '#162b47';
-const COR_BORDA = '#2a517f';
 const COR_TEXTO = '#f4f9ff';
-const COR_CONTORNO = '#0b1a33';
-const COR_DESATIVADO_TOPO = '#55606a';
-const COR_DESATIVADO_BASE = '#2c343b';
+const COR_MUTED = '#aed0ef';
 
-const PAINEL_W = 420;
+const PAINEL_W = 400;
 const PAINEL_H = 380;
 const PAINEL_X = LARGURA / 2 - PAINEL_W / 2;
 const PAINEL_Y = ALTURA / 2 - PAINEL_H / 2;
 
 const BOTAO_W = 320;
-const BOTAO_H = 52;
+const BOTAO_H = 56;
 const BOTAO_X = LARGURA / 2 - BOTAO_W / 2;
-const PASSO_Y = BOTAO_H + 16;
-const PRIMEIRA_Y = PAINEL_Y + 100;
+const PASSO_Y = 66;
+const PRIMEIRA_Y = PAINEL_Y + 96;
 
 export const BOTAO_CONTINUAR: BotaoRetangular = { id: 'continuar', x: BOTAO_X, y: PRIMEIRA_Y, w: BOTAO_W, h: BOTAO_H };
 export const BOTAO_REINICIAR: BotaoRetangular = { id: 'reiniciar', x: BOTAO_X, y: PRIMEIRA_Y + PASSO_Y, w: BOTAO_W, h: BOTAO_H };
 export const BOTAO_CONFIGURACOES: BotaoRetangular = { id: 'configuracoes', x: BOTAO_X, y: PRIMEIRA_Y + 2 * PASSO_Y, w: BOTAO_W, h: BOTAO_H };
 export const BOTAO_VOLTAR_MENU: BotaoRetangular = { id: 'voltar-menu', x: BOTAO_X, y: PRIMEIRA_Y + 3 * PASSO_Y, w: BOTAO_W, h: BOTAO_H };
 
-export const BOTAO_CONFIRMAR_SAIDA: BotaoRetangular = { id: 'confirmar-saida', x: LARGURA / 2 - 170, y: PRIMEIRA_Y + PASSO_Y + 10, w: 150, h: 52 };
-export const BOTAO_CANCELAR_SAIDA: BotaoRetangular = { id: 'cancelar-saida', x: LARGURA / 2 + 20, y: PRIMEIRA_Y + PASSO_Y + 10, w: 150, h: 52 };
+export const BOTAO_CONFIRMAR_SAIDA: BotaoRetangular = { id: 'confirmar-saida', x: LARGURA / 2 - 170, y: PRIMEIRA_Y + PASSO_Y + 10, w: 150, h: 56 };
+export const BOTAO_CANCELAR_SAIDA: BotaoRetangular = { id: 'cancelar-saida', x: LARGURA / 2 + 20, y: PRIMEIRA_Y + PASSO_Y + 10, w: 150, h: 56 };
 
 export type AlvoHoverPausa = 'continuar' | 'reiniciar' | 'configuracoes' | 'voltar-menu' | 'confirmar-saida' | 'cancelar-saida' | null;
 
@@ -56,6 +54,11 @@ export interface EstadoVisualPausa {
   readonly confirmandoSaida: boolean;
   readonly podeReiniciar: boolean;
   readonly hover: AlvoHoverPausa;
+  /** Ticks desde que a pausa abriu -- só usado pra respiração do CTA (`destaque`); 0 é um valor seguro. */
+  readonly t?: number | undefined;
+  /** Fundo B pronto (a corrida congelada e borrada); sem ele (testes/1º quadro) cai num sólido simples. */
+  readonly fundo?: CamadaEstatica | null | undefined;
+  readonly documento?: Document | undefined;
 }
 
 /** Acha qual botão (se algum) está sob o ponto, de acordo com a sub-tela atual (normal ou confirmação de saída). */
@@ -72,99 +75,70 @@ export function botaoPausaEm(pt: { x: number; y: number }, confirmandoSaida: boo
   return null;
 }
 
-/** Painel de pausa, estilo visual já estabelecido do jogo (mesma paleta/tipografia de `opcoes.ts`/`selecao.ts`). */
+const COR_FUNDO_SIMPLES = '#0c1b30';
+
+/** Painel de pausa "premium estilo Pixar" (§11.8): Fundo C + Painel Geada + botão 3D + letreiro. Sem `documento`
+ *  (testes unitários, ambiente node) cai num sólido simples + texto puro -- o visual real é provado no navegador
+ *  por `tests/e2e/pausa.spec.ts` (skill `medir-antes-de-afirmar`). */
 export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
-  ctx.save();
-  ctx.fillStyle = COR_VEU;
-  ctx.fillRect(0, 0, LARGURA, ALTURA);
+  const doc = estado.documento;
+  const t = estado.t ?? 0;
 
-  ctx.fillStyle = COR_PAINEL;
-  caminhoArredondado(ctx, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, 18);
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = COR_BORDA;
-  ctx.stroke();
+  if (estado.fundo) estado.fundo.desenhar(ctx);
+  else {
+    ctx.save();
+    ctx.fillStyle = COR_FUNDO_SIMPLES;
+    ctx.globalAlpha = 0.72;
+    ctx.fillRect(0, 0, LARGURA, ALTURA);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
-  desenharTexto(ctx, 'PAUSADO', LARGURA / 2, PAINEL_Y + 56, {
-    fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif',
-    cor: COR_TEXTO,
-    contorno: 6,
-    corContorno: COR_CONTORNO,
-    alinhamento: 'center',
-  });
-  ctx.restore();
+  if (doc) {
+    painelGeada(ctx, doc, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H });
+    desenharLetreiro(ctx, doc, 'PAUSA', LARGURA / 2, PAINEL_Y + 58, 36, 'gelo');
+  } else {
+    ctx.save();
+    ctx.fillStyle = 'rgba(12, 27, 48, 0.85)';
+    ctx.fillRect(PAINEL_X, PAINEL_Y, PAINEL_W, PAINEL_H);
+    ctx.restore();
+    desenharTexto(ctx, 'PAUSA', LARGURA / 2, PAINEL_Y + 58, { fonte: 'italic 800 36px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 5, alinhamento: 'center' });
+  }
 
   if (estado.confirmandoSaida) {
-    desenharTexto(ctx, 'Sair da corrida e voltar ao menu?', LARGURA / 2, PRIMEIRA_Y + 4, {
-      fonte: '700 19px Barlow, sans-serif',
+    desenharTexto(ctx, 'Sair da corrida e voltar ao menu?', LARGURA / 2, PRIMEIRA_Y + 6, {
+      fonte: '700 18px Barlow, sans-serif',
       cor: COR_TEXTO,
       alinhamento: 'center',
     });
     desenharTexto(ctx, 'O progresso desta pista não é salvo.', LARGURA / 2, PRIMEIRA_Y + 30, {
-      fonte: '500 15px Barlow, sans-serif',
-      cor: '#8fb6e0',
+      fonte: '500 14px Barlow, sans-serif',
+      cor: COR_MUTED,
       alinhamento: 'center',
     });
-    desenharBotao(ctx, {
-      ...BOTAO_CONFIRMAR_SAIDA,
-      texto: 'SIM, SAIR',
-      corTopo: estado.hover === 'confirmar-saida' ? '#e85d4a' : '#c0392b',
-      corBase: estado.hover === 'confirmar-saida' ? '#b03a26' : '#7d241a',
-      aoVivo: estado.hover === 'confirmar-saida',
-    });
-    desenharBotao(ctx, {
-      ...BOTAO_CANCELAR_SAIDA,
-      texto: 'CANCELAR',
-      corTopo: estado.hover === 'cancelar-saida' ? '#4da2ff' : '#2a7de1',
-      corBase: estado.hover === 'cancelar-saida' ? '#1f6fd0' : '#144d8f',
-      aoVivo: estado.hover === 'cancelar-saida',
-    });
+    botao3D(ctx, { ...BOTAO_CONFIRMAR_SAIDA, texto: 'SIM, SAIR', tipo: 'perigo', aoVivo: estado.hover === 'confirmar-saida' });
+    botao3D(ctx, { ...BOTAO_CANCELAR_SAIDA, texto: 'CANCELAR', tipo: 'secundario', aoVivo: estado.hover === 'cancelar-saida' });
     return;
   }
 
-  desenharBotao(ctx, {
-    ...BOTAO_CONTINUAR,
-    texto: 'CONTINUAR',
-    corTopo: estado.hover === 'continuar' ? '#4ad17d' : '#31c66d',
-    corBase: estado.hover === 'continuar' ? '#239254' : '#1d7f45',
-    aoVivo: estado.hover === 'continuar',
-    destaque: true,
-  });
+  botao3D(ctx, { ...BOTAO_CONTINUAR, texto: 'CONTINUAR', tipo: 'confirmar', destaque: true, aoVivo: estado.hover === 'continuar', t });
 
-  desenharBotao(ctx, {
-    ...BOTAO_REINICIAR,
-    texto: 'REINICIAR CORRIDA',
-    corTopo: !estado.podeReiniciar ? COR_DESATIVADO_TOPO : estado.hover === 'reiniciar' ? '#4da2ff' : '#2a7de1',
-    corBase: !estado.podeReiniciar ? COR_DESATIVADO_BASE : estado.hover === 'reiniciar' ? '#1f6fd0' : '#144d8f',
-    aoVivo: estado.podeReiniciar && estado.hover === 'reiniciar',
-  });
+  const tipoReiniciar: TipoBotao3D = !estado.podeReiniciar ? 'desativado' : 'secundario';
+  botao3D(ctx, { ...BOTAO_REINICIAR, texto: 'REINICIAR CORRIDA', tipo: tipoReiniciar, aoVivo: estado.podeReiniciar && estado.hover === 'reiniciar' });
   if (!estado.podeReiniciar) {
     desenharTexto(ctx, 'só antes de cruzar a chegada', LARGURA / 2, BOTAO_REINICIAR.y + BOTAO_REINICIAR.h + 14, {
-      fonte: '500 13px Barlow, sans-serif',
-      cor: '#8fb6e0',
+      fonte: '600 14px Barlow, sans-serif',
+      cor: COR_MUTED,
       alinhamento: 'center',
     });
   }
 
-  desenharBotao(ctx, {
-    ...BOTAO_CONFIGURACOES,
-    texto: 'CONFIGURAÇÕES',
-    corTopo: estado.hover === 'configuracoes' ? '#4da2ff' : '#2a7de1',
-    corBase: estado.hover === 'configuracoes' ? '#1f6fd0' : '#144d8f',
-    aoVivo: estado.hover === 'configuracoes',
-  });
+  botao3D(ctx, { ...BOTAO_CONFIGURACOES, texto: 'CONFIGURAÇÕES', tipo: 'secundario', aoVivo: estado.hover === 'configuracoes' });
+  botao3D(ctx, { ...BOTAO_VOLTAR_MENU, texto: 'VOLTAR AO MENU', tipo: 'perigo', aoVivo: estado.hover === 'voltar-menu' });
 
-  desenharBotao(ctx, {
-    ...BOTAO_VOLTAR_MENU,
-    texto: 'VOLTAR AO MENU',
-    corTopo: estado.hover === 'voltar-menu' ? '#e85d4a' : '#c0392b',
-    corBase: estado.hover === 'voltar-menu' ? '#b03a26' : '#7d241a',
-    aoVivo: estado.hover === 'voltar-menu',
-  });
-
-  desenharTexto(ctx, 'ESC/P continua', LARGURA / 2, PAINEL_Y + PAINEL_H - 14, {
-    fonte: '500 13px Barlow, sans-serif',
-    cor: '#8fb6e0',
+  desenharTexto(ctx, 'ESC/P continua', LARGURA / 2, PAINEL_Y + 366, {
+    fonte: '600 14px Barlow, sans-serif',
+    cor: COR_MUTED,
     alinhamento: 'center',
   });
 }
@@ -172,6 +146,7 @@ export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
 export interface OpcoesControladorPausa {
   readonly canvas: AlvoToque;
   readonly janela?: AlvoTeclado | undefined;
+  readonly documento?: Document | undefined;
   /** Lido a cada clique/tecla (nunca cacheado): reflete "já cruzou a chegada" na hora (plano C-D6). */
   readonly podeReiniciar: () => boolean;
   readonly aoContinuar: () => void;
@@ -196,10 +171,15 @@ export interface ControladorPausa {
 /** Controlador da pausa: estado (pausado/confirmando-saída/suspenso) + ouvintes de toque/tecla + desenho. */
 export function criarControladorPausa(opcoes: OpcoesControladorPausa): ControladorPausa {
   const janela = opcoes.janela;
+  const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
   let pausado = false;
   let confirmandoSaida = false;
   let suspenso = false;
   let hover: AlvoHoverPausa = null;
+  let ticksAbertura = 0;
+  // Fundo C (§3.3): captura a corrida congelada UMA vez por pausa aberta -- reconstruir todo quadro seria caro
+  // (reduz+amplia a imagem) e desnecessário (a corrida por baixo não se move enquanto pausada).
+  let fundo: CamadaEstatica | null = null;
 
   const ativo = (): boolean => pausado && !suspenso;
 
@@ -273,6 +253,8 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
     abrir() {
       pausado = true;
       confirmandoSaida = false;
+      ticksAbertura = 0;
+      fundo = null; // recaptura a corrida congelada na próxima `desenhar` (frame mais recente, não um velho)
     },
     continuar() {
       pausado = false;
@@ -286,7 +268,9 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
     },
     desenhar(ctx) {
       if (!ativo()) return;
-      desenharPainelPausa(ctx, { confirmandoSaida, podeReiniciar: opcoes.podeReiniciar(), hover });
+      if (!fundo && doc) fundo = construirFundoCongelado(doc, ctx.canvas, 0.45);
+      desenharPainelPausa(ctx, { confirmandoSaida, podeReiniciar: opcoes.podeReiniciar(), hover, t: ticksAbertura, fundo, documento: doc });
+      ticksAbertura += 1;
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);

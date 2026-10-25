@@ -2,36 +2,44 @@
  * Tela de Seleção de Personagem (Canvas 2D), acessível pelo botão PERSONAGEM do Menu (ou automaticamente antes
  * de TREINO/CAMPEONATO -- `[[fluxo-inicio-selecao-personagem-antes-de-correr]]`).
  *
- * Redesenho "no nível da capa" (feedback do dono, 2026-10-24: a versão anterior em grade de cartões pequenos
- * sobre painel azul liso ficava longe da qualidade de `public/assets/menu/capa.webp`, e os 5 personagens não
- * ativos apareciam como cápsula marrom genérica por 2-4s até os sprites carregarem -- "nem por segundos").
+ * Redesenho "premium estilo Pixar" (`docs/direcao-ui-premium.md` §11.1, Fase 2): fundo A (capa fosca) com aurora
+ * viva e flocos, palco com pedestal de gelo + personagem em `star` (altura 150, teto do guia §1.7) com aro de
+ * luz, painel Geada com nome/manobra/bordão (balão de fala) e as 3 barras de atributo (ícones de item
+ * reaproveitados como ícones de atributo: `turbo`=Velocidade, `escudo`=Equilíbrio, `bola`=Força -- decisão do
+ * dono, 2026-10-24, evita gastar os 2 créditos de geração de imagem que restam), fileira de 6 cartões com
+ * RETRATO RECORTADO DA CAPA (`kit-premium.ts: desenharRetratoDaCapa`, §6.2) em vez do sprite pequeno (zero
+ * placeholder feio, cartão sempre nítido mesmo antes do sprite chegar), VOLTAR redondo no canto e CTA CORRER!.
  *
- * Resposta aos dois problemas:
- *  1. Zero placeholder feio: os 6 sprites são precarregados o quanto antes (`ui/cenas/abertura.ts`, maior lead
- *     time possível -- `carregarSpritePersonagem` é cacheado por id em `assets/index.ts`, então quando esta tela
- *     monta, a MESMA promessa já resolvida dispara o `.then()` como microtask antes do 1º quadro, `[[gating-cena-por-promise-quebra-testes-sincronos]]`). Enquanto algum sprite específico ainda não chegou (rede lenta),
- *     o fallback NUNCA é a cápsula marrom antiga: é um esqueleto translúcido azul-neve com um floco, no tom da
- *     paleta do jogo (nunca "fora do padrão Pixar" por acidente de cor).
- *  2. Fundo = `capa.webp` borrada (uma vez, em `CamadaEstatica` -- `ui/desenho.ts` -- nunca `filter` por quadro)
- *     e escurecida; o personagem ATIVO aparece GRANDE no palco à esquerda (pose 'star' preferida: manobra),
- *     com nome, manobra assinatura (`DefPersonagem.nomeAssinatura`) e barras de Velocidade/Equilíbrio/Força no
- *     painel à direita (Força usa `atributos.pulo` como proxy -- é o mesmo agrupamento conceitual de
- *     `data/evolucao.ts: ATRIBUTOS_EVOLUCAO`, "Força (pulo+embalo)"). Nível de evolução (se `obterEvolucao` foi
- *     passado e > 0): badge + segmento dourado além da barra base, mesma economia de `oficina-campeonato.ts`.
- *     Uma fita de 6 miniaturas abaixo troca o ativo ao tocar (mesmo contrato de sempre: `aoEscolher` persiste e,
- *     se veio de TREINO/CAMPEONATO, navega); o botão CORRER grande reafirma o ativo atual (mesmo `aoEscolher`).
+ * Textos de desenvolvedor removidos (feedback do dono): nada de "Todos liberados por enquanto" nem "Base
+ * 90-110" -- ver memória `selecao-personagem-catalogo-inteiro-vs-desbloqueados` pro porquê de ainda oferecer o
+ * catálogo inteiro (gating de desbloqueio é M3-futuro).
  */
 import { ALTURA, LARGURA } from '../../core/constantes';
 import type { Evolucao } from '../../core/contratos';
 import { seno } from '../../core/trig';
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
+import { assetsItensProntos, precarregarAssetsItens } from '../../assets/itens';
 import { NIVEL_MAXIMO_EVOLUCAO, PASSO_ATRIBUTO_POR_NIVEL } from '../../data/evolucao';
 import { PERSONAGENS_DE_DADOS } from '../../data/personagens';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { caminhoArredondado, criarCamadaEstatica, desenharBotaoBala, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
+import { easeOutBack, overshootPadrao, prefereMovimentoReduzido } from '../animacao';
+import { caminhoArredondado, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
 import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import {
+  barraAtributo,
+  botao3D,
+  botaoRedondoVoltar,
+  construirFundoFosco,
+  desenharLetreiro,
+  desenharRetratoDaCapa,
+  medalhao,
+  painelGeada,
+  pedestalDeGelo,
+  recorteRetratoDisponivel,
+  type AtributoPersonagem,
+} from '../kit-premium';
 import type { Cena } from '../tipos';
 import { assetsMenuCapaProntos, precarregarAssetsMenuCapa } from './menu-capa';
 
@@ -68,37 +76,43 @@ function obterDefPersonagem(id: string) {
 }
 
 const COR_FUNDO = '#0c1b30';
-const COR_PAINEL = 'rgba(12, 27, 48, 0.78)';
-const COR_BORDA = '#2a517f';
 const COR_TEXTO = '#f4f9ff';
-const COR_CONTORNO = '#0b1a33';
-const COR_SELECIONADO = '#f6c90e';
-const COR_DESTAQUE = '#ffd166';
-const COR_MUTED = '#8fb6e0';
-const COR_BARRA_BASE = '#5fb0ff';
+const COR_SOL = '#FFD23F';
+const COR_MUTED = '#aed0ef';
 
-const PAINEL_X = 440;
-const PAINEL_Y = 72;
-const PAINEL_W = 500;
-const PAINEL_H = 250;
+const PAINEL_X = 412;
+const PAINEL_Y = 84;
+const PAINEL_W = 516;
+const PAINEL_H = 234;
 
-const PALCO_CX = 215;
-// Folga de verdade acima da fita de miniaturas (`MINI_Y`, abaixo): o personagem (e o monte de neve sob os pés)
-// termina bem antes de 340 -- antes a prancha encostava/sumia atrás do topo dos cards (feedback do dono).
-const PALCO_BASE_Y = 298;
-const PALCO_ALTURA = 192;
-const PALCO_HALO_R = 122;
-const MONTE_RX = PALCO_ALTURA * 0.56;
-const MONTE_RY = 15;
+const PALCO_CX = 212;
+const PALCO_ALTURA = 150; // teto do guia §1.7: nenhum sprite fora da corrida passa de 150 lógicos
+const PALCO_PES_Y = 358; // pés do personagem = topo do pedestal
+const PEDESTAL_RX = 100;
+const PEDESTAL_RY = 14;
+const PEDESTAL_FAIXA_H = 10;
+const PALCO_HALO_R = 150;
 
-const MINI_Y = 340;
-const MINI_W = 140;
-const MINI_H = 92;
-const MINI_GAP = 10;
-const MINI_X0 = (LARGURA - (MINI_W * 6 + MINI_GAP * 5)) / 2;
+// Folga de verdade acima da fita de cartões (ver memória `selecao-palco-clipping-pela-fita-de-miniaturas`): o
+// pedestal termina em ~y400 (358 + 14 + 10 + sombra), a fita começa em 416 -- ~16px de clearance real.
+const MINI_Y = 416;
+const MINI_W = 136;
+const MINI_H = 108;
+const MINI_GAP = 12;
+const MINI_X0 = 42;
 
-const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: 40, y: 454, w: 160, h: 44 };
-const BOTAO_CORRER: BotaoRetangular = { id: 'correr', x: 330, y: 444, w: 300, h: 58 };
+const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: 32, y: 20, w: 56, h: 56 };
+const BOTAO_CORRER: BotaoRetangular = { id: 'correr', x: 570, y: 334, w: 300, h: 64 };
+
+const LINHA_ATRIBUTOS: readonly { readonly atributo: AtributoPersonagem; readonly icone: 'turbo' | 'escudo' | 'bola'; readonly rotulo: string; readonly y: number }[] = [
+  { atributo: 'velocidade', icone: 'turbo', rotulo: 'Velocidade', y: 236 },
+  { atributo: 'equilibrio', icone: 'escudo', rotulo: 'Equilíbrio', y: 266 },
+  { atributo: 'forca', icone: 'bola', rotulo: 'Força', y: 296 },
+];
+const FAIXA_ATRIBUTO = 35; // 90..125 (base 90-110 de ficha + até +15 de bônus no nível 5)
+const BARRA_X = 600;
+const BARRA_W = 300;
+const BARRA_H = 16;
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -108,22 +122,32 @@ function cartao(indice: number): BotaoRetangular {
   return { id: `card-${indice}`, x: MINI_X0 + indice * (MINI_W + MINI_GAP), y: MINI_Y, w: MINI_W, h: MINI_H };
 }
 
-/** Fundo = `capa.webp` borrada (UMA vez, offscreen) + véu escuro -- nunca refeita por quadro (`filter` é caro em canvas por software). */
-function construirFundoBorrado(doc: Document, img: HTMLImageElement): CamadaEstatica {
-  return criarCamadaEstatica(doc, (ctx) => {
+/** Floco vetorial simples (6 raios), nunca emoji de texto (muda de cara por sistema) -- usado só no esqueleto de
+ *  carregamento, quando o sprite daquele id ainda não chegou. */
+function desenharFlocoVetor(ctx: Ctx, cx: number, cy: number, r: number, alpha: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = `rgba(244, 249, 255, ${alpha})`;
+  ctx.lineWidth = Math.max(1.5, r * 0.12);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i += 1) {
     ctx.save();
-    ctx.filter = 'blur(10px)';
-    const escala = Math.max(LARGURA / img.naturalWidth, ALTURA / img.naturalHeight) * 1.08;
-    const w = img.naturalWidth * escala;
-    const h = img.naturalHeight * escala;
-    ctx.drawImage(img, (LARGURA - w) / 2, (ALTURA - h) / 2, w, h);
+    ctx.rotate((Math.PI / 3) * i);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -r);
+    ctx.moveTo(0, -r * 0.55);
+    ctx.lineTo(-r * 0.22, -r * 0.75);
+    ctx.moveTo(0, -r * 0.55);
+    ctx.lineTo(r * 0.22, -r * 0.75);
+    ctx.stroke();
     ctx.restore();
-    ctx.fillStyle = 'rgba(6, 13, 27, 0.72)';
-    ctx.fillRect(0, 0, LARGURA, ALTURA);
-  });
+  }
+  ctx.restore();
 }
 
-/** Fallback NUNCA é a cápsula marrom antiga: esqueleto translúcido na paleta do jogo + floco, enquanto o sprite daquele id não chegou. */
+/** Fallback NUNCA é a cápsula marrom antiga: esqueleto translúcido na paleta do jogo + floco vetorial, enquanto o
+ *  sprite daquele id não chegou. */
 function desenharEsqueletoPersonagem(ctx: Ctx, cx: number, baseY: number, altura: number, t: number): void {
   const pulso = 0.5 + 0.5 * Math.max(0, seno((t * 3) % 360));
   ctx.save();
@@ -131,50 +155,93 @@ function desenharEsqueletoPersonagem(ctx: Ctx, cx: number, baseY: number, altura
   ctx.beginPath();
   ctx.ellipse(cx, baseY - altura * 0.44, altura * 0.3, altura * 0.46, 0, 0, Math.PI * 2);
   ctx.fill();
-  desenharTexto(ctx, '❄', cx, baseY - altura * 0.44, {
-    fonte: `${Math.round(altura * 0.26)}px sans-serif`,
-    cor: `rgba(244, 249, 255, ${0.55 + 0.25 * pulso})`,
-    alinhamento: 'center',
-    base: 'middle',
-  });
+  desenharFlocoVetor(ctx, cx, baseY - altura * 0.44, altura * 0.16, 0.55 + 0.25 * pulso);
   ctx.restore();
 }
 
-/** Barra horizontal (90..110 de ficha + até +15 de evolução no nível 5 = faixa 90..125). Segmento azul = ficha, dourado = bônus. */
-function desenharBarraAtributo(ctx: Ctx, x: number, y: number, w: number, h: number, rotulo: string, valorBase: number, bonus: number): void {
-  const FAIXA = 35;
-  const fracaoBase = clamp01((valorBase - 90) / FAIXA);
-  const fracaoBonus = clamp01(bonus / FAIXA);
-  const rotuloW = 92;
-  const trilhoX = x + rotuloW;
-  const trilhoW = w - rotuloW;
+/** Balão de fala (bordão): quebra em até 2 linhas e reduz a fonte até caber -- alguns bordões do catálogo passam
+ *  do teto de 22 caracteres de uma linha só (regra de callout), então a UI absorve com quebra em vez de cortar
+ *  texto do personagem (decisão de apresentação, não altera o dado). */
+function desenharBalaoDeFala(ctx: Ctx, texto: string, caixa: { x: number; y: number; w: number; h: number }): void {
+  const palavras = texto.split(' ');
+  let tamanho = 20;
+  let linhas: string[] = [texto];
 
-  desenharTexto(ctx, rotulo, x, y + h / 2, { fonte: '600 15px Barlow, sans-serif', cor: COR_TEXTO, base: 'middle' });
+  for (; tamanho >= 13; tamanho -= 1) {
+    ctx.font = `400 ${tamanho}px Bangers, sans-serif`;
+    if (ctx.measureText(texto).width <= caixa.w - 24) {
+      linhas = [texto];
+      break;
+    }
+    // tenta quebrar em 2 linhas pela palavra mais próxima da metade
+    let melhorCorte = -1;
+    let melhorDist = Infinity;
+    let acumulado = 0;
+    for (let i = 0; i < palavras.length - 1; i += 1) {
+      acumulado += (palavras[i]?.length ?? 0) + 1;
+      const dist = Math.abs(acumulado - texto.length / 2);
+      if (dist < melhorDist) {
+        melhorDist = dist;
+        melhorCorte = i + 1;
+      }
+    }
+    if (melhorCorte > 0) {
+      const l1 = palavras.slice(0, melhorCorte).join(' ');
+      const l2 = palavras.slice(melhorCorte).join(' ');
+      if (ctx.measureText(l1).width <= caixa.w - 24 && ctx.measureText(l2).width <= caixa.w - 24) {
+        linhas = [l1, l2];
+        break;
+      }
+    }
+  }
 
   ctx.save();
-  ctx.fillStyle = 'rgba(8, 18, 36, 0.55)';
-  caminhoArredondado(ctx, { x: trilhoX, y, w: trilhoW, h }, h / 2);
+  caminhoArredondado(ctx, caixa, 14);
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#0B1630';
+  ctx.stroke();
 
-  caminhoArredondado(ctx, { x: trilhoX, y, w: trilhoW, h }, h / 2);
-  ctx.clip();
-  ctx.fillStyle = COR_BARRA_BASE;
-  ctx.fillRect(trilhoX, y, trilhoW * fracaoBase, h);
-  if (fracaoBonus > 0) {
-    ctx.fillStyle = COR_SELECIONADO;
-    ctx.fillRect(trilhoX + trilhoW * fracaoBase, y, trilhoW * fracaoBonus, h);
+  // rabicho apontando para o palco (à esquerda)
+  ctx.beginPath();
+  ctx.moveTo(caixa.x + 18, caixa.y + caixa.h - 2);
+  ctx.lineTo(caixa.x - 10, caixa.y + caixa.h + 14);
+  ctx.lineTo(caixa.x + 34, caixa.y + caixa.h - 2);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(caixa.x + 18, caixa.y + caixa.h - 3);
+  ctx.lineTo(caixa.x - 10, caixa.y + caixa.h + 14);
+  ctx.strokeStyle = '#0B1630';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.font = `400 ${tamanho}px Bangers, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#0B1630';
+  const cx = caixa.x + caixa.w / 2;
+  const cy = caixa.y + caixa.h / 2;
+  if (linhas.length === 1) {
+    ctx.fillText(linhas[0] ?? '', cx, cy);
+  } else {
+    ctx.fillText(linhas[0] ?? '', cx, cy - tamanho * 0.55);
+    ctx.fillText(linhas[1] ?? '', cx, cy + tamanho * 0.55);
   }
   ctx.restore();
+}
 
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = COR_BORDA;
-  caminhoArredondado(ctx, { x: trilhoX, y, w: trilhoW, h }, h / 2);
-  ctx.stroke();
+/** Fundo = `capa.webp` borrada (§3.1, UMA vez, offscreen) + véu + vinheta -- nunca refeita por quadro. */
+function construirFundoTela(doc: Document, img: HTMLImageElement): CamadaEstatica {
+  return construirFundoFosco(doc, img, { reducao: 16, veuTopo: 0.3, veuBase: 0.55 });
 }
 
 export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
+  const reduzido = prefereMovimentoReduzido();
   let hover: string | null = null;
   let ticks = 0;
   let fundo: CamadaEstatica | null = null;
@@ -182,6 +249,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   // Defensivo: se esta tela abrir sem ter passado por abertura/menu (ex. teste direto), garante o fire-and-forget
   // mesmo assim -- cacheado, não duplica o carregamento se já estava em andamento.
   void precarregarAssetsMenuCapa();
+  void precarregarAssetsItens();
 
   // Sprites: melhor esforço, cacheado por id (`assets/index.ts`) -- se abertura/menu já chamaram, o `.then()`
   // roda como microtask antes do 1º quadro desta cena (zero placeholder na prática).
@@ -194,6 +262,20 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
       .catch(() => {
         // fallback silencioso: o esqueleto translúcido cobre enquanto não chega
       });
+  }
+
+  // Animação das barras ao trocar de personagem (§11.1: "comparar fica divertido"): guarda o valor de ONDE a
+  // barra partiu (o personagem anterior) e o tick em que a troca começou -- só usado pra interpolar por 300ms.
+  let idAnterior = opcoes.obterPersonagemAtivo();
+  let deBonus = 0;
+  let deValores: Readonly<Record<AtributoPersonagem, number>> = lerFicha(idAnterior);
+  let inicioTransicaoBarras = -1000;
+  const DURACAO_BARRAS = 18; // 300ms a 60Hz
+
+  function lerFicha(id: string): Readonly<Record<AtributoPersonagem, number>> {
+    const def = obterDefPersonagem(id);
+    const a = def?.atributos ?? { velocidade: 100, equilibrio: 100, pulo: 100 };
+    return { velocidade: a.velocidade, equilibrio: a.equilibrio, forca: a.pulo };
   }
 
   const cartaoNoPonto = (pt: { x: number; y: number }): number | null => {
@@ -250,64 +332,26 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   opcoes.canvas.addEventListener('pointermove', aoMover);
   janela?.addEventListener('keydown', aoTeclar);
 
-  /** Monte de neve sob os pés: sombra de contato + corpo em gradiente (volume, não um disco liso) + brilho no
-   *  topo + alguns glints -- antes era uma elipse translúcida lisa, que contra o fundo escuro lia como "disco
-   *  cinza chapado" (feedback do dono). Determinístico (sem `Math.random`, proibido em `src/`). */
-  function desenharMonteDeNeve(ctx: Ctx, cx: number, cy: number, rx: number, ry: number): void {
-    ctx.save();
-    ctx.fillStyle = 'rgba(4, 12, 26, 0.32)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + ry * 0.5, rx * 0.88, ry * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    const grad = ctx.createRadialGradient(cx - rx * 0.15, cy - ry * 0.6, rx * 0.08, cx, cy, rx);
-    grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(0.55, '#eaf4ff');
-    grad.addColorStop(1, '#bfdcf5');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.beginPath();
-    ctx.ellipse(cx - rx * 0.18, cy - ry * 0.35, rx * 0.3, ry * 0.32, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    for (const [fx, fy] of [
-      [-0.45, -0.1],
-      [0.3, 0.2],
-      [0.05, -0.4],
-    ] as const) {
-      ctx.beginPath();
-      ctx.arc(cx + rx * fx, cy + ry * fy, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
   function desenharPalco(ctx: Ctx, id: string, t: number): void {
     const sprite = sprites.get(id);
     // Pose de destaque (manobra) se existir, senão a "de pé" -- mas a ESCALA sempre pela altura de `ride0` (igual
-    // a `render/piloto.ts: ALTURA_ALVO_M`), nunca pela altura da pose atual: `star` tem padding de enquadramento
-    // diferente de `ride0`, então escalar por ela faria o personagem "mudar de tamanho" ao trocar de pose/id.
+    // a `render/piloto.ts: ALTURA_ALVO_M`), nunca pela altura da pose atual (memória `escala-sprite-por-pose...`).
     const quadro = sprite ? (sprite.obterQuadro('star') ?? sprite.obterQuadro('ride0')) : null;
     const referencia = sprite?.obterQuadro('ride0')?.dados ?? quadro?.dados;
-    const pulso = 1 + 0.015 * seno((t * 2.2) % 360);
+    const pulso = reduzido ? 1 : 1 + 0.015 * seno((t * 2.2) % 360);
 
     ctx.save();
-    const halo = ctx.createRadialGradient(PALCO_CX, PALCO_BASE_Y - PALCO_ALTURA * 0.4, 8, PALCO_CX, PALCO_BASE_Y - PALCO_ALTURA * 0.4, PALCO_HALO_R);
-    halo.addColorStop(0, 'rgba(255, 230, 150, 0.28)');
-    halo.addColorStop(1, 'rgba(255, 230, 150, 0)');
+    const halo = ctx.createRadialGradient(PALCO_CX, PALCO_PES_Y - PALCO_ALTURA * 0.4, 8, PALCO_CX, PALCO_PES_Y - PALCO_ALTURA * 0.4, PALCO_HALO_R);
+    halo.addColorStop(0, 'rgba(159, 227, 255, 0.22)');
+    halo.addColorStop(1, 'rgba(159, 227, 255, 0)');
     ctx.fillStyle = halo;
-    ctx.fillRect(PALCO_CX - PALCO_HALO_R, PALCO_BASE_Y - PALCO_ALTURA * 0.4 - PALCO_HALO_R, PALCO_HALO_R * 2, PALCO_HALO_R * 2);
+    ctx.fillRect(PALCO_CX - PALCO_HALO_R, PALCO_PES_Y - PALCO_ALTURA * 0.4 - PALCO_HALO_R, PALCO_HALO_R * 2, PALCO_HALO_R * 2);
     ctx.restore();
 
-    desenharMonteDeNeve(ctx, PALCO_CX, PALCO_BASE_Y + 4, MONTE_RX, MONTE_RY);
+    pedestalDeGelo(ctx, PALCO_CX, PALCO_PES_Y, PEDESTAL_RX, PEDESTAL_RY, PEDESTAL_FAIXA_H);
 
     ctx.save();
-    ctx.translate(PALCO_CX, PALCO_BASE_Y);
+    ctx.translate(PALCO_CX, PALCO_PES_Y);
     ctx.scale(pulso, pulso);
     if (quadro && referencia) {
       const d = quadro.dados;
@@ -316,97 +360,130 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
       ctx.drawImage(quadro.imagem, -ancoraX * escala, -ancoraY * escala, d.largura * escala, d.altura * escala);
     } else {
       ctx.restore();
-      desenharEsqueletoPersonagem(ctx, PALCO_CX, PALCO_BASE_Y, PALCO_ALTURA, t);
+      desenharEsqueletoPersonagem(ctx, PALCO_CX, PALCO_PES_Y, PALCO_ALTURA, t);
       ctx.save();
     }
     ctx.restore();
   }
 
-  function desenharPainelInfo(ctx: Ctx, id: string): void {
+  function desenharPainelInfo(ctx: Ctx, id: string, t: number): void {
     const def = obterDefPersonagem(id);
     const nome = def?.nome ?? nomeExibicao(id);
     const assinatura = def?.nomeAssinatura;
     const bordao = def?.bordao;
-    const atributos = def?.atributos ?? { velocidade: 100, equilibrio: 100, pulo: 100 };
     const evolucao = opcoes.obterEvolucao?.();
     const nivel = evolucao ? evolucao.niveis[id] ?? 0 : 0;
     const bonus = nivel * PASSO_ATRIBUTO_POR_NIVEL;
+    const para = lerFicha(id);
 
-    ctx.save();
-    ctx.fillStyle = COR_PAINEL;
-    caminhoArredondado(ctx, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, 18);
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = COR_BORDA;
-    ctx.stroke();
-    ctx.restore();
+    if (doc) painelGeada(ctx, doc, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H });
+    else {
+      ctx.save();
+      ctx.fillStyle = 'rgba(12, 27, 48, 0.82)';
+      caminhoArredondado(ctx, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, 18);
+      ctx.fill();
+      ctx.restore();
+    }
 
-    desenharTexto(ctx, nome, PAINEL_X + 26, PAINEL_Y + 40, { fonte: 'italic 800 28px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 3, corContorno: COR_CONTORNO });
+    desenharTexto(ctx, nome, PAINEL_X + 32, 136, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 5 });
 
     if (nivel > 0) {
-      desenharTexto(ctx, `NÍVEL ${nivel}/${NIVEL_MAXIMO_EVOLUCAO}`, PAINEL_X + PAINEL_W - 24, PAINEL_Y + 32, {
-        fonte: '800 13px Barlow, sans-serif',
-        cor: COR_DESTAQUE,
+      desenharTexto(ctx, `NÍVEL ${nivel}/${NIVEL_MAXIMO_EVOLUCAO}`, PAINEL_X + PAINEL_W - 26, PAINEL_Y + 28, {
+        fonte: '800 14px Barlow, sans-serif',
+        cor: COR_SOL,
         alinhamento: 'right',
       });
     }
 
     if (assinatura) {
-      desenharTexto(ctx, `Manobra: ${assinatura}`, PAINEL_X + 26, PAINEL_Y + 66, { fonte: 'italic 600 16px Barlow, sans-serif', cor: COR_DESTAQUE });
+      desenharTexto(ctx, `Manobra: ${assinatura}`, PAINEL_X + 32, 166, { fonte: 'italic 600 18px Barlow, sans-serif', cor: COR_SOL });
     }
     if (bordao) {
-      desenharTexto(ctx, `"${bordao}"`, PAINEL_X + 26, PAINEL_Y + 88, { fonte: 'italic 500 13px Barlow, sans-serif', cor: COR_MUTED });
+      desenharBalaoDeFala(ctx, bordao, { x: PAINEL_X + 32, y: 182, w: 256, h: 32 });
     }
 
-    desenharBarraAtributo(ctx, PAINEL_X + 26, PAINEL_Y + 118, PAINEL_W - 52, 18, 'Velocidade', atributos.velocidade, bonus);
-    desenharBarraAtributo(ctx, PAINEL_X + 26, PAINEL_Y + 152, PAINEL_W - 52, 18, 'Equilíbrio', atributos.equilibrio, bonus);
-    desenharBarraAtributo(ctx, PAINEL_X + 26, PAINEL_Y + 186, PAINEL_W - 52, 18, 'Força', atributos.pulo, bonus);
+    // Progresso [0,1] da transição de barras (300ms, easeOutBack): 0 = ainda no valor antigo, 1 = já no novo.
+    const p = Math.min(1, (t - inicioTransicaoBarras) / DURACAO_BARRAS);
+    const curva = easeOutBack(overshootPadrao(reduzido, 1.7));
+    const prog = p >= 1 ? 1 : curva(Math.max(0, p));
 
-    desenharTexto(ctx, 'Base 90–110 · dourado = bônus de evolução', PAINEL_X + PAINEL_W / 2, PAINEL_Y + PAINEL_H - 18, {
-      fonte: '500 12px Barlow, sans-serif',
-      cor: COR_MUTED,
-      alinhamento: 'center',
-    });
+    for (const linha of LINHA_ATRIBUTOS) {
+      const valorDe = deValores[linha.atributo];
+      const valorPara = para[linha.atributo];
+      const valorAtual = valorDe + (valorPara - valorDe) * prog;
+      const bonusAtual = deBonus + (bonus - deBonus) * prog;
+      const fracaoBase = clamp01((valorAtual - 90) / FAIXA_ATRIBUTO);
+      const fracaoBonus = clamp01(bonusAtual / FAIXA_ATRIBUTO);
+
+      medalhao(ctx, PAINEL_X + 44, linha.y, 28, 'vidro', (ictx, raio) => {
+        const icones = assetsItensProntos();
+        const img = icones?.[linha.icone];
+        if (img) ictx.drawImage(img, -raio * 0.68, -raio * 0.68, raio * 1.36, raio * 1.36);
+      });
+      desenharTexto(ctx, linha.rotulo, PAINEL_X + 72, linha.y + 1, { fonte: '600 17px Barlow, sans-serif', cor: COR_TEXTO, base: 'middle' });
+      barraAtributo(ctx, BARRA_X, linha.y - BARRA_H / 2, BARRA_W, BARRA_H, linha.atributo, fracaoBase, fracaoBonus);
+    }
+
+    // Legenda do bônus de evolução.
+    ctx.save();
+    ctx.fillStyle = COR_SOL;
+    ctx.fillRect(PAINEL_X + PAINEL_W - 98, PAINEL_Y + PAINEL_H - 22, 14, 10);
+    ctx.restore();
+    desenharTexto(ctx, 'evolução', PAINEL_X + PAINEL_W - 80, PAINEL_Y + PAINEL_H - 14, { fonte: '600 14px Barlow, sans-serif', cor: COR_MUTED });
   }
 
-  function desenharMiniatura(ctx: Ctx, indice: number, id: string, t: number): void {
+  function desenharCartao(ctx: Ctx, indice: number, id: string, t: number): void {
     const r = cartao(indice);
     const ativo = opcoes.obterPersonagemAtivo() === id;
     const aoVivo = hover === `card-${indice}`;
+    const elevacao = ativo ? -10 : aoVivo ? -4 : 0;
+    const escala = ativo ? 1.06 : 1;
 
     ctx.save();
-    ctx.fillStyle = ativo ? 'rgba(29, 58, 92, 0.9)' : COR_PAINEL;
-    caminhoArredondado(ctx, r, 12);
-    ctx.fill();
-    ctx.lineWidth = ativo ? 3 : 2;
-    ctx.strokeStyle = ativo ? COR_SELECIONADO : aoVivo ? '#ffffff' : COR_BORDA;
-    ctx.stroke();
-    ctx.restore();
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2 + elevacao);
+    ctx.scale(escala, escala);
+    ctx.translate(-r.w / 2, -r.h / 2);
 
-    const centroX = r.x + r.w / 2;
-    const centroY = r.y + 38;
-    const sprite = sprites.get(id);
-    const quadro = sprite ? (sprite.obterQuadro('ride0') ?? sprite.obterQuadro('star')) : null;
-
-    ctx.save();
-    ctx.translate(centroX, centroY);
-    if (quadro) {
-      const d = quadro.dados;
-      const escala = 58 / d.altura;
-      const [ancoraX, ancoraY] = d.contato ?? d.pivo;
-      ctx.drawImage(quadro.imagem, -ancoraX * escala, -ancoraY * escala, d.largura * escala, d.altura * escala);
+    const assets = assetsMenuCapaProntos();
+    if (assets && recorteRetratoDisponivel(id)) {
+      desenharRetratoDaCapa(ctx, assets.capa, id, { x: 0, y: 0, w: r.w, h: r.h }, { raio: 16 });
     } else {
-      ctx.restore();
-      desenharEsqueletoPersonagem(ctx, centroX, centroY + 20, 58, t);
-      ctx.save();
+      ctx.fillStyle = 'rgba(12, 27, 48, 0.85)';
+      caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
+      ctx.fill();
+      desenharEsqueletoPersonagem(ctx, r.w / 2, r.h - 16, 58, t);
     }
+
+    // faixa do nome
+    const faixa = ctx.createLinearGradient(0, r.h - 34, 0, r.h);
+    faixa.addColorStop(0, 'rgba(6, 14, 36, 0)');
+    faixa.addColorStop(1, 'rgba(6, 14, 36, 0.85)');
+    ctx.save();
+    caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
+    ctx.clip();
+    ctx.fillStyle = faixa;
+    ctx.fillRect(0, r.h - 34, r.w, 34);
     ctx.restore();
 
-    desenharTexto(ctx, nomeExibicao(id), centroX, r.y + r.h - 10, {
-      fonte: '700 13px Barlow, sans-serif',
-      cor: ativo ? COR_SELECIONADO : COR_TEXTO,
+    ctx.lineWidth = ativo ? 3 : 2;
+    ctx.strokeStyle = ativo ? COR_SOL : aoVivo ? '#ffffff' : 'rgba(255,255,255,0.25)';
+    caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
+    ctx.stroke();
+
+    desenharTexto(ctx, nomeExibicao(id), r.w / 2, r.h - 10, {
+      fonte: 'italic 800 18px "Barlow Condensed", Impact, sans-serif',
+      cor: ativo ? COR_SOL : '#ffffff',
       alinhamento: 'center',
     });
+
+    if (!ativo) {
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#000000';
+      caminhoArredondado(ctx, { x: 0, y: 0, w: r.w, h: r.h }, 16);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   return {
@@ -418,7 +495,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
       const t = ticks + alpha;
       const assets = assetsMenuCapaProntos();
 
-      if (!fundo && assets && doc) fundo = construirFundoBorrado(doc, assets.capa);
+      if (!fundo && assets && doc) fundo = construirFundoTela(doc, assets.capa);
       if (fundo) fundo.desenhar(ctx);
       else {
         ctx.save();
@@ -427,46 +504,33 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
         ctx.restore();
       }
 
-      desenharFlocos(ctx, 28, t);
+      desenharFlocos(ctx, 22, t, 0.7);
 
-      desenharTexto(ctx, 'ESCOLHA SEU PERSONAGEM', LARGURA / 2, 38, {
-        fonte: 'italic 800 34px "Barlow Condensed", Impact, sans-serif',
-        cor: COR_TEXTO,
-        contorno: 6,
-        corContorno: COR_CONTORNO,
-        alinhamento: 'center',
-      });
-      desenharTexto(ctx, 'Todos liberados por enquanto — escolha e desça a montanha', LARGURA / 2, 60, {
-        fonte: '600 15px Barlow, sans-serif',
-        cor: COR_MUTED,
-        contorno: 3,
-        alinhamento: 'center',
-      });
+      if (doc) desenharLetreiro(ctx, doc, 'ESCOLHA SEU PERSONAGEM', LARGURA / 2, 66, 40, 'gelo');
+      else desenharTexto(ctx, 'ESCOLHA SEU PERSONAGEM', LARGURA / 2, 66, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 6, alinhamento: 'center' });
 
       const ativo = opcoes.obterPersonagemAtivo();
+      if (ativo !== idAnterior) {
+        deValores = lerFicha(idAnterior);
+        deBonus = (() => {
+          const evolucao = opcoes.obterEvolucao?.();
+          const nivelAnterior = evolucao ? evolucao.niveis[idAnterior] ?? 0 : 0;
+          return nivelAnterior * PASSO_ATRIBUTO_POR_NIVEL;
+        })();
+        inicioTransicaoBarras = t;
+        idAnterior = ativo;
+      }
+
       desenharPalco(ctx, ativo, t);
-      desenharPainelInfo(ctx, ativo);
+      desenharPainelInfo(ctx, ativo, t);
 
-      opcoes.catalogo.forEach((id, indice) => desenharMiniatura(ctx, indice, id, t));
+      opcoes.catalogo.forEach((id, indice) => desenharCartao(ctx, indice, id, t));
 
-      desenharBotaoBala(ctx, {
-        ...BOTAO_VOLTAR,
-        texto: 'VOLTAR',
-        corTopo: hover === 'voltar' ? '#e85d4a' : '#c0392b',
-        corBase: hover === 'voltar' ? '#b03a26' : '#7d241a',
-        aoVivo: hover === 'voltar',
-      });
-      desenharBotaoBala(ctx, {
-        ...BOTAO_CORRER,
-        texto: 'CORRER!',
-        destaque: true,
-        corTopo: hover === 'correr' ? '#ffe066' : '#f6c90e',
-        corBase: hover === 'correr' ? '#f39c12' : '#d35400',
-        aoVivo: hover === 'correr',
-      });
+      botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
+      botao3D(ctx, { ...BOTAO_CORRER, texto: 'CORRER!', tipo: 'primario', destaque: true, aoVivo: hover === 'correr', t });
 
-      desenharTexto(ctx, 'ESC volta ao menu · ←/→ troca', BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h + 16, {
-        fonte: '500 12px Barlow, sans-serif',
+      desenharTexto(ctx, 'ESC volta ao menu · ←/→ troca', BOTAO_CORRER.x + BOTAO_CORRER.w / 2, BOTAO_CORRER.y + BOTAO_CORRER.h + 18, {
+        fonte: '600 14px Barlow, sans-serif',
         cor: COR_MUTED,
         alinhamento: 'center',
       });
