@@ -685,34 +685,45 @@ function desenharColetavelParque(ctx: CanvasRenderingContext2D, x: number, y: nu
   ctx.fill();
 }
 
-/** "Galho" (`CamadaJogo.obstaculosAltos`, C4) na pele do parque de sorvetes: um PALITO DE PICOLÉ quebrado
- *  fincado na neve -- antes caía no fallback genérico (retângulo cinza liso), destoando do resto Pixar. Mesma
- *  silhueta de `render/temas/bosque.ts: desenharGalho` (tronco + galho fino + boné de neve), só trocando a
- *  madeira pelo palito claro do parque (`COR_OBST_PALITO`). */
+/** "Galho" (`CamadaJogo.obstaculosAltos`, C4) na pele do parque de sorvetes -- REDESENHO 2026-10-24 (feedback do
+ *  dono: "parecia algo pra pular, a regra é agachar"). Mesma geometria nova de `render/temas/bosque.ts:
+ *  desenharGalho` (2 postes + travessa horizontal na altura de cabeça + capa), trocando pro palito claro do
+ *  parque (`COR_OBST_PALITO`/`COR_CASQUINHA_GRADE`). */
 function desenharGalhoParque(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  const topoY = y - h;
-  const meioW = w * 0.16;
+  const alturaBarraCentro = h * 1.7;
+  const espessura = Math.max(5, h * 0.36);
+  const barY = y - alturaBarraCentro;
+  const meioLargo = w * 0.95;
+  const postW = Math.max(4, w * 0.22);
+  const postInnerX = w * 0.6;
 
   ctx.save();
+  ctx.lineJoin = 'round';
+
+  for (const sinal of [-1, 1] as const) {
+    const px = x + sinal * postInnerX;
+    const topoPoste = barY - espessura * 0.4;
+    ctx.beginPath();
+    ctx.roundRect(px - postW / 2, topoPoste, postW, y - topoPoste, postW * 0.4);
+    ctx.fillStyle = COR_OBST_PALITO;
+    ctx.fill();
+    ctx.strokeStyle = COR_CONTORNO;
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(x, barY);
   ctx.beginPath();
-  ctx.moveTo(x - meioW, y);
-  ctx.lineTo(x - meioW * 0.5, topoY + h * 0.12);
-  ctx.lineTo(x + meioW * 0.9, topoY);
-  ctx.lineTo(x + meioW * 1.1, topoY + h * 0.18);
-  ctx.lineTo(x + meioW * 0.3, y);
-  ctx.closePath();
+  ctx.roundRect(-meioLargo, -espessura / 2, meioLargo * 2, espessura, espessura * 0.4);
   ctx.fillStyle = COR_OBST_PALITO;
   ctx.fill();
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = COR_CONTORNO;
-  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(x, y - h * 0.42);
-  ctx.lineTo(x + w * 0.46, y - h * 0.62);
-  ctx.lineTo(x + w * 0.4, y - h * 0.52);
-  ctx.lineTo(x + meioW * 0.4, y - h * 0.36);
-  ctx.closePath();
+  ctx.ellipse(meioLargo - espessura * 0.4, 0, espessura * 0.34, espessura * 0.48, 0, 0, Math.PI * 2);
   ctx.fillStyle = COR_CASQUINHA_GRADE;
   ctx.fill();
   ctx.strokeStyle = COR_CONTORNO;
@@ -720,12 +731,17 @@ function desenharGalhoParque(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.ellipse(x + meioW * 0.2, topoY + h * 0.03, w * 0.26, h * 0.09, -0.2, 0, Math.PI * 2);
+  ctx.moveTo(-meioLargo, -espessura / 2);
+  ctx.quadraticCurveTo(-meioLargo * 0.45, -espessura * 1.55, 0, -espessura * 1.05);
+  ctx.quadraticCurveTo(meioLargo * 0.45, -espessura * 1.55, meioLargo, -espessura / 2);
+  ctx.closePath();
   ctx.fillStyle = COR_TERRENO_MANTA;
   ctx.fill();
   ctx.strokeStyle = COR_CONTORNO;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.2;
   ctx.stroke();
+  ctx.restore();
+
   ctx.restore();
 }
 

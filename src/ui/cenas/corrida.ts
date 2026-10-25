@@ -36,6 +36,7 @@ import {
   type SistemaAvisosObstaculo,
   type SistemaTurboPouso,
 } from '../../render/camada';
+import { coletarPerigosPista, desenharAvisosBorda, type PontoPerigo } from '../../render/aviso-borda';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
@@ -162,6 +163,9 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
   // liga `criarSistemaTurboPouso`, nunca `descida.ts`/TREINO).
   const avisosObstaculo: SistemaAvisosObstaculo = criarSistemaAvisosObstaculo();
   const turboPouso: SistemaTurboPouso = criarSistemaTurboPouso();
+  // Perigos ESTÁTICOS da pista (pedra/tronco/pinheiro + galho) para o aviso de borda -- a poça (dinâmica, nasce/
+  // morre por item) é concatenada a cada quadro em `desenhar()`, junto com `entidadesVisuais`.
+  const perigosPista: readonly PontoPerigo[] = coletarPerigosPista(pista, camada);
   const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
   // Rivais animados de verdade (pedido do dono, 2026-10-24): 1 rastreador de pose visual POR RIVAL, mesmo
   // mecanismo do jogador (takeoff/wobble/grab/estica-e-amassa) -- `render/pose-visual.ts` já previa isso
@@ -264,8 +268,8 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       desenharTerreno(ctx, pista, camLeitura, pintorTema);
       desenharTrilhos(ctx, pista, camLeitura, pintorTema);
       desenharKickers(ctx, pista, camada, camLeitura, leitura.jogador.tick);
-      desenharObjetos(ctx, pista, camLeitura, pintorTema);
-      desenharObstaculosAltos(ctx, pista, camada, camLeitura, pintorTema);
+      desenharObjetos(ctx, pista, camLeitura, pintorTema, leitura.jogador.tick);
+      desenharObstaculosAltos(ctx, pista, camada, camLeitura, pintorTema, leitura.jogador.tick);
       desenharChegada(ctx, pista, camLeitura, pintorTema);
       desenharItensCamada(ctx, camada, camLeitura, pintorTema, leitura.jogador.tick);
       particulas.desenharSpray(ctx, camLeitura);
@@ -277,6 +281,11 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
         e.tipo === 'caixa' ? { id: e.id, tipo: e.tipo, xM: e.x, yM: e.y } : { id: e.id, tipo: e.tipo, xM: e.x, yM: alturaEm(pista, e.x) + 0.3 },
       );
       desenharEntidadesItens(ctx, camLeitura, entidadesVisuais, leitura.jogador.tick);
+      // Poça (armadilha de chão) entra no aviso de borda igual pedra/tronco/galho -- ela nasce dinamicamente
+      // (item usado por alguém), por isso é concatenada aqui, nunca em `perigosPista` (que é fixo da pista).
+      const perigosComPoca: readonly PontoPerigo[] = entidadesVisuais.some((e) => e.tipo === 'poca')
+        ? [...perigosPista, ...entidadesVisuais.filter((e) => e.tipo === 'poca').map((e): PontoPerigo => ({ xM: e.xM, yM: e.yM, tipo: 'poca' }))]
+        : perigosPista;
 
       // Rivais animados de verdade (pedido do dono): `r.leituraPiloto` é a física REAL do motor dele (SÓ LEITURA,
       // `corrida/corrida.ts` -- nunca influencia a simulação), pose ajustada pela instância de pose visual DELE,
@@ -314,7 +323,8 @@ export function criarCenaCorrida(opcoes: OpcoesCenaCorrida): Cena {
       if (leitura.alvoNoJogador) desenharAvisoAlvo(ctx, camLeitura, leitura.jogador.piloto.x, leitura.jogador.piloto.y, leitura.jogador.tick);
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.jogador.tick);
       popupsManobra.desenhar(ctx, camLeitura);
-      avisosObstaculo.desenhar(ctx, pista, camLeitura);
+      avisosObstaculo.desenhar(ctx, pista, camLeitura, leitura.jogador.piloto);
+      desenharAvisosBorda(ctx, perigosComPoca, camLeitura, leitura.jogador.piloto.velocidade, leitura.jogador.tick);
       confete.desenhar(ctx);
 
       const posicaoJogador = leitura.posicoes.indexOf(idJogador) + 1;

@@ -20,6 +20,7 @@ import { PX_POR_METRO } from '../core/constantes';
 import type { CamadaJogo, EventoDescida, ObjetoPista, PilotoLeitura, PistaGerada } from '../core/contratos';
 import { assetsItensProntos } from '../assets/itens';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
+import { desenharAlertaObstaculo, desenharFaixaAlerta } from './objetos';
 import { alturaDoTerreno } from './terreno';
 import type { PintorTema } from './temas/tipos';
 
@@ -117,14 +118,26 @@ export function desenharKickers(ctx: CanvasRenderingContext2D, pista: PistaGerad
   }
 }
 
+/** Multiplicador da altura VISUAL do halo do galho: a barra agora é desenhada na altura de cabeça (~1,7x
+ *  `obj.altura`, ver `desenharGalho<Tema>` em cada `render/temas/*.ts`), bem acima da caixa de colisão nominal
+ *  (1,3 m -- a física só olha `x`/`largura`, nunca `altura`). Sem este fator o halo ficaria baixo, cobrindo só os
+ *  postes e não a barra em si. */
+const FATOR_ALTURA_VISUAL_GALHO = 1.9;
+
 /** Desenha os obstáculos altos (`camada.obstaculosAltos`, tipo `'galho'`) -- mesmo padrão de `desenharObjetos`
- *  (`render/objetos.ts`), só que sobre a lista da CAMADA, não de `pista.objetos`. */
-export function desenharObstaculosAltos(ctx: CanvasRenderingContext2D, pista: PistaGerada, camada: CamadaJogo, camera: EstadoCamera, pintor: PintorTema): void {
+ *  (`render/objetos.ts`), só que sobre a lista da CAMADA, não de `pista.objetos`. `tick` (default 0, compat)
+ *  alimenta o MESMO halo pulsante de perigo do galho/pedra/tronco (`desenharAlertaObstaculo`) + a faixa de alerta
+ *  no chão: o galho também tomba o piloto sem agachar, então merece o mesmo vocabulário visual de "cuidado". */
+export function desenharObstaculosAltos(ctx: CanvasRenderingContext2D, pista: PistaGerada, camada: CamadaJogo, camera: EstadoCamera, pintor: PintorTema, tick = 0): void {
   if (camada.obstaculosAltos.length === 0) return;
   const escala = pxPorMetro(PX_POR_METRO, camera.zoom);
   for (const obj of camada.obstaculosAltos) {
     const centroXm = obj.x + obj.largura / 2;
     const baseTela = mundoParaTela(centroXm, alturaDoTerreno(pista, centroXm), camera, PX_POR_METRO);
+    const larguraPx = Math.max(8, obj.largura * escala);
+    const alturaPx = Math.max(8, obj.altura * escala) * FATOR_ALTURA_VISUAL_GALHO;
+    desenharFaixaAlerta(ctx, baseTela.x, baseTela.y, larguraPx, tick);
+    desenharAlertaObstaculo(ctx, baseTela.x, baseTela.y, larguraPx, alturaPx, tick);
     pintor.desenharObjeto(ctx, obj, baseTela.x, baseTela.y, escala);
   }
 }
@@ -135,25 +148,88 @@ export function desenharObstaculosAltos(ctx: CanvasRenderingContext2D, pista: Pi
  *  não precisa ser EXATA (o galho real já fica visível por conta própria), só o bastante pra dar tempo de reação. */
 const DURACAO_AVISO_TICKS = 90;
 const CAPACIDADE_AVISOS = 8;
-/** Metros acima do chão onde o "!" flutua (altura do galho, 1,3 m, + folga pra não colidir visualmente com ele). */
-const ALTURA_AVISO_M = 2.6;
+/** Metros acima do chão onde o "!" flutua -- acima da barra de cabeça redesenhada (galho agora vai até ~1,3*1,7 m
+ *  + a capa de neve, ver `desenharGalho<Tema>`), folga pra não colidir visualmente com ela. */
+const ALTURA_AVISO_M = 3.1;
+
+/** Quantos avisos de galho (de TODA a sessão, não só desta pista) ainda ganham a dica "AGACHAR" por baixo do "!"
+ *  -- pedido do dono: "pras primeiras vezes". Módulo (não dentro da factory): sobrevive entre descidas/corridas
+ *  na mesma aba, só zera no reload -- mais fiel a "primeiras vezes jogando" do que resetar a cada pista. */
+const LIMITE_DICA_AGACHAR = 3;
+let avisosGalhoVistosSessao = 0;
 
 interface AvisoObstaculo {
   ativo: boolean;
   x: number;
   vida: number;
+  /** `true` só para os primeiros `LIMITE_DICA_AGACHAR` avisos da sessão (decidido na abertura, nunca muda depois). */
+  mostrarDica: boolean;
 }
 
 export interface SistemaAvisosObstaculo {
   /** Lê os eventos do tick e abre um aviso novo a cada `'aviso-obstaculo'`; decai os já abertos. */
   atualizar(eventos: readonly EventoDescida[]): void;
-  /** Desenha os avisos ativos, ancorados no `x` do mundo (não no piloto). */
-  desenhar(ctx: CanvasRenderingContext2D, pista: PistaGerada, camera: EstadoCamera): void;
+  /** Desenha os avisos ativos, ancorados no `x` do mundo (não no piloto) -- `piloto`, se dado, ancora a dica
+   *  "AGACHAR" (pedido do dono: "perto do personagem", não em cima do galho que pode nem estar na tela ainda). */
+  desenhar(ctx: CanvasRenderingContext2D, pista: PistaGerada, camera: EstadoCamera, piloto?: PilotoLeitura): void;
+}
+
+/** Dica "AGACHAR" grande, ancorada perto do PERSONAGEM (pedido do dono, reforçado 2026-10-24: "letra minúscula,
+ *  ilegível no iPhone... grande, com ícone de 2 dedos/seta pra baixo, perto do personagem"). Pílula opaca (lê
+ *  contra qualquer fundo) + seta-chevron desenhada (não um glifo de fonte minúsculo) + "AGACHAR" em fonte grande
+ *  + legenda pequena cobrindo teclado E toque na mesma linha. */
+function desenharDicaAgachar(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: number): void {
+  const w = 172;
+  const h = 60;
+  const esquerdaX = x - w / 2;
+  const topoY = y - h / 2;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.roundRect(esquerdaX, topoY, w, h, 16);
+  ctx.fillStyle = 'rgba(11, 26, 51, 0.78)';
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = COR_AVISO;
+  ctx.stroke();
+
+  // Seta-chevron grande pra baixo (desenhada, não um glifo de fonte pequeno demais pra ler no iPhone).
+  const ax = esquerdaX + 28;
+  ctx.save();
+  ctx.translate(ax, y);
+  ctx.beginPath();
+  ctx.moveTo(-13, -11);
+  ctx.lineTo(0, 7);
+  ctx.lineTo(13, -11);
+  ctx.lineTo(13, -3);
+  ctx.lineTo(0, 15);
+  ctx.lineTo(-13, -3);
+  ctx.closePath();
+  ctx.fillStyle = '#fff4f4';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.lineJoin = 'round';
+  ctx.font = '900 22px "Barlow Condensed", sans-serif';
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = '#0b1a33';
+  ctx.strokeText('AGACHAR', ax + 24, y - 6);
+  ctx.fillStyle = '#fff4f4';
+  ctx.fillText('AGACHAR', ax + 24, y - 6);
+
+  ctx.font = '700 13px "Barlow Condensed", sans-serif';
+  ctx.lineWidth = 2.5;
+  ctx.strokeText('Shift/↓ • 2 dedos', ax + 24, y + 14);
+  ctx.fillText('Shift/↓ • 2 dedos', ax + 24, y + 14);
+  ctx.restore();
 }
 
 /** Pool fixo pré-alocado (mesmo padrão de `render/manobra.ts`/`render/particulas.ts`): zero alocação por quadro. */
 export function criarSistemaAvisosObstaculo(): SistemaAvisosObstaculo {
-  const pool: AvisoObstaculo[] = Array.from({ length: CAPACIDADE_AVISOS }, () => ({ ativo: false, x: 0, vida: 0 }));
+  const pool: AvisoObstaculo[] = Array.from({ length: CAPACIDADE_AVISOS }, () => ({ ativo: false, x: 0, vida: 0, mostrarDica: false }));
   let cabeca = 0;
 
   return {
@@ -170,10 +246,13 @@ export function criarSistemaAvisosObstaculo(): SistemaAvisosObstaculo {
         a.ativo = true;
         a.x = ev.x;
         a.vida = DURACAO_AVISO_TICKS;
+        a.mostrarDica = avisosGalhoVistosSessao < LIMITE_DICA_AGACHAR;
+        avisosGalhoVistosSessao += 1;
         cabeca = (cabeca + 1) % CAPACIDADE_AVISOS;
       }
     },
-    desenhar(ctx, pista, camera) {
+    desenhar(ctx, pista, camera, piloto) {
+      let alphaDica = 0;
       for (let i = 0; i < CAPACIDADE_AVISOS; i += 1) {
         const a = pool[i]!;
         if (!a.ativo) continue;
@@ -196,6 +275,14 @@ export function criarSistemaAvisosObstaculo(): SistemaAvisosObstaculo {
         ctx.textBaseline = 'middle';
         ctx.fillText('!', pt.x, pt.y + 1);
         ctx.restore();
+
+        // Dica "AGACHAR" (pedido do dono: "nas primeiras vezes... perto do personagem"): não fica mais colada no
+        // "!" (que pode estar longe, quase fora da tela) -- desenhada 1x, perto do PILOTO, depois do loop.
+        if (a.mostrarDica) alphaDica = Math.max(alphaDica, alpha);
+      }
+      if (alphaDica > 0 && piloto) {
+        const ptPiloto = mundoParaTela(piloto.x, piloto.y, camera, PX_POR_METRO);
+        desenharDicaAgachar(ctx, ptPiloto.x, ptPiloto.y - 86, alphaDica);
       }
     },
   };

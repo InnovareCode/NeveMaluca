@@ -19,6 +19,7 @@ import { PX_POR_METRO } from '../core/constantes';
 import type { TipoItem } from '../core/contratos';
 import { assetsItensProntos } from '../assets/itens';
 import { mundoParaTela, pxPorMetro, type EstadoCamera } from './mundo';
+import { COR_CONTORNO_ALERTA, COR_PERIGO, desenharFaixaAlerta } from './objetos';
 
 const COR_CONTORNO = '#0b1a33';
 const COR_CAIXA = '#ffd166';
@@ -96,9 +97,32 @@ function desenharBola(ctx: CanvasRenderingContext2D, x: number, y: number, escal
 }
 
 /** Poça de calda: ícone real (`poca.webp`) achatado no chão; sem o ícone, cai na elipse vetorial semi-transparente
- *  -- lê como "molhado/pegajoso", nunca sólido. */
-function desenharPoca(ctx: CanvasRenderingContext2D, x: number, y: number, escala: number): void {
+ *  -- lê como "molhado/pegajoso", nunca sólido. Faixa de alerta no chão (mesma de pedra/tronco/galho,
+ *  `render/objetos.ts: desenharFaixaAlerta`) + anel DUPLO pulsando em ESCALA (não só alfa) no mesmo vocabulário
+ *  de perigo do jogo inteiro: sozinha, a poça achatada no chão quase some contra a neve (pedido do dono, iPhone,
+ *  2026-10-24: "quase imperceptíveis", reforçado: "halo bem mais forte, contorno quente que pulsa em escala") --
+ *  ela é uma ARMADILHA, não decoração. */
+function desenharPoca(ctx: CanvasRenderingContext2D, x: number, y: number, escala: number, tick: number): void {
   const icone = assetsItensProntos()?.poca;
+  const pulso = 0.5 + 0.5 * Math.sin(tick * 0.12);
+  const escalaPulso = 0.88 + 0.22 * pulso;
+
+  desenharFaixaAlerta(ctx, x, y, 24 * escala, tick);
+
+  ctx.save();
+  ctx.globalAlpha = 0.22 + 0.16 * pulso;
+  ctx.fillStyle = COR_PERIGO;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 26 * escala * escalaPulso, 11 * escala * escalaPulso, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.65 + 0.3 * pulso;
+  ctx.strokeStyle = COR_CONTORNO_ALERTA;
+  ctx.lineWidth = Math.max(2, 3 * escala * escalaPulso);
+  ctx.beginPath();
+  ctx.ellipse(x, y, (20 + pulso * 2) * escala * escalaPulso, (8 + pulso) * escala * escalaPulso, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
   ctx.save();
   ctx.globalAlpha = 0.85;
   if (icone) {
@@ -127,7 +151,7 @@ export function desenharEntidadesItens(ctx: CanvasRenderingContext2D, camera: Es
     const pt = mundoParaTela(ent.xM, ent.yM, camera, PX_POR_METRO);
     if (ent.tipo === 'caixa') desenharCaixa(ctx, pt.x, pt.y, escala, tick);
     else if (ent.tipo === 'bola') desenharBola(ctx, pt.x, pt.y, escala);
-    else if (ent.tipo === 'poca') desenharPoca(ctx, pt.x, pt.y, escala);
+    else if (ent.tipo === 'poca') desenharPoca(ctx, pt.x, pt.y, escala, tick);
     // outros tipos (turbo/escudo/nuvem/ima) nunca chegam em `entidadesVisiveis` -- ver `corrida/itens.ts`.
   }
 }

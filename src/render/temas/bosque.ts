@@ -436,47 +436,71 @@ function desenharTronco(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
   ctx.fill();
 }
 
-/** Desenha o "galho" (`CamadaJogo.obstaculosAltos`, C4): um graveto quebrado nascendo da neve até a altura de
- *  cabeça -- antes caía no fallback genérico (retângulo cinza liso, `#7A8F9F`), que o dono notou destoando do
- *  resto da arte Pixar. Tronco principal torto + galho fino secundário + boné de neve na ponta, mesma linguagem
- *  de `desenharTronco` acima (madeira + neve, corte quadrilátero preenchido, nunca stroke-only). */
+/** Desenha o "galho" (`CamadaJogo.obstaculosAltos`, C4) -- REDESENHO 2026-10-24 (feedback do dono: "parecia algo
+ *  pra pular, a regra é agachar; redesenhe como barra atravessada na altura da cabeça"). Antes: um graveto baixo
+ *  nascendo do chão (lia como obstáculo baixo "pra pular"). Agora: uma TRAVESSA horizontal na altura da cabeça do
+ *  personagem (`ALTURA_ALVO_M` 2,8 m -- 2 postes fincados na neve sustentam uma tora deitada, com capa de neve em
+ *  cima e corte claro numa ponta (mesma linguagem de `desenharTronco`). Geometria pura (postes/barra escalam com
+ *  `h`, NUNCA mexe na caixa de colisão real -- física só olha `x`/`largura`, `descida/motor.ts`); a altura VISUAL
+ *  é deliberadamente MAIOR que `obj.altura` (1,3 m nominal) pra ficar no nível de cabeça -- ver
+ *  `render/camada.ts: FATOR_ALTURA_VISUAL_GALHO`, que amplia o halo de perigo pra acompanhar. */
 function desenharGalho(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  const topoY = y - h;
-  const meioW = w * 0.16;
+  const alturaBarraCentro = h * 1.7; // ~2,2 m -- altura de cabeça, "duck under"
+  const espessura = Math.max(5, h * 0.36);
+  const barY = y - alturaBarraCentro;
+  const meioLargo = w * 0.95;
+  const postW = Math.max(4, w * 0.22);
+  const postInnerX = w * 0.6;
 
   ctx.save();
+  ctx.lineJoin = 'round';
+
+  // 2 postes de sustentação, da neve até a travessa.
+  for (const sinal of [-1, 1] as const) {
+    const px = x + sinal * postInnerX;
+    const topoPoste = barY - espessura * 0.4;
+    ctx.beginPath();
+    ctx.roundRect(px - postW / 2, topoPoste, postW, y - topoPoste, postW * 0.4);
+    ctx.fillStyle = COR_MADEIRA_ESCURA;
+    ctx.fill();
+    ctx.strokeStyle = COR_CONTORNO;
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+  }
+
+  // Travessa horizontal -- É ELA que o jogador precisa agachar pra passar.
+  ctx.save();
+  ctx.translate(x, barY);
   ctx.beginPath();
-  ctx.moveTo(x - meioW, y);
-  ctx.lineTo(x - meioW * 0.5, topoY + h * 0.12);
-  ctx.lineTo(x + meioW * 0.9, topoY);
-  ctx.lineTo(x + meioW * 1.1, topoY + h * 0.18);
-  ctx.lineTo(x + meioW * 0.3, y);
-  ctx.closePath();
+  ctx.roundRect(-meioLargo, -espessura / 2, meioLargo * 2, espessura, espessura * 0.4);
   ctx.fillStyle = COR_MADEIRA_ESCURA;
   ctx.fill();
+  ctx.lineWidth = 2.6;
   ctx.strokeStyle = COR_CONTORNO;
-  ctx.lineWidth = 1.5;
   ctx.stroke();
 
+  // Ponta cortada (miolo claro), mesma linguagem de `desenharTronco`.
   ctx.beginPath();
-  ctx.moveTo(x, y - h * 0.42);
-  ctx.lineTo(x + w * 0.46, y - h * 0.62);
-  ctx.lineTo(x + w * 0.4, y - h * 0.52);
-  ctx.lineTo(x + meioW * 0.4, y - h * 0.36);
-  ctx.closePath();
+  ctx.ellipse(meioLargo - espessura * 0.4, 0, espessura * 0.34, espessura * 0.48, 0, 0, Math.PI * 2);
   ctx.fillStyle = COR_MADEIRA_CLARA;
   ctx.fill();
   ctx.strokeStyle = COR_CONTORNO;
   ctx.lineWidth = 1.2;
   ctx.stroke();
 
+  // Capa de neve acumulada em cima de toda a travessa.
   ctx.beginPath();
-  ctx.ellipse(x + meioW * 0.2, topoY + h * 0.03, w * 0.26, h * 0.09, -0.2, 0, Math.PI * 2);
+  ctx.moveTo(-meioLargo, -espessura / 2);
+  ctx.quadraticCurveTo(-meioLargo * 0.45, -espessura * 1.55, 0, -espessura * 1.05);
+  ctx.quadraticCurveTo(meioLargo * 0.45, -espessura * 1.55, meioLargo, -espessura / 2);
+  ctx.closePath();
   ctx.fillStyle = COR_NEVE_LUZ_OBJ;
   ctx.fill();
   ctx.strokeStyle = COR_CONTORNO;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.2;
   ctx.stroke();
+  ctx.restore();
+
   ctx.restore();
 }
 
@@ -655,6 +679,13 @@ function desenharObjetoBosque(ctx: CanvasRenderingContext2D, obj: ObjetoPista, x
       desenharPedra(ctx, xTela, yTela, larguraPx, alturaPx);
       break;
     case 'tronco':
+      desenharTronco(ctx, xTela, yTela, larguraPx, alturaPx);
+      break;
+    case 'pinheiro':
+      // Mesmo bug-classe do galho (memória `galho-fallback-cinza-tipoobjeto-sem-case-no-tema`): este `case`
+      // faltava aqui -- caía no retângulo cinza genérico. O raster (`bosque-raster.ts`) já tem sprite próprio
+      // (`obj.pinheiro`) e nunca passava por este fallback; só o vetor puro (seleção/raster ainda não carregado)
+      // mostrava o bug. Reusa `desenharTronco` (mesma silhueta de tora tombada que o catálogo já representa).
       desenharTronco(ctx, xTela, yTela, larguraPx, alturaPx);
       break;
     case 'boneco-de-neve':

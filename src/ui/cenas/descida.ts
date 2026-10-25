@@ -24,6 +24,7 @@ import type { AlvoToque } from '../../input/toque';
 // cai num só segmento igual ao nome da camada — ver tests/unit/arquitetura.test.ts. Import direto evita o falso positivo.
 import { criarEntrada, type Entrada } from '../../input/index';
 import { desenharItensCamada, desenharKickers, desenharObstaculosAltos, criarSistemaAvisosObstaculo, type SistemaAvisosObstaculo } from '../../render/camada';
+import { coletarPerigosPista, desenharAvisosBorda, type PontoPerigo } from '../../render/aviso-borda';
 import { criarCamera, type Camera } from '../../render/camera';
 import { desenharChegada } from '../../render/chegada';
 import { criarConfete, type SistemaConfete } from '../../render/confete';
@@ -128,6 +129,9 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
   const popupsManobra: SistemaPopupsManobra = criarSistemaPopupsManobra();
   // "!" sobre o galho ~1,5 s antes (evento `aviso-obstaculo`, C4): mesmo pool fixo de `popupsManobra`.
   const avisosObstaculo: SistemaAvisosObstaculo = criarSistemaAvisosObstaculo();
+  // Perigos da PISTA (pedra/tronco/pinheiro + galho) para o aviso de borda (pedido do dono, iPhone): estáticos,
+  // calculados 1x aqui -- nunca muda por tick, `camada`/`pista` são fixos pela descida inteira.
+  const perigosPista: readonly PontoPerigo[] = coletarPerigosPista(pista, camada);
   // Pose visual (takeoff/wobble/grab, §C1) e confete de chegada: ambos de RENDER só, nunca entram no replay.
   const visualPiloto: RastreadorPoseVisual = criarRastreadorPoseVisual();
   const confete: SistemaConfete = criarConfete(rngVisual);
@@ -243,8 +247,8 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       desenharTerreno(ctx, pista, camLeitura, pintorTema);
       desenharTrilhos(ctx, pista, camLeitura, pintorTema);
       desenharKickers(ctx, pista, camada, camLeitura, leitura.tick);
-      desenharObjetos(ctx, pista, camLeitura, pintorTema);
-      desenharObstaculosAltos(ctx, pista, camada, camLeitura, pintorTema);
+      desenharObjetos(ctx, pista, camLeitura, pintorTema, leitura.tick);
+      desenharObstaculosAltos(ctx, pista, camada, camLeitura, pintorTema, leitura.tick);
       desenharChegada(ctx, pista, camLeitura, pintorTema);
       desenharItensCamada(ctx, camada, camLeitura, pintorTema, leitura.tick);
       particulas.desenharSpray(ctx, camLeitura);
@@ -259,7 +263,8 @@ export function criarCenaDescida(opcoes: OpcoesCenaDescida): Cena {
       desenharPiloto(ctx, leitura.piloto, camLeitura, spritePiloto, visualPiloto.poseVisual(leitura.piloto.pose), visualPiloto.escalaVisual());
       particulas.desenharFlocosFrente(ctx, camLeitura.x, leitura.tick);
       popupsManobra.desenhar(ctx, camLeitura);
-      avisosObstaculo.desenhar(ctx, pista, camLeitura);
+      avisosObstaculo.desenhar(ctx, pista, camLeitura, leitura.piloto);
+      desenharAvisosBorda(ctx, perigosPista, camLeitura, leitura.piloto.velocidade, leitura.tick);
       confete.desenhar(ctx);
       desenharHud(ctx, {
         velocidadeMs: leitura.piloto.velocidade,
