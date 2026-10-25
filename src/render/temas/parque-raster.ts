@@ -249,14 +249,19 @@ function desenharTileHorizontal(
 }
 
 function construirCamadasParqueRaster(doc: Document | undefined): Parallax {
-  // Decide UMA vez, na criação da cena (não por quadro): cache ausente cai inteiro no vetorial, sem recriar as
-  // camadas do fallback a cada `desenhar()` (isso recriaria os tiles offscreen 60x/s -- caro à toa).
-  if (!cache) return pintorParque.construirCamadas(doc, LARGURA, ALTURA, TEMA_PARQUE);
+  // Reconfere a cada quadro (antes decidia UMA vez na criação e a corrida inteira ficava vetorial se a arte chegasse
+  // 1 s depois — ver bosque-raster.ts). O fallback vetorial é montado uma vez só, sob demanda: nada de recriar os
+  // tiles offscreen 60x/s.
+  let vetorial: Parallax | null = null;
 
   return {
     desenhar(ctx, cameraXm, tempoTicks) {
       const a = cache;
-      if (!a) return; // impossível chegar aqui (decidido acima), só pra o TS estreitar o tipo
+      if (!a) {
+        vetorial ??= pintorParque.construirCamadas(doc, LARGURA, ALTURA, TEMA_PARQUE);
+        vetorial.desenhar(ctx, cameraXm, tempoTicks);
+        return;
+      }
 
       // 1. fundo (céu + cúpulas), fator 0,04, tile 960x540 lógicos, opaco (cobre a tela inteira)
       desenharTileHorizontal(ctx, a.fundo, LARGURA, ALTURA, 0.04, cameraXm);

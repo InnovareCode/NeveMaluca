@@ -315,12 +315,17 @@ function desenharTileHorizontal(
 }
 
 function construirCamadasCumeRaster(doc: Document | undefined): Parallax {
-  if (!cache) return pintorCume.construirCamadas(doc, LARGURA, ALTURA, TEMA_CUME);
+  // Fallback vetorial só enquanto o cache não assenta, reconferido a cada quadro (ver bosque-raster.ts).
+  let vetorial: Parallax | null = null;
 
   return {
     desenhar(ctx, cameraXm, tempoTicks) {
       const a = cache;
-      if (!a) return;
+      if (!a) {
+        vetorial ??= pintorCume.construirCamadas(doc, LARGURA, ALTURA, TEMA_CUME);
+        vetorial.desenhar(ctx, cameraXm, tempoTicks);
+        return;
+      }
 
       // 1. fundo (céu com aurora + serra abaixo + mar de nuvens, já embutidos na arte -- §7: a ficha tem 4 camadas
       // de fundo, o método tem 3 imagens; juntar o mar de nuvens ao céu custa 0,02 de parallax que ninguém vê),

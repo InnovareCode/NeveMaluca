@@ -23,8 +23,11 @@ const COMPRIMENTO_PRANCHA_M = 1.3;
  *  iPhone, 2026-10-24: "o personagem ainda está pequeno na tela e não valoriza o gráfico" -- meta explícita do dono
  *  é ~1/4 da altura da tela no chão; medido no navegador (skill medir-antes-de-afirmar), em cruzeiro típico (zoom
  *  de velocidade, não parado) o valor antigo de 2,05 só dava ~13% da altura lógica (540px) -- daí o salto grande,
- *  não um ajuste fino. Era 1,85 antes desta mesma rodada de "aumenta um pouco". */
-const ALTURA_ALVO_M = 3.9;
+ *  não um ajuste fino. Era 1,85 antes desta mesma rodada de "aumenta um pouco".
+ *  Depois o dono jogou com 3,9 (~28% da tela) e achou GRANDE DEMAIS: "precisam ter o tamanho proporcional ao
+ *  cenário para a câmera ficar com ângulos perfeitos". 2,8 dá ~20% da tela em cruzeiro, por volta da altura do
+ *  boneco de neve e da vaca do Morro — meio-termo entre os dois pedidos dele. */
+export const ALTURA_ALVO_M = 2.8;
 /** Pose usada só pra MEDIR a altura de referência (nunca desenhada aqui) -- toda pose escala por ESTE número, não
  *  pelo próprio `d.altura` dela (feedback do dono: "o personagem muda de tamanho ao cair/levar batida"). Cada
  *  recorte de pose tem padding de enquadramento diferente (braços abertos, giro, queda) -- escalar cada uma pelo

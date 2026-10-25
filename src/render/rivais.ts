@@ -19,7 +19,7 @@ import type { SpritePersonagem } from '../assets/index';
 import { ALTURA, LARGURA, PX_POR_METRO } from '../core/constantes';
 import type { PilotoLeitura } from '../core/contratos';
 import { mundoParaTela, type EstadoCamera } from './mundo';
-import { desenharPiloto } from './piloto';
+import { ALTURA_ALVO_M, desenharPiloto } from './piloto';
 import type { FatorEstica } from './pose-visual';
 
 const COR_TEXTO = '#f4f9ff';
@@ -34,7 +34,7 @@ const RAIO_AVATAR_SETA_PX = 13;
 const LIMIAR_COLADO_PX = 90;
 /** Altura (m) acima dos PÉS onde o nome flutua -- fixa porque toda pose escala pro mesmo tamanho real
  * (`render/piloto.ts: ALTURA_ALVO_M`), então a cabeça está sempre nessa altura relativa aos pés (mesmo no ar). */
-const ALTURA_NOME_M = 2.25;
+const ALTURA_NOME_M = ALTURA_ALVO_M + 0.3;
 
 export interface RivalVisual {
   readonly id: string;

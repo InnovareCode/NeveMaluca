@@ -268,12 +268,19 @@ function desenharTileHorizontal(
 }
 
 function construirCamadasBosqueRaster(doc: Document | undefined): Parallax {
-  if (!cache) return pintorBosque.construirCamadas(doc, LARGURA, ALTURA, TEMA_BOSQUE);
+  // Fallback vetorial montado sob demanda (uma vez) e usado SÓ enquanto o cache não assenta, reconferido a cada
+  // quadro. Antes isto era decidido uma vez na criação da cena: se a arte chegasse 1 s depois, a corrida inteira
+  // ficava com fundo vetorial (achado do Atlas, 24/10 — mesmo padrão do bug do Fundo B).
+  let vetorial: Parallax | null = null;
 
   return {
     desenhar(ctx, cameraXm, tempoTicks) {
       const a = cache;
-      if (!a) return;
+      if (!a) {
+        vetorial ??= pintorBosque.construirCamadas(doc, LARGURA, ALTURA, TEMA_BOSQUE);
+        vetorial.desenhar(ctx, cameraXm, tempoTicks);
+        return;
+      }
 
       // 1. fundo (céu + serra distante), fator 0,04, tile 960x540 lógicos, opaco
       desenharTileHorizontal(ctx, a.fundo, LARGURA, ALTURA, 0.04, cameraXm);

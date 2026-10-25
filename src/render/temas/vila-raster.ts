@@ -343,12 +343,17 @@ function desenharTileHorizontal(
 }
 
 function construirCamadasVilaRaster(doc: Document | undefined): Parallax {
-  if (!cache) return pintorVila.construirCamadas(doc, LARGURA, ALTURA, TEMA_VILA);
+  // Fallback vetorial só enquanto o cache não assenta, reconferido a cada quadro (ver bosque-raster.ts).
+  let vetorial: Parallax | null = null;
 
   return {
     desenhar(ctx, cameraXm, tempoTicks) {
       const a = cache;
-      if (!a) return;
+      if (!a) {
+        vetorial ??= pintorVila.construirCamadas(doc, LARGURA, ALTURA, TEMA_VILA);
+        vetorial.desenhar(ctx, cameraXm, tempoTicks);
+        return;
+      }
 
       // 1. fundo (céu do entardecer + serra distante + estrelas, já embutidas na arte), fator 0,04, opaco
       desenharTileHorizontal(ctx, a.fundo, LARGURA, ALTURA, 0.04, cameraXm);

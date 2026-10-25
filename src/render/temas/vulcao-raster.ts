@@ -316,12 +316,17 @@ function desenharTileHorizontal(
 }
 
 function construirCamadasVulcaoRaster(doc: Document | undefined): Parallax {
-  if (!cache) return pintorVulcao.construirCamadas(doc, LARGURA, ALTURA, TEMA_VULCAO);
+  // Fallback vetorial só enquanto o cache não assenta, reconferido a cada quadro (ver bosque-raster.ts).
+  let vetorial: Parallax | null = null;
 
   return {
     desenhar(ctx, cameraXm, tempoTicks) {
       const a = cache;
-      if (!a) return;
+      if (!a) {
+        vetorial ??= pintorVulcao.construirCamadas(doc, LARGURA, ALTURA, TEMA_VULCAO);
+        vetorial.desenhar(ctx, cameraXm, tempoTicks);
+        return;
+      }
 
       // 1. fundo (céu do crepúsculo + serra distante + cone do vulcão com cratera/lava, já embutidos na arte),
       // fator 0,04, opaco
