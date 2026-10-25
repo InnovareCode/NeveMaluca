@@ -139,8 +139,36 @@ describe('obstáculo duro (plano §3.3: "encostar no chão = tombo")', () => {
     }
     l = motor.processar(CMD_NADA); // o tick que fecha os 90 e faz o respawn
     expect(l.fase).toBe('descendo');
-    expect(l.piloto.x).toBe(0); // único checkpoint é x=0
+    // Correção "preso no respawn perto de obstáculo" (dono/iPhone, 2026-10-25): o checkpoint (x=0) fica a só 5m da
+    // pedra (x=5, largura=1) — sem o empurrão, o respawn voltaria colado nela e tombaria de novo no próximo tick,
+    // sempre no mesmo lugar (o bug relatado). Agora o respawn pula pro fim da pedra (x=6) + a folga de 3m = x=9.
+    expect(l.piloto.x).toBe(9);
     expect(l.tick).toBe(tickDoTombo + CONFIG_PADRAO.ticksTombo);
+    // Também sai com a janela de imunidade aberta (item b da correção): nem precisaria dela aqui (já passou da
+    // pedra), mas é sempre concedida no respawn — é o que o render usa pra piscar o personagem.
+    expect(l.piloto.invulneravelTicks).toBeGreaterThan(0);
+  });
+
+  it('checkpoint COLADO na pedra (correção "preso no respawn", dono/iPhone 2026-10-25): nunca entra em ciclo de tombo repetido', () => {
+    // Pedra a 2m do único checkpoint (bem dentro dos ~20m medidos no diagnóstico real) — sem a correção, um piloto
+    // que nunca agacha/desvia bate, tomba, respawna colado nela de novo, e nunca sai desse ciclo. Pista curta e
+    // terreno plano (chão sem rampa, v tende ao piso `velocidadeMinimaChaoMs=1,5m/s`): dá pra chegar em poucos
+    // ticks sem precisar de um teto generoso tipo o do harness real.
+    const pista = pistaPlana(60, {
+      objetos: [{ tipo: 'pedra', x: 2, largura: 1, altura: 0.8, variante: 0 }],
+      checkpoints: [0],
+    });
+    const motor = criarDescida(pista);
+    let tombos = 0;
+    let l = motor.leitura();
+    for (let i = 0; i < 3000 && l.fase !== 'chegou'; i++) {
+      l = motor.processar(CMD_NADA);
+      if (l.eventos.some((e) => e.tipo === 'tombo')) tombos++;
+    }
+    // O ÚNICO jeito de "não faz nada" tombar de novo depois do 1º respawn seria o ciclo preso (mesmo ponto): a
+    // correção empurra o respawn pra depois da pedra, então o piloto nunca mais a encontra — exatamente 1 tombo.
+    expect(tombos).toBe(1);
+    expect(l.fase).toBe('chegou');
   });
 });
 

@@ -72,6 +72,15 @@ export function desenharPiloto(
   const anguloCanvasRad = (-piloto.angulo * Math.PI) / 180;
 
   ctx.save();
+  // Imunidade depois de voltar de um tombo (`descida/motor.ts: respawn`): pisca a cada 4 ticks, estilo kart, pra o
+  // jogador entender que está protegido. O relógio é o próprio contador do motor (determinístico, sem tempo real).
+  const invulneravel = piloto.invulneravelTicks ?? 0;
+  if (invulneravel > 0) {
+    // Multiplica (não substitui): o fantasma do Treino já chega aqui translúcido. `typeof` protege dublês de `Ctx`
+    // de teste que não guardam `globalAlpha` como número.
+    const base = typeof ctx.globalAlpha === 'number' ? ctx.globalAlpha : 1;
+    ctx.globalAlpha = base * (Math.floor(invulneravel / 4) % 2 === 0 ? 0.35 : 0.95);
+  }
   ctx.translate(centro.x, centro.y);
   ctx.rotate(anguloCanvasRad);
   // Só chama `ctx.scale` quando há de fato estica/amassa (1:1 é no-op): evita uma chamada de canvas a mais todo

@@ -118,5 +118,11 @@ export const VELOCIDADE_PARADO_MS = 0.3;
  * erro de boot (`descida/replay.ts`). Recordes/fantasmas antigos seguem o corte de versão que a `meta/` já tem
  * (`recordesAntigos`, por `versaoPista`); o dono já aprovou essa perda (não é regressão, é o preço de melhorar a
  * física).
+ *
+ * Bump para '4' na correção "preso no respawn perto de obstáculo" (dono/iPhone, 2026-10-25, Campeonato/Morro do
+ * Pinhão/Vó Cidinha — ver comentário grande de `TICKS_INVULNERAVEL_RESPAWN` em `descida/motor.ts`): `respawn()`
+ * passou a empurrar o ponto de volta pra depois de obstáculo próximo e abrir uma janela de imunidade. Só muda o
+ * resultado de um replay quando um tombo acontece perto demais de um obstáculo (a maioria não muda nada); mesmo
+ * padrão dos bumps anteriores: sem exceção de compatibilidade, replay `v3` roda sem fantasma.
  */
-export const VERSAO_MOTOR = '3';
+export const VERSAO_MOTOR = '4';

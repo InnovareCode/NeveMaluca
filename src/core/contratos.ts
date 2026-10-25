@@ -82,6 +82,14 @@ export interface PilotoLeitura {
   readonly grab: Grab | null;
   readonly voltas: number;
   readonly ticksNoAr: number;
+  /**
+   * Ticks restantes de imunidade pós-respawn (correção "preso no respawn perto de obstáculo", dono/iPhone,
+   * 2026-10-25): enquanto > 0, obstáculo duro/alto (`descida/motor.ts`) não tomba o piloto — é o sinal pro render
+   * piscar o personagem (Lyra decide o efeito visual; aqui é só o número). 0 fora desse período, inclusive em todo
+   * chamador que nunca respawna. Opcional: o motor de teste `ui/cenas/motor-teste.ts` (dublê sem respawn) nunca
+   * precisa dele e não é tocado por esta correção.
+   */
+  readonly invulneravelTicks?: number;
 }
 
 export interface ComboLeitura {

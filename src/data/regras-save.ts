@@ -56,7 +56,7 @@ export const VERSAO_PROVISORIA_DA_PISTA = 'provisoria';
  * (ex.: o pulo mais forte do `VERSAO_MOTOR` '3'): recorde de física antiga vai para `recordesAntigos`, não some.
  * TEM que ser `f` + `VERSAO_MOTOR` (`descida/constantes.ts`; `data/` não importa `descida/`) — teste em `integracao-m0`.
  */
-export const VERSAO_FISICA_DOS_RECORDES = 'f3';
+export const VERSAO_FISICA_DOS_RECORDES = 'f4';
 /**
  * Camada de jogo (kickers, galhos, caixas) que gravou o recorde: um kicker com outro impulso muda o tempo da descida
  * tanto quanto a física. TEM que ser `c` + `VERSAO_CAMADA_JOGO` (`pista/camada-jogo.ts`) — teste em `integracao-m0`.

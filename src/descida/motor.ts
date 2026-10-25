@@ -48,7 +48,7 @@ import { PASSO_S } from '../core/constantes';
 import { ErroDeContrato } from '../core/erros';
 import { hashDeValor } from '../core/hash';
 import { cosseno, normalizarGraus, seno } from '../core/trig';
-import { alturaEfetivaEm, alturaEm, bonecoDeNeveEm, inclinacaoGrausEm, obstaculoDuroEm, trilhoEm } from '../pista/consulta';
+import { alturaEfetivaEm, alturaEm, bonecoDeNeveEm, fimDoObstaculoDuroMaisLongeNaFaixa, inclinacaoGrausEm, obstaculoDuroEm, trilhoEm } from '../pista/consulta';
 import { CONFIG_PADRAO, type ConfigDescida } from './constantes';
 import {
   abrirJanela,
@@ -86,6 +86,35 @@ const AVISO_SEGUNDOS = 1.5;
 const LIMIAR_RENTE_TICKS = ticksDeSegundos(0.3);
 /** Bônus do "por um fio" — pontos diretos, fora do combo (como `boneco`, não como as manobras de voo). */
 const PONTOS_OBSTACULO_RENTE = 150;
+
+/**
+ * Correção "preso no respawn perto de obstáculo" (dono/iPhone, 2026-10-25, Campeonato/Morro do Pinhão/Vó Cidinha):
+ * medido com um script-harness descartável (mesmo padrão do I6/"pouso sobre obstáculo") que um piloto "só pula"
+ * (nunca agacha) e um "não faz nada" tombam e respawnam, repetindo, no MESMO ponto, SEM NUNCA progredir, nas 5
+ * pistas oficiais — porque 66 dos ~196 `checkpoints` oficiais ficam a menos de 20m de um obstáculo (duro OU
+ * "galho") na frente. `montarCheckpoints` (`pista/gerador.ts`) não conhece a camada de jogo (galho nasce depois,
+ * sobre a `PistaGerada` já hasheada) e alguns trechos do catálogo que SÃO "seguros para checkpoint" (`pedras`,
+ * `basalto`) têm um obstáculo duro a só 6m do próprio início — então mover o ponto de retorno na geração não
+ * resolve os dois casos de uma vez sem também mexer no hash da pista. Fix no RESPAWN em si (não na geração):
+ *   a) `MARGEM_SEGURA_RESPAWN_M`/`FOLGA_POS_OBSTACULO_RESPAWN_M`: empurra o ponto de volta pra DEPOIS de qualquer
+ *      obstáculo (duro ou alto) que esteja perto demais na frente — "o retorno já vai pra depois do obstáculo que
+ *      derrubou" (repete por uma cadeia de obstáculos vizinhos, `MAX_EMPURROES_RESPAWN` é só o teto de segurança).
+ *   b) `TICKS_INVULNERAVEL_RESPAWN`: janela curta onde NENHUM obstáculo (duro/alto) tomba — rede de segurança para
+ *      qualquer caso que a margem (a) não cobriu, e o que o render usa pra piscar o personagem
+ *      (`PilotoLeitura.invulneravelTicks`).
+ *   c) empurrão mínimo de saída: já existe (`config.velocidadeRespawnMs`, nunca "quase parado" — piso separado de
+ *      `config.velocidadeMinimaChaoMs`), intacto aqui.
+ * `x`/`vx`/`vy` entram no `hashEstado()` (não são campo novo, só mudam de VALOR quando há obstáculo perto) — bump
+ * de `VERSAO_MOTOR` (comportamento de replay muda); `ticksInvulneravelRestantes` fica FORA do hash, mesmo padrão
+ * dos outros estados de C4 (reset no respawn, nunca persistido no replay).
+ */
+const MARGEM_SEGURA_RESPAWN_M = 20;
+/** Folga depois da borda de saída do obstáculo empurrado: não deixa o novo ponto ENCOSTADO nela. */
+const FOLGA_POS_OBSTACULO_RESPAWN_M = 3;
+/** Teto de empurrões em cadeia (nunca deveria ser atingido: `pedras`/`basalto`, os casos mais densos do catálogo, têm só 3 obstáculos em ~24m). */
+const MAX_EMPURROES_RESPAWN = 8;
+/** ~1,8s (dentro do alvo "1,5-2s" pedido): tempo de reagir/ganhar embalo antes de QUALQUER obstáculo poder tombar de novo. */
+const TICKS_INVULNERAVEL_RESPAWN = ticksDeSegundos(1.8);
 
 /** Turbo de pouso (plano C-D7, só em `modo === 'corrida'`): fração dos pontos do voo que vira velocidade extra. */
 const TURBO_MS_POR_PONTO = 0.01;
@@ -190,6 +219,20 @@ interface EstadoDescida {
   freadaTicksRestantes: number;
   /** Janela do ímã ativa (a atração em si é lida pelo orquestrador sobre `CamadaJogo`, I2). */
   imaTicksRestantes: number;
+  // Correção "preso no respawn perto de obstáculo" (ver comentário grande de `TICKS_INVULNERAVEL_RESPAWN`, topo do
+  // arquivo): fora do `hashEstado()` de propósito, mesmo padrão de `turboVel`/`atordoadoTicksRestantes` — reseta a
+  // cada respawn, nunca persiste no replay.
+  /** Ticks restantes de imunidade a obstáculo (duro/alto) depois de um respawn. */
+  ticksInvulneravelRestantes: number;
+  /**
+   * Fim (x + largura) do obstáculo (duro OU alto) que causou o `'tombo'` MAIS RECENTE, ou `null` quando o tombo foi
+   * por ângulo (pouso torto demais, sem obstáculo nenhum envolvido). É o que faz o item (a) da correção valer de
+   * verdade mesmo quando o obstáculo está MUITO além de `MARGEM_SEGURA_RESPAWN_M` do checkpoint (medido: um "galho"
+   * a 20,1m — só 0,1m fora da margem fixa — ainda formava o ciclo; empurrar sempre pra depois do CULPADO real, não
+   * só "qualquer obstáculo dentro de uma janela a partir do checkpoint", fecha esse caso sem precisar de margem
+   * arbitrariamente grande). Consumido e zerado em `respawn()`.
+   */
+  ultimoObstaculoTomboFimX: number | null;
 }
 
 export interface MotorDescida {
@@ -257,6 +300,7 @@ function leituraDe(estado: EstadoDescida, eventos: readonly EventoDescida[]): Le
     grab: p.grab,
     voltas,
     ticksNoAr: p.ticksNoAr,
+    invulneravelTicks: estado.ticksInvulneravelRestantes,
   };
   return {
     tick: estado.tick,
@@ -295,6 +339,26 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     if (camada === undefined) return null;
     for (const o of camada.obstaculosAltos) if (x >= o.x && x <= o.x + o.largura) return o;
     return null;
+  }
+
+  /**
+   * Fim (x + largura) do obstáculo (duro, da `PistaGerada`, OU "galho" alto da `camada`, quando presente) mais
+   * LONGE cujo início cai em `[x0, x0 + MARGEM_SEGURA_RESPAWN_M]`, ou `null` se não houver nenhum. Usado só pelo
+   * respawn (correção "preso no respawn perto de obstáculo", dono/iPhone, 2026-10-25) — os dois tipos tombam igual
+   * (`causa: 'obstaculo'`), então respawn não pode saber qual foi nem precisa: só precisa da borda de saída mais
+   * distante pra empurrar o ponto de volta pra ALÉM dela de uma vez.
+   */
+  function fimDoObstaculoMaisLongeNoRespawn(x0: number): number | null {
+    const x1 = x0 + MARGEM_SEGURA_RESPAWN_M;
+    let fim = fimDoObstaculoDuroMaisLongeNaFaixa(pista, x0, x1);
+    if (camada !== undefined) {
+      for (const o of camada.obstaculosAltos) {
+        if (o.x < x0 || o.x > x1) continue;
+        const fimObjeto = o.x + o.largura;
+        if (fim === null || fimObjeto > fim) fim = fimObjeto;
+      }
+    }
+    return fim;
   }
 
   /** Distância (m) à frente do piloto em que o "!" do próximo obstáculo alto aparece (física DESTE personagem). */
@@ -345,10 +409,29 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     freadaFator: 1,
     freadaTicksRestantes: 0,
     imaTicksRestantes: 0,
+    ticksInvulneravelRestantes: 0,
+    ultimoObstaculoTomboFimX: null,
   };
 
   function respawn(est: EstadoDescida): void {
-    const x = est.ultimoCheckpointX;
+    // Correção "preso no respawn perto de obstáculo" (ver comentário grande de `TICKS_INVULNERAVEL_RESPAWN`, topo
+    // do arquivo), item (a): nunca recomeça colado num obstáculo.
+    let x = est.ultimoCheckpointX;
+    // Primeiro, o CULPADO direto (o obstáculo que causou ESTE tombo, se foi por obstáculo): empurra pra depois
+    // dele SEMPRE, não importa a distância do checkpoint — "o retorno já vai pra depois do obstáculo que
+    // derrubou". Sem isto, um obstáculo bem além de `MARGEM_SEGURA_RESPAWN_M` (medido: só 0,1m fora dela já bastava)
+    // continuava formando o mesmo ciclo: o checkpoint nunca avança porque o próprio obstáculo sempre tomba de novo.
+    if (est.ultimoObstaculoTomboFimX !== null && est.ultimoObstaculoTomboFimX > x) {
+      x = est.ultimoObstaculoTomboFimX + FOLGA_POS_OBSTACULO_RESPAWN_M;
+    }
+    // Depois, defesa extra pra cadeia de obstáculos vizinhos (ex.: `pedras`/`basalto`, 2-3 obstáculos em ~20m) que
+    // sobrarem dentro da margem segura a partir do ponto já corrigido acima.
+    for (let i = 0; i < MAX_EMPURROES_RESPAWN; i++) {
+      const fimObstaculo = fimDoObstaculoMaisLongeNoRespawn(x);
+      if (fimObstaculo === null) break;
+      x = fimObstaculo + FOLGA_POS_OBSTACULO_RESPAWN_M;
+    }
+    if (x > pista.chegadaX) x = pista.chegadaX; // defensivo: nunca empurra o respawn além da chegada.
     est.piloto.x = x;
     est.piloto.y = alturaEm(pista, x);
     est.piloto.angulo = inclinacaoGrausEm(pista, x);
@@ -376,6 +459,9 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     est.freadaFator = 1;
     est.freadaTicksRestantes = 0;
     est.imaTicksRestantes = 0;
+    est.ultimoObstaculoTomboFimX = null; // já consumido acima.
+    // Item (b) da correção: janela curta onde nenhum obstáculo (duro/alto) tomba de novo.
+    est.ticksInvulneravelRestantes = TICKS_INVULNERAVEL_RESPAWN;
     est.fase = 'descendo';
   }
 
@@ -571,23 +657,30 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
         p.vy = p.v * seno(p.angulo);
 
         if (p.modo === 'chao') {
-          const bateu = obstaculoDuroEm(pista, p.x);
+          // Item (b) da correção "preso no respawn perto de obstáculo" (ver comentário grande de
+          // `TICKS_INVULNERAVEL_RESPAWN`, topo do arquivo): imune, nenhum dos dois tipos de obstáculo tomba —
+          // trata como se não estivesse ali ainda (nem marca `obstaculosAltosVistos`: ao sair da imunidade, se
+          // ainda estiver sobre ele, o obstáculo volta a valer normalmente).
+          const imuneAObstaculo = estado.ticksInvulneravelRestantes > 0;
+          const bateu = imuneAObstaculo ? null : obstaculoDuroEm(pista, p.x);
           if (bateu !== null) {
             estado.fase = 'tombo';
             estado.ticksTomboRestantes = config.ticksTombo;
             estado.tombosOcorridos++;
+            estado.ultimoObstaculoTomboFimX = bateu.x + bateu.largura; // item (a) da correção, consumido no respawn.
             perderCombo(eventos);
             eventos.push({ tipo: 'tombo', causa: 'obstaculo' });
           } else {
             // C4: obstáculo alto — só passa agachado. 1x por obstáculo (ver `obstaculosAltosVistos`, reseta no
             // respawn); se o tombo acontecer aqui, o boneco de neve do MESMO tick nem é checado (igual ao duro acima).
-            const alto = obstaculoAltoEm(p.x);
+            const alto = imuneAObstaculo ? null : obstaculoAltoEm(p.x);
             if (alto !== null && !estado.obstaculosAltosVistos.has(alto.x)) {
               estado.obstaculosAltosVistos = new Set(estado.obstaculosAltosVistos).add(alto.x);
               if (!p.agachado) {
                 estado.fase = 'tombo';
                 estado.ticksTomboRestantes = config.ticksTombo;
                 estado.tombosOcorridos++;
+                estado.ultimoObstaculoTomboFimX = alto.x + alto.largura; // item (a) da correção, consumido no respawn.
                 perderCombo(eventos);
                 eventos.push({ tipo: 'tombo', causa: 'obstaculo' });
               } else if (p.ticksAgachado <= LIMIAR_RENTE_TICKS) {
@@ -642,6 +735,7 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
           estado.fase = 'tombo';
           estado.ticksTomboRestantes = config.ticksTombo;
           estado.tombosOcorridos++;
+          estado.ultimoObstaculoTomboFimX = null; // tombo por ângulo: nenhum obstáculo envolvido (zera um resíduo de tombo anterior).
           perderCombo(eventos);
           eventos.push({ tipo: 'tombo', causa: 'angulo' });
         } else {
@@ -720,6 +814,9 @@ export function criarDescida(pista: PistaGerada, config: ConfigDescida = CONFIG_
     if (estado.atordoadoTicksRestantes > 0) estado.atordoadoTicksRestantes--;
     if (estado.freadaTicksRestantes > 0) estado.freadaTicksRestantes--;
     if (estado.imaTicksRestantes > 0) estado.imaTicksRestantes--;
+    // Correção "preso no respawn perto de obstáculo", item (b): decai depois de já ter sido LIDO pelas checagens
+    // de colisão deste tick (mesmo padrão dos 3 acima).
+    if (estado.ticksInvulneravelRestantes > 0) estado.ticksInvulneravelRestantes--;
 
     return eventos;
   }

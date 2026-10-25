@@ -68,3 +68,19 @@ export function obstaculoDuroNaFaixa(pista: PistaGerada, x0: number, x1: number)
   }
   return false;
 }
+
+/**
+ * Fim (x + largura) do obstáculo duro (pedra/tronco/pinheiro) MAIS LONGE cujo INÍCIO cai em `[x0, x1]`, ou `null`
+ * se não houver nenhum. Diferente de `obstaculoDuroNaFaixa` (só diz "existe"): usado pelo respawn
+ * (`descida/motor.ts`, correção "preso perto de obstáculo") pra saber ATÉ ONDE empurrar o ponto de volta — sempre
+ * o mais distante dentro da janela, pra já pular por cima de uma cadeia de obstáculos próximos de uma vez.
+ */
+export function fimDoObstaculoDuroMaisLongeNaFaixa(pista: PistaGerada, x0: number, x1: number): number | null {
+  let fim: number | null = null;
+  for (const o of pista.objetos) {
+    if (!TIPOS_OBSTACULO_DURO.has(o.tipo) || o.x < x0 || o.x > x1) continue;
+    const fimObjeto = o.x + o.largura;
+    if (fim === null || fimObjeto > fim) fim = fimObjeto;
+  }
+  return fim;
+}
