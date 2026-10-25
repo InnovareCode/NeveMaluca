@@ -14,6 +14,7 @@ import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { AudioDestravavel } from '../../audio/index';
 import type { SaveV1 } from '../../meta/tipos';
+import { obterPistaDeDados, PISTA_MORRO_DO_PINHAO, PISTAS_DE_DADOS } from '../../data/pistas';
 import type { Cena } from '../tipos';
 import { criarCortinaNevasca } from '../transicao';
 import { criarCenaDescida, type ResultadoDescida } from './descida';
@@ -63,6 +64,7 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
   const pausa: ControladorPausa = criarControladorPausa({
     canvas: opcoes.canvas,
     janela: opcoes.janela,
+    personagem: opcoes.personagem,
     podeReiniciar: () => !jaChegou,
     aoContinuar: () => undefined,
     aoReiniciar: () => {
@@ -103,6 +105,9 @@ export function criarCenaJogo(opcoes: OpcoesCenaJogo): Cena {
             dados: resultado,
             canvas: opcoes.canvas,
             janela: opcoes.janela,
+            documento: opcoes.documento,
+            personagem: opcoes.personagem,
+            temaFundo: (obterPistaDeDados(opcoes.pista ?? PISTA_MORRO_DO_PINHAO.id, PISTAS_DE_DADOS) ?? PISTA_MORRO_DO_PINHAO).tema,
             aoReiniciar: () => trocarComNevasca(montarDescida),
             aoMenu: opcoes.aoMenu,
           }),

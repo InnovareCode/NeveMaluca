@@ -113,3 +113,31 @@ export function prefereMovimentoReduzido(alvo: AlvoMovimentoReduzido | undefined
 export function overshootPadrao(reduzido: boolean, s = 1.7): number {
   return reduzido ? 0 : s;
 }
+
+// --- Entrada escalonada com overshoot (§8.1 "Entrada escalonada"/§8.3), um helper único para toda a UI --------
+
+export interface PoseEntrada {
+  /** [0,1] -- fade nos primeiros 60% da duração (guia §8.3: "elemento entrando... + fade nos primeiros 60%"). */
+  readonly opacidade: number;
+  /** 1 no repouso; passa de 1 durante o overshoot (ex. 1,10) e assenta em 1 -- multiplicar direto numa escala. */
+  readonly escala: number;
+  /** Desloca de `deslocaDe` (no início) até 0 (no repouso), pela MESMA curva da escala -- some com o movimento. */
+  readonly deslocaY: number;
+  /** A curva crua (0 no início, passa de 1 no overshoot, assenta em 1) -- útil pra animar outras coisas pela
+   *  MESMA progressão (ex. rotação de um cartão "sendo dado", §8.5), sem recalcular `easeOutBack` de novo. */
+  readonly curva: number;
+}
+
+/**
+ * Pose de uma entrada escalonada (cartão/linha/painel "nascendo"): pura função de `tAtual`, `tInicio` (ambos em
+ * ticks) e `duracaoTicks` -- sem tween com estado mutável (mesma filosofia do resto deste módulo). Cada tela
+ * soma `escalonar(indice, passoTicks)` a `tInicio` do grupo pra achar o `tInicio` de CADA item (ver `escalonar`).
+ * `deslocaDe` é a distância (px lógicos) de onde o elemento "nasce" (ex. 40 pra um painel que sobe, 80 pra um
+ * cartão que vem de baixo) -- 0 desliga o deslocamento e deixa só o fade+escala.
+ */
+export function poseEntrada(tAtual: number, tInicio: number, duracaoTicks: number, reduzido: boolean, deslocaDe = 24, overshoot = 1.7): PoseEntrada {
+  const p = progresso(tAtual, tInicio, duracaoTicks);
+  const curva = easeOutBack(overshootPadrao(reduzido, overshoot))(p);
+  const opacidade = clamp01(progresso(tAtual, tInicio, duracaoTicks * 0.6));
+  return { opacidade, escala: 0.94 + 0.06 * curva, deslocaY: (1 - curva) * deslocaDe, curva };
+}

@@ -21,9 +21,10 @@ import { precarregarAssetsDoTema, rasterProntoParaTema, temaDeRenderDoTema } fro
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
+import { escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido } from '../animacao';
 import { caminhoArredondado, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
-import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
-import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, painelGeada } from '../kit-premium';
+import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, dicaTeclado, iconeFloco, painelGeada } from '../kit-premium';
 import type { Cena } from '../tipos';
 import { criarFundoCampeonato } from './fundo-campeonato';
 
@@ -72,15 +73,35 @@ function cartao(indice: number): BotaoRetangular {
   return { id: `card-${indice}`, x: CARD_X0 + indice * (CARD_W + CARD_GAP), y: CARD_Y, w: CARD_W, h: CARD_H };
 }
 
+// Entrada escalonada (§11.9 "cartões 'dados' de baixo... de dentro para fora (3,2,4,1,5), escalonados a 70ms"):
+// posições 1-based 3,2,4,1,5 == índices 0-based 2,1,3,0,4 -- o card do MEIO entra primeiro, depois os vizinhos
+// pra fora. Só vale pro catálogo de 5 pistas de hoje; um catálogo de outro tamanho cai na ordem natural (guarda
+// no uso abaixo).
+const ORDEM_ENTRADA_CARTOES = [2, 1, 3, 0, 4];
+const T_ENTRADA_CARTOES = 0;
+const PASSO_ENTRADA_CARTAO = msParaTicks(70);
+const DUR_ENTRADA_CARTAO = msParaTicks(420);
+const DUR_CROSSFADE_FUNDO = msParaTicks(300);
+
 export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
+  const reduzido = prefereMovimentoReduzido();
   let hover: string | null = null;
   let ticks = 0;
+  const pressao = criarEstadoPressao();
 
   const parallaxPorTema = new Map<IdTema, Parallax>();
   const framesPorPista = new Map<string, HTMLCanvasElement>();
   const fundoPorPista = new Map<string, CamadaEstatica>();
+
+  // Crossfade de fundo ao mudar o destaque (§11.9: "Fundo B da pista destacada (hover ou selecionada). Ao mudar
+  // o destaque, fade cruzado de 300ms"). `idFundoAnterior` é um retrato CONGELADO de qual pista estava no comando
+  // ANTES da troca mais recente -- só esse par (anterior/alvo) participa do fade; mudar de novo no meio do fade
+  // apenas reinicia os dois ponteiros, nunca empilha fades.
+  let idFundoAlvo = opcoes.obterPistaAtiva();
+  let idFundoAnterior = idFundoAlvo;
+  let inicioCrossfade = -1000;
 
   // Dispara o carregamento dos cenários raster das 5 pistas (fire-and-forget): por quando o frame estiver
   // pronto, `tentarConstruirFrame` monta o canvas offscreen reaproveitado pelo cartão E pelo Fundo B.
@@ -155,6 +176,7 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
     if (indice !== null) {
       opcoes.aoEscolher(opcoes.catalogo[indice] as string);
     } else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR) || pontoDentroDoBotao(pt, BOTAO_PRONTO)) {
+      if (pontoDentroDoBotao(pt, BOTAO_PRONTO)) pressao.marcar('pronto', ticks);
       opcoes.aoVoltar();
     }
   };
@@ -253,25 +275,13 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
       alinhamento: 'center',
     });
 
-    // flocos de dificuldade (= ordem da pista)
+    // Flocos de dificuldade (= ordem da pista) -- acabamento, 2026-10-24 (feedback do dono: "as estrelas de
+    // dificuldade saem como asteriscos"): a receita antiga desenhava só 3 eixos retos (6 raios SEM ramos), que lê
+    // como "*" de fonte. `iconeFloco` (kit-premium.ts) acrescenta os ramos em V que fazem ler como neve.
     const flocosW = 14;
     const inicioX = r.w / 2 - (flocosW * dificuldade) / 2 + flocosW / 2;
     for (let i = 0; i < dificuldade; i += 1) {
-      ctx.save();
-      ctx.translate(inicioX + i * flocosW, r.h - 14);
-      ctx.strokeStyle = '#9FE3FF';
-      ctx.lineWidth = 1.6;
-      ctx.lineCap = 'round';
-      for (let b = 0; b < 3; b += 1) {
-        ctx.save();
-        ctx.rotate((Math.PI / 3) * b);
-        ctx.beginPath();
-        ctx.moveTo(0, -4);
-        ctx.lineTo(0, 4);
-        ctx.stroke();
-        ctx.restore();
-      }
-      ctx.restore();
+      iconeFloco(ctx, inicioX + i * flocosW, r.h - 14, 5, '#9FE3FF');
     }
 
     ctx.restore();
@@ -285,10 +295,29 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
     desenhar(ctx: Ctx, alpha: number) {
       const t = ticks + alpha;
       const ativo = opcoes.obterPistaAtiva();
-      const fundo = obterFundo(ativo);
+      const indiceHover = hover?.startsWith('card-') ? Number(hover.slice(5)) : null;
+      const destacada = indiceHover !== null ? (opcoes.catalogo[indiceHover] ?? ativo) : ativo;
 
-      if (fundo) fundo.desenhar(ctx);
-      else {
+      if (destacada !== idFundoAlvo) {
+        idFundoAnterior = idFundoAlvo;
+        idFundoAlvo = destacada;
+        inicioCrossfade = t;
+      }
+      const pCrossfade = Math.min(1, Math.max(0, (t - inicioCrossfade) / DUR_CROSSFADE_FUNDO));
+      const fundoAlvo = obterFundo(idFundoAlvo);
+      const fundoAnterior = idFundoAnterior === idFundoAlvo ? fundoAlvo : obterFundo(idFundoAnterior);
+
+      if (pCrossfade < 1 && fundoAnterior) {
+        fundoAnterior.desenhar(ctx);
+        if (fundoAlvo && fundoAlvo !== fundoAnterior) {
+          ctx.save();
+          ctx.globalAlpha = pCrossfade;
+          fundoAlvo.desenhar(ctx);
+          ctx.restore();
+        }
+      } else if (fundoAlvo) {
+        fundoAlvo.desenhar(ctx);
+      } else {
         ctx.save();
         ctx.fillStyle = COR_FUNDO;
         ctx.fillRect(0, 0, LARGURA, ALTURA);
@@ -299,7 +328,22 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
       if (doc) desenharLetreiro(ctx, doc, 'ESCOLHA SUA PISTA', LARGURA / 2, 66, 40, 'gelo');
       else desenharTexto(ctx, 'ESCOLHA SUA PISTA', LARGURA / 2, 66, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 6, alinhamento: 'center' });
 
-      opcoes.catalogo.forEach((id, indice) => desenharCartao(ctx, indice, id));
+      // Cartões "sendo dados" (§8.5/§11.9): de dentro pra fora, escalonados, com leve rotação que assenta em 0.
+      opcoes.catalogo.forEach((id, indice) => {
+        const ordem = ORDEM_ENTRADA_CARTOES.length === opcoes.catalogo.length ? ORDEM_ENTRADA_CARTOES.indexOf(indice) : indice;
+        const t0 = T_ENTRADA_CARTOES + escalonar(ordem < 0 ? indice : ordem, PASSO_ENTRADA_CARTAO);
+        const pose = poseEntrada(t, t0, DUR_ENTRADA_CARTAO, reduzido, 80);
+        const r = cartao(indice);
+        const pivoX = r.x + r.w / 2;
+        const pivoY = r.y + r.h / 2;
+        ctx.save();
+        ctx.globalAlpha = pose.opacidade;
+        ctx.translate(pivoX, pivoY + pose.deslocaY);
+        ctx.rotate((((indice % 2 === 0 ? 1 : -1) * 6 * Math.PI) / 180) * (1 - pose.curva));
+        ctx.translate(-pivoX, -pivoY);
+        desenharCartao(ctx, indice, id);
+        ctx.restore();
+      });
 
       const def = obterPistaDeDados(ativo, PISTAS_DE_DADOS);
       if (doc) painelGeada(ctx, doc, { x: PAINEL_X, y: PAINEL_Y, w: PAINEL_W, h: PAINEL_H }, { tampa: false });
@@ -314,13 +358,11 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
       desenharTexto(ctx, CLIMA_POR_PISTA[ativo] ?? '', PAINEL_X + 28, PAINEL_Y + 66, { fonte: '600 16px Barlow, sans-serif', cor: COR_MUTED });
 
       botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
-      botao3D(ctx, { ...BOTAO_PRONTO, texto: 'PRONTO', tipo: 'primario', destaque: true, aoVivo: hover === 'pronto', t });
+      const posePronto = pressao.pose('pronto', ticks);
+      botao3D(ctx, { ...BOTAO_PRONTO, texto: 'PRONTO', tipo: 'primario', destaque: true, aoVivo: hover === 'pronto', t, pressionado: posePronto.pressionado, escalaExtra: posePronto.escalaExtra });
 
-      desenharTexto(ctx, 'ESC volta ao menu', LARGURA / 2, BOTAO_PRONTO.y + BOTAO_PRONTO.h + 18, {
-        fonte: '600 14px Barlow, sans-serif',
-        cor: COR_MUTED,
-        alinhamento: 'center',
-      });
+      // Dica de teclado no padrão comum do guia (§11): pílula de vidro no canto superior direito, não texto solto.
+      dicaTeclado(ctx, 'ESC volta ao menu', 928, 34);
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);

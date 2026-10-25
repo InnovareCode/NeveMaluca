@@ -15,7 +15,8 @@
 import { ALTURA, LARGURA } from '../core/constantes';
 import { ALTURA_BUFFER, LARGURA_BUFFER, RS } from '../platform/constantes';
 import type { Ctx } from '../platform/canvas';
-import { caminhoArredondado, criarCamadaEstatica, type CamadaEstatica, type Retangulo } from './desenho';
+import { bezierQuad, easeInCubic } from './animacao';
+import { caminhoArredondado, criarCamadaEstatica, desenharTexto, type CamadaEstatica, type Retangulo } from './desenho';
 
 const COR_TINTA = '#0B1630';
 
@@ -46,6 +47,40 @@ function dimensoesDeFonte(fonte: HTMLImageElement | HTMLCanvasElement): { readon
  *  desfoque por redução+ampliação do guia, que funciona em qualquer motor (ao contrário de `ctx.filter`, que
  *  o WebKit do iPhone não garante). Desenhado uma vez, devolvido como `CamadaEstatica` (só `drawImage` depois).
  *  `fonte` aceita uma imagem estática (capa) OU um canvas já desenhado (um quadro de cenário renderizado). */
+/**
+ * Amplia a versão reduzida do fundo sem virar mosaico. Ampliar 8-10x num passo só, mesmo com suavização ligada,
+ * deixa uma grade de blocos visível (era o "pixelado" que o Atlas viu no pódio/oficina/classificação). Aqui:
+ * 1 passada de desfoque barata na versão pequena (a imagem sobre ela mesma, deslocada 1 px nas 4 direções) e
+ * depois ampliação em degraus de 2x até ~metade do buffer — o último degrau (<=2x) fica pra quem desenha.
+ * Feito UMA vez por fundo (o resultado vai pra uma `CamadaEstatica`), nunca por quadro. Sem `ctx.filter` (iPhone).
+ */
+function ampliarSuave(doc: Document, pequena: HTMLCanvasElement): HTMLCanvasElement {
+  const borrada = doc.createElement('canvas');
+  borrada.width = pequena.width;
+  borrada.height = pequena.height;
+  const ctxB = borrada.getContext('2d');
+  if (!ctxB) return pequena;
+  ctxB.imageSmoothingEnabled = true;
+  ctxB.drawImage(pequena, 0, 0);
+  ctxB.globalAlpha = 0.35;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) ctxB.drawImage(pequena, dx, dy);
+  ctxB.globalAlpha = 1;
+
+  let atual: HTMLCanvasElement = borrada;
+  while (atual.width * 2 <= LARGURA_BUFFER / 2 + 1) {
+    const maior = doc.createElement('canvas');
+    maior.width = atual.width * 2;
+    maior.height = atual.height * 2;
+    const ctxM = maior.getContext('2d');
+    if (!ctxM) break;
+    ctxM.imageSmoothingEnabled = true;
+    ctxM.imageSmoothingQuality = 'high';
+    ctxM.drawImage(atual, 0, 0, maior.width, maior.height);
+    atual = maior;
+  }
+  return atual;
+}
+
 export function construirFundoFosco(doc: Document, fonte: HTMLImageElement | HTMLCanvasElement, opcoes: OpcoesFundoFosco = {}): CamadaEstatica {
   const reducao = Math.max(1, opcoes.reducao ?? 16);
   const veuTopo = opcoes.veuTopo ?? 0.3;
@@ -73,12 +108,13 @@ export function construirFundoFosco(doc: Document, fonte: HTMLImageElement | HTM
   ctxPequena.imageSmoothingEnabled = true;
   ctxPequena.imageSmoothingQuality = 'high';
   ctxPequena.drawImage(cheio, 0, 0, pequena.width, pequena.height);
+  const ampliada = ampliarSuave(doc, pequena);
 
   return criarCamadaEstatica(doc, (ctx) => {
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(pequena, 0, 0, LARGURA, ALTURA);
+    ctx.drawImage(ampliada, 0, 0, LARGURA, ALTURA);
     ctx.restore();
 
     const veu = ctx.createLinearGradient(0, 0, 0, ALTURA);
@@ -109,12 +145,13 @@ export function construirFundoCongelado(doc: Document, origem: HTMLCanvasElement
   ctxPequena.imageSmoothingEnabled = true;
   ctxPequena.imageSmoothingQuality = 'high';
   ctxPequena.drawImage(origem, 0, 0, pequena.width, pequena.height);
+  const ampliada = ampliarSuave(doc, pequena);
 
   return criarCamadaEstatica(doc, (ctx) => {
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(pequena, 0, 0, LARGURA, ALTURA);
+    ctx.drawImage(ampliada, 0, 0, LARGURA, ALTURA);
     ctx.restore();
     ctx.fillStyle = `rgba(5, 12, 26, ${veu})`;
     ctx.fillRect(0, 0, LARGURA, ALTURA);
@@ -143,25 +180,57 @@ export function desenharTampaDeNeve(ctx: Ctx, x: number, y: number, w: number, e
   ctx.save();
 
   // Base + montinhos: um único caminho (sombra de contato embaixo + corpo).
+  //
+  // Acabamento (feedback do dono, 2026-10-24, DUAS rodadas): "a tampa de neve está serrilhada demais" e, depois
+  // do 1º fix, "ainda lê como serrilhada, pontas em V com contorno preto". Duas causas raiz, não uma só:
+  //
+  // 1ª causa (corrigida na 1ª rodada): a receita original ancorava cada semicírculo em `topoY + raio*0.3`, com
+  // `raio` sorteado por hash -- a base de CADA arco ficava numa altura diferente da do vizinho, e a reta
+  // implícita entre dois `arc()` seguidos virava um dentinho. Fix: todos os montinhos centrados na MESMA altura
+  // (`topoY`).
+  //
+  // 2ª causa (o "V com contorno preto" que sobrou): com a base alinhada, dois montinhos vizinhos ainda podem
+  // SE SOBREPOR se `raio_i + raio_(i+1)` passar do espaçamento entre eles -- o raio sorteado ia de 11 a 15
+  // (diâmetro 22-30) com espaçamento de só 24. Quando dois semicírculos se cruzam, o caminho continua
+  // "por baixo" da sobreposição (correto pro PREENCHIMENTO, que soma as duas áreas certo via regra non-zero),
+  // mas o `ctx.stroke()` desenha o CAMINHO LITERAL, inclusive o trecho onde um arco entra e sai de dentro do
+  // outro -- essa interseção span aparece como um V preto bem na emenda. Fix: raio máximo bem menor que meio
+  // espaçamento (nunca mais que ~40% do espaçamento cada, então a soma nunca ultrapassa o espaçamento) -- os
+  // montinhos ficam tangentes ou com uma folga mínima, nunca se cruzando.
   ctx.beginPath();
   ctx.moveTo(x0, baseY);
-  const passoMontinho = 26 * escala;
+  // Espaçamento = a MAIOR soma possível de dois raios vizinhos (8+10=...; aqui 10+10=20, +1 de folga) -- garante
+  // que dois montinhos NUNCA se cruzam (sem o "V" da sobreposição) e ainda assim ficam quase tangentes (sem o
+  // trecho reto virar perceptível, que seria outra forma de "não ler como nuvem").
+  const passoMontinho = 21 * escala;
   const qtdMontinhos = Math.max(2, Math.round(largura / passoMontinho));
   for (let i = 0; i <= qtdMontinhos; i += 1) {
     const px = x0 + (largura * i) / qtdMontinhos;
-    const raio = (10 + hash01(i) * 6) * escala;
-    ctx.arc(px, topoY + raio * 0.3, raio, Math.PI, 0, false);
+    const raio = (8 + hash01(i) * 2) * escala; // 8 a 10
+    ctx.arc(px, topoY, raio, Math.PI, 0, false);
   }
-  // Base com gotas (formato de gota: duas curvas quadráticas por gota).
-  const passoGota = (escala >= 0.7 ? 46 : 32) * escala;
-  const qtdGotas = Math.max(1, Math.round(largura / passoGota));
-  for (let i = qtdGotas; i >= 0; i -= 1) {
-    const gx = x0 + (largura * i) / qtdGotas;
-    const h = hash01(i * 3.7);
-    const comprimento = ((i % 4 === 0 ? 22 : 10) + h * 6) * escala;
-    const largGota = (14 + h * 8) * escala;
-    ctx.quadraticCurveTo(gx + largGota * 0.25, baseY + comprimento * 0.5, gx, baseY + comprimento);
-    ctx.quadraticCurveTo(gx - largGota * 0.25, baseY + comprimento * 0.5, gx - largGota, baseY);
+  // Base com gotas (formato de gota: duas curvas quadráticas por gota) -- SÓ na escala grande (painel, escala>=0,7).
+  //
+  // 3ª causa do "V com contorno preto" (achada medindo a tampa pequena de botão -- escala 0,42 -- numa captura
+  // REAL de campeonato, 2026-10-24): as gotas não são o problema na escala 1 (painel), onde têm tamanho de sobra
+  // pra curva do `quadraticCurveTo` ficar visivelmente arredondada. Na escala pequena (0,42), a MESMA receita dá
+  // gotas de só ~4-12px de comprimento por ~6-9px de largura -- pequenas demais pra curva aparecer: a gota
+  // degenera numa reta quase sem curvatura, e o contorno de 1-2,5px nela lê como um dente afiado, não uma gota.
+  // Fix: abaixo de escala 0,7 nem desenha gota nenhuma -- só uma base reta (sem saliência pendurada, que a essa
+  // escala ninguém nota a falta, e SEM dente nenhum pra errar).
+  if (escala >= 0.7) {
+    const passoGota = 46 * escala;
+    const qtdGotas = Math.max(1, Math.round(largura / passoGota));
+    for (let i = qtdGotas; i >= 0; i -= 1) {
+      const gx = x0 + (largura * i) / qtdGotas;
+      const h = hash01(i * 3.7);
+      const comprimento = ((i % 4 === 0 ? 22 : 10) + h * 6) * escala;
+      const largGota = (14 + h * 8) * escala;
+      ctx.quadraticCurveTo(gx + largGota * 0.25, baseY + comprimento * 0.5, gx, baseY + comprimento);
+      ctx.quadraticCurveTo(gx - largGota * 0.25, baseY + comprimento * 0.5, gx - largGota, baseY);
+    }
+  } else {
+    ctx.lineTo(x0, baseY); // base reta, sem gota -- pequena demais pra curva de gota ler como gota (ver acima)
   }
   ctx.closePath();
 
@@ -172,7 +241,10 @@ export function desenharTampaDeNeve(ctx: Ctx, x: number, y: number, w: number, e
   ctx.fillStyle = grad;
   ctx.fill();
 
-  ctx.lineWidth = 2.5;
+  // Contorno na escala do elemento -- na versão pequena de botão (escala ~0,42), um contorno de 2,5px fixo é
+  // mais grosso que o próprio raio do montinho (~8-10px) e domina visualmente, lendo como "dentes" pretos em
+  // vez de contorno fino. `Math.max(1,...)` mantém um traço visível mesmo na escala mínima.
+  ctx.lineWidth = Math.max(1, 2.5 * escala);
   ctx.strokeStyle = COR_TINTA;
   ctx.stroke();
 
@@ -342,33 +414,55 @@ export interface Botao3DProps {
   /** Ticks desde que a cena ficou visível -- só usado para a respiração do `destaque`. */
   readonly t?: number | undefined;
   readonly tamanhoFonte?: number | undefined;
+  /** Estado "pressionado" (§4.3): a face desce sobre o lábio (6px -> 2px visível) e amassa (1,04 ; 0,92) com
+   *  pivô na base. Quem rastreia pointerdown/pointerup é a CENA (`criarEstadoPressao`, abaixo) -- este componente
+   *  só DESENHA o estado que recebe, nunca decide quando apertar. */
+  readonly pressionado?: boolean | undefined;
+  /** Multiplicador de escala externo, uniforme, com pivô no CENTRO -- usado pela cena para o "soltar" (mola
+   *  voltando de 1,06 a 1 depois do release, §4.3 "Soltou") sem este componente precisar saber de tempo de soltura.
+   *  Combinado (multiplicado) com a respiração do `destaque`. Padrão 1 (sem efeito). */
+  readonly escalaExtra?: number | undefined;
 }
 
 /** Botão 3D "bala gelada" (§4.3): sombra, lábio de extrusão, face em gradiente de 3 paradas, brilho de vidro,
- *  contorno e texto com contorno. Estados `parado`/`hover`(`aoVivo`)/`desativado` (ver guia para a tabela
- *  completa; `pressionado`/`soltar` ficam para quando a cena rastrear pointerup, hoje só pointerdown). */
+ *  contorno e texto com contorno. Estados `parado`/`hover`(`aoVivo`)/`pressionado`/`desativado` (a mola de
+ *  "soltar" é responsabilidade de quem chama, via `escalaExtra` -- ver `criarEstadoPressao`). */
 export function botao3D(ctx: Ctx, b: Botao3DProps): void {
   const cores = CORES_BOTAO[b.tipo];
   const raio = b.h / 2;
   const t = b.t ?? 0;
-  const respirar = b.destaque && b.tipo !== 'desativado' ? 1 + 0.03 * (0.5 - 0.5 * Math.cos((2 * Math.PI * t) / 96)) : 1;
+  const pressionado = b.pressionado === true && b.tipo !== 'desativado';
+  const respirar = (b.destaque && b.tipo !== 'desativado' ? 1 + 0.03 * (0.5 - 0.5 * Math.cos((2 * Math.PI * t) / 96)) : 1) * (b.escalaExtra ?? 1);
   const cx = b.x + b.w / 2;
   const cy = b.y + b.h / 2;
 
   ctx.save();
+  // Respiração/soltar: escala uniforme com pivô no centro.
   ctx.translate(cx, cy);
   ctx.scale(respirar, respirar);
   ctx.translate(-cx, -cy);
+  if (pressionado) {
+    // Pressionado: amassa (1,04 ; 0,92) com pivô na BASE do botão (§4.3) -- a "queda" sobre o lábio.
+    const baseY = b.y + b.h;
+    ctx.translate(cx, baseY);
+    ctx.scale(1.04, 0.92);
+    ctx.translate(-cx, -baseY);
+  }
+  const deslocaY = pressionado ? 4 : 0; // a face desce sobre o lábio
 
   // Sombra.
   ctx.fillStyle = 'rgba(3, 8, 24, 0.40)';
   caminhoArredondado(ctx, { x: b.x, y: b.y + 8, w: b.w, h: b.h }, raio);
   ctx.fill();
 
-  // Lábio (extrusão).
+  // Lábio (extrusão): visível vai de 6px a 2px quando pressionado (a face "engole" o lábio).
   ctx.fillStyle = cores.labio;
-  caminhoArredondado(ctx, { x: b.x, y: b.y + 6, w: b.w, h: b.h }, raio);
+  caminhoArredondado(ctx, { x: b.x, y: b.y + (pressionado ? 2 : 6), w: b.w, h: b.h }, raio);
   ctx.fill();
+
+  // Daqui pra baixo (face, brilho, contorno, texto) tudo desce junto quando pressionado -- um só `translate`.
+  ctx.save();
+  ctx.translate(0, deslocaY);
 
   // Face.
   const grad = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.h);
@@ -417,7 +511,8 @@ export function botao3D(ctx: Ctx, b: Botao3DProps): void {
 
   if (b.destaque && b.tipo !== 'desativado') desenharTampaDeNeve(ctx, b.x + b.w * 0.14, b.y, b.w * 0.72, 0.42);
 
-  ctx.restore();
+  ctx.restore(); // fecha o translate(0, deslocaY) de "face pra baixo"
+  ctx.restore(); // fecha o scale/translate de respiração + amassado de pressionado
 }
 
 /** Botão redondo de voltar (seta desenhada em código -- nunca glifo de fonte, que muda de cara por sistema). */
@@ -846,4 +941,358 @@ export function estrelinha(ctx: Ctx, cx: number, cy: number, raio: number, faseT
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 9. Dica de teclado (padrão comum §11: pílula pequena de vidro, canto superior direito, alinhada à direita)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Pílula pequena de vidro com uma dica de teclado (ex. "ESC volta"), alinhada à direita de `xDireita` em `y`
+ *  (centro vertical). Substitui texto solto perto de botões/cartões (acabamento, 2026-10-24: a dica da seleção
+ *  de personagem encostava na fita de cartões por falta de uma caixa própria) pelo padrão do guia §11: "pílulas
+ *  pequenas de vidro no canto superior direito, em (928, 34)". */
+export function dicaTeclado(ctx: Ctx, texto: string, xDireita: number, y: number): void {
+  ctx.save();
+  ctx.font = '600 14px Barlow, sans-serif';
+  const largura = ctx.measureText(texto).width;
+  const padX = 12;
+  const h = 26;
+  const w = largura + padX * 2;
+  const x = xDireita - w;
+  ctx.fillStyle = 'rgba(10, 24, 60, 0.55)';
+  caminhoArredondado(ctx, { x, y: y - h / 2, w, h }, h / 2);
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.stroke();
+  ctx.restore();
+  desenharTexto(ctx, texto, xDireita - padX, y, { fonte: '600 14px Barlow, sans-serif', cor: '#B8C4DA', alinhamento: 'right', base: 'middle' });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 10. Floco pequeno (ícone de dificuldade/decoração) -- NUNCA o asterisco "*" que lia feio nos cartões de pista
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Floco de 3 eixos com "galhos" em V nas pontas (6 raios no total, com ramos -- acabamento, 2026-10-24: o
+ *  `selecao-pista.ts` antigo desenhava só os 3 eixos SEM ramos, que lê como um asterisco de fonte, não como
+ *  neve). Usado nos indicadores de dificuldade dos cartões de pista; pequeno e barato o bastante pra repetir
+ *  5x por cartão sem cachear. */
+export function iconeFloco(ctx: Ctx, cx: number, cy: number, raio: number, cor: string): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = cor;
+  ctx.lineWidth = Math.max(1.2, raio * 0.22);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i += 1) {
+    ctx.save();
+    ctx.rotate((Math.PI / 3) * i);
+    ctx.beginPath();
+    ctx.moveTo(0, -raio);
+    ctx.lineTo(0, raio);
+    ctx.moveTo(0, -raio * 0.55);
+    ctx.lineTo(-raio * 0.3, -raio * 0.85);
+    ctx.moveTo(0, -raio * 0.55);
+    ctx.lineTo(raio * 0.3, -raio * 0.85);
+    ctx.moveTo(0, raio * 0.55);
+    ctx.lineTo(-raio * 0.3, raio * 0.85);
+    ctx.moveTo(0, raio * 0.55);
+    ctx.lineTo(raio * 0.3, raio * 0.85);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 11. Raios de glória (§7.3) -- vencedor/troféu, um único `path`/`fill`
+// ---------------------------------------------------------------------------------------------------------------
+
+export type CorRaios = 'ouro' | 'gelo';
+
+const CORES_RAIOS: Readonly<Record<CorRaios, { readonly rgb: string; readonly alpha: number }>> = {
+  ouro: { rgb: '255, 210, 63', alpha: 0.3 },
+  gelo: { rgb: '159, 227, 255', alpha: 0.18 },
+};
+
+/** Doze a dezesseis triângulos finos saindo de `(cx, cy)` (§7.3), um único `path`/`fill` (gradiente radial).
+ *  `escala` 0 esconde tudo (early-return); animar de 0 a 1 com `easeOutBack` é o "carimbo" do guia. `rotacaoGraus`
+ *  gira o conjunto (6-8°/s no idle, §9.1). */
+export function raiosDeGloria(ctx: Ctx, cx: number, cy: number, cor: CorRaios, raioMax: number, escala: number, rotacaoGraus = 0, quantidade = 16): void {
+  if (escala <= 0.01) return;
+  const def = CORES_RAIOS[cor];
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((rotacaoGraus * Math.PI) / 180);
+  ctx.scale(escala, escala);
+
+  const grad = ctx.createRadialGradient(0, 0, raioMax * 0.08, 0, 0, raioMax);
+  grad.addColorStop(0, `rgba(${def.rgb}, ${def.alpha})`);
+  grad.addColorStop(1, `rgba(${def.rgb}, 0)`);
+  ctx.fillStyle = grad;
+
+  const abertura = (8 * Math.PI) / 180;
+  ctx.beginPath();
+  for (let i = 0; i < quantidade; i += 1) {
+    const centro = (i / quantidade) * Math.PI * 2;
+    const a0 = centro - abertura / 2;
+    const a1 = centro + abertura / 2;
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a0) * raioMax, Math.sin(a0) * raioMax);
+    ctx.lineTo(Math.cos(a1) * raioMax, Math.sin(a1) * raioMax);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 12. Confete (§7.5) -- determinístico, agrupado por cor (poucos `fill` por quadro)
+// ---------------------------------------------------------------------------------------------------------------
+
+type CorConfete = 'sol' | 'chiclete' | 'gelo' | 'menta' | 'tangerina';
+const ORDEM_CORES_CONFETE: readonly CorConfete[] = ['sol', 'chiclete', 'gelo', 'menta', 'tangerina'];
+const HEX_CORES_CONFETE: Readonly<Record<CorConfete, string>> = {
+  sol: '#FFD23F',
+  chiclete: '#FF5C8A',
+  gelo: '#9FE3FF',
+  menta: '#3DDC97',
+  tangerina: '#FF8A1F',
+};
+
+const CONFETE_VIDA_TICKS = 180;
+const CONFETE_GRAVIDADE = 0.25;
+const CONFETE_ARRASTO = 0.99;
+
+/** Soma geométrica `r + r² + ... + r^n` (fechada, sem laço) -- é o que permite achar a posição de UMA peça de
+ *  confete em qualquer instante `e` sem precisar simular tick a tick desde o nascimento (filosofia de
+ *  `ui/animacao.ts`: pose = função(t), nunca um laço de física guardando estado mutável entre quadros). A física
+ *  real (gravidade constante + arrasto multiplicativo por tick, exatamente como o guia descreve o "por tick") é
+ *  uma recorrência linear de 1ª ordem -- e toda recorrência linear assim tem fechamento em soma geométrica. */
+function somaGeometrica(r: number, n: number): number {
+  if (n <= 0) return 0;
+  if (Math.abs(r - 1) < 1e-9) return n;
+  return (r * (1 - r ** n)) / (1 - r);
+}
+
+/** Posição/rotação/achatamento ("cambalhota") de uma peça `i` após `e` ticks de voo, partindo de `(x0,y0)` com
+ *  velocidade inicial `(vx0,vy0)` e velocidade angular `giro` -- pura função de `e` (ver `somaGeometrica`). */
+function posicaoConfete(x0: number, y0: number, vx0: number, vy0: number, giro: number, indice: number, e: number): { x: number; y: number; rotacao: number; escalaY: number } {
+  const dx = vx0 * somaGeometrica(CONFETE_ARRASTO, e);
+  const fatorDrag = CONFETE_ARRASTO / (1 - CONFETE_ARRASTO);
+  const dy = vy0 * somaGeometrica(CONFETE_ARRASTO, e) + CONFETE_GRAVIDADE * fatorDrag * (e - somaGeometrica(CONFETE_ARRASTO, e));
+  const balancoX = Math.sin(e * 0.1 + indice) * 6;
+  const fase = e * giro;
+  return { x: x0 + dx + balancoX, y: y0 + dy, rotacao: fase, escalaY: Math.abs(Math.cos(fase)) };
+}
+
+export type ModoConfete = 'canhoes' | 'chuva';
+
+/** Confete determinístico (§7.5): `modo:'canhoes'` = duas saídas nos cantos de baixo, pra cima e pra dentro, todas
+ *  as peças nascendo juntas (comemoração de pódio); `modo:'chuva'` = nascendo espalhadas no topo ao longo dos
+ *  primeiros ~180 ticks (chuva da vitória do campeonato, §9.2). `eTicks` = ticks desde que a comemoração começou
+ *  (negativo = nada ainda). Agrupa por cor (no máximo 5 `fill`, nunca 1 por peça -- guia §7.5). */
+export function desenharConfete(ctx: Ctx, modo: ModoConfete, quantidade: number, eTicks: number): void {
+  if (eTicks < 0) return;
+  for (const cor of ORDEM_CORES_CONFETE) {
+    ctx.save();
+    ctx.fillStyle = HEX_CORES_CONFETE[cor];
+    ctx.beginPath();
+    let algumaPeca = false;
+    for (let i = 0; i < quantidade; i += 1) {
+      const h = hash01(i * 7.13);
+      const corDaPeca = ORDEM_CORES_CONFETE[Math.floor(hash01(i * 3.31) * ORDEM_CORES_CONFETE.length) % ORDEM_CORES_CONFETE.length];
+      if (corDaPeca !== cor) continue;
+
+      const nascimento = modo === 'chuva' ? (i / quantidade) * CONFETE_VIDA_TICKS : 0;
+      const e = eTicks - nascimento;
+      if (e < 0 || e > CONFETE_VIDA_TICKS) continue;
+
+      const ladoCanhao = i % 2 === 0 ? 1 : -1; // canhão esquerdo (0,540) atira p/ direita; direito (960,540) p/ esquerda
+      const x0 = modo === 'canhoes' ? (ladoCanhao > 0 ? 0 : LARGURA) : (i * 967) % LARGURA;
+      const y0 = modo === 'canhoes' ? ALTURA : -20;
+      const velocidade = modo === 'canhoes' ? 9 + h * 4 : 0;
+      const anguloGraus = 60 + hash01(i * 5.77) * 15;
+      const vx0 = modo === 'canhoes' ? Math.cos((anguloGraus * Math.PI) / 180) * velocidade * ladoCanhao : 0;
+      const vy0 = modo === 'canhoes' ? -Math.sin((anguloGraus * Math.PI) / 180) * velocidade : 1.5 + hash01(i * 2.19) * 1.5;
+      const giro = 0.08 + hash01(i * 4.63) * 0.14;
+
+      const pos = posicaoConfete(x0, y0, vx0, vy0, giro, i, e);
+      if (pos.y > ALTURA + 40) continue; // já saiu de vez da tela por baixo -- nem desenha
+
+      const alpha = e > CONFETE_VIDA_TICKS - 30 ? Math.max(0, (CONFETE_VIDA_TICKS - e) / 30) : 1;
+      if (alpha <= 0.02) continue;
+
+      const larguraPeca = 8 + hash01(i * 1.41) * 4;
+      const alturaPeca = (5 + hash01(i * 6.07) * 1) * Math.max(0.15, pos.escalaY);
+      const cosA = Math.cos(pos.rotacao);
+      const sinA = Math.sin(pos.rotacao);
+      const hw = larguraPeca / 2;
+      const hh = alturaPeca / 2;
+      const cantos: readonly [number, number][] = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+      cantos.forEach(([px, py], indiceCanto) => {
+        const rx = pos.x + px * cosA - py * sinA;
+        const ry = pos.y + px * sinA + py * cosA;
+        if (indiceCanto === 0) ctx.moveTo(rx, ry);
+        else ctx.lineTo(rx, ry);
+      });
+      ctx.closePath();
+      algumaPeca = true;
+    }
+    if (algumaPeca) ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 13. Moeda voando em arco (§8.3 "moeda voando") e moeda girando (§7.6, troféu Floco de Ouro)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Posição ao longo do arco (bezier quadrática, ponto de controle acima do meio -- princípio "arcos", §8.1) de
+ *  `origem` a `destino`, em progresso linear `p` ∈ [0,1] (a easeInCubic do guia já é aplicada aqui dentro). */
+export function posicaoEmArco(origem: { readonly x: number; readonly y: number }, destino: { readonly x: number; readonly y: number }, p: number): { x: number; y: number } {
+  const controle = { x: (origem.x + destino.x) / 2, y: Math.min(origem.y, destino.y) - 100 };
+  return bezierQuad(origem, controle, destino, easeInCubic(p));
+}
+
+/** Moeda (ícone `floco-dourado`, ou um círculo `sol` de fallback sem a imagem) numa posição -- usada junto de
+ *  `posicaoEmArco` pra desenhar cada moeda voando do personagem até o contador (§9.1/§9.4). */
+export function desenharMoedaIcone(ctx: Ctx, img: HTMLImageElement | null, x: number, y: number, tamanho: number): void {
+  ctx.save();
+  if (img) {
+    ctx.drawImage(img, x - tamanho / 2, y - tamanho / 2, tamanho, tamanho);
+  } else {
+    ctx.fillStyle = '#FFD23F';
+    ctx.beginPath();
+    ctx.arc(x, y, tamanho / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = COR_TINTA;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Moeda girando "de verdade" (§7.6): giro de moeda por `escalaX = cos(θ)`; de perfil (|escalaX|<0,3), desenha a
+ *  borda por cima numa elipse fina em `ouro-escuro`. O brilho que atravessa (faixa diagonal, canvas auxiliar) do
+ *  guia foi deixado de fora -- custo de mais um canvas offscreen por chamada pra um detalhe que só aparece 500ms
+ *  a cada 3s; simplificação deliberada, documentada na memória da Lyra. */
+export function desenharMoedaGirando(ctx: Ctx, img: HTMLImageElement | null, cx: number, cy: number, diametro: number, tTicks: number): void {
+  const theta = tTicks * 0.05;
+  const escalaX = Math.cos(theta);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(escalaX === 0 ? 0.001 : escalaX, 1);
+  desenharMoedaIcone(ctx, img, 0, 0, diametro);
+  ctx.restore();
+  if (Math.abs(escalaX) < 0.3) {
+    ctx.save();
+    ctx.globalAlpha = (0.3 - Math.abs(escalaX)) * 2;
+    ctx.fillStyle = '#B4560F';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, diametro * 0.07, diametro / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 14. Etiqueta VOCÊ (§4.4) e balão de fala genérico (§4.4) -- compartilhados por pódio/classificação/oficina
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Pílula `sol` "VOCÊ" com setinha pra baixo, balançando ±3px em 1400ms (84 ticks) -- `cx` é o centro horizontal,
+ *  `topoY` é onde a BASE da etiqueta deve ficar (a seta aponta pra baixo a partir daí). */
+export function etiquetaVoce(ctx: Ctx, cx: number, baseY: number, tTicks: number): void {
+  const balanco = Math.sin((tTicks / 84) * Math.PI * 2) * 3;
+  const w = 62;
+  const h = 24;
+  const x = cx - w / 2;
+  const y = baseY - h - 8;
+  ctx.save();
+  ctx.translate(0, balanco);
+  ctx.fillStyle = '#FFD23F';
+  caminhoArredondado(ctx, { x, y, w, h }, h / 2);
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = COR_TINTA;
+  caminhoArredondado(ctx, { x, y, w, h }, h / 2);
+  ctx.stroke();
+  desenharTexto(ctx, 'VOCÊ', cx, y + h / 2 + 1, { fonte: 'italic 800 14px "Barlow Condensed", Impact, sans-serif', cor: COR_TINTA, alinhamento: 'center', base: 'middle' });
+
+  ctx.beginPath();
+  ctx.moveTo(cx - 5, y + h - 1);
+  ctx.lineTo(cx + 5, y + h - 1);
+  ctx.lineTo(cx, y + h + 7);
+  ctx.closePath();
+  ctx.fillStyle = '#FFD23F';
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = COR_TINTA;
+  ctx.stroke();
+  ctx.restore();
+}
+
+export type DirecaoRabicho = 'baixo' | 'esquerda';
+
+/** Balão de fala genérico (§4.4), fonte Bangers, largura automática por `texto` -- versão compartilhada e
+ *  simples (sem a quebra em 2 linhas de `selecao.ts: desenharBalaoDeFala`, que lida com bordões mais longos);
+ *  pensado para callouts curtos (ex. "NÍVEL 3!" na oficina, §9.4). `cx,cy` é o CENTRO do balão. */
+export function balaoDeFala(ctx: Ctx, texto: string, cx: number, cy: number, direcaoRabicho: DirecaoRabicho = 'baixo', tamanho = 26): void {
+  const fonte = `400 ${tamanho}px Bangers, sans-serif`;
+  ctx.save();
+  ctx.font = fonte;
+  const largTexto = ctx.measureText(texto).width;
+  const w = largTexto + 28;
+  const h = tamanho + 22;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+
+  caminhoArredondado(ctx, { x, y, w, h }, 14);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COR_TINTA;
+  ctx.stroke();
+
+  ctx.beginPath();
+  if (direcaoRabicho === 'baixo') {
+    ctx.moveTo(cx - 10, y + h - 2);
+    ctx.lineTo(cx, y + h + 14);
+    ctx.lineTo(cx + 10, y + h - 2);
+  } else {
+    ctx.moveTo(x + 18, y + h - 10);
+    ctx.lineTo(x - 14, y + h + 6);
+    ctx.lineTo(x + 32, y + h - 10);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COR_TINTA;
+  ctx.stroke();
+
+  desenharTexto(ctx, texto, cx, cy, { fonte, cor: COR_TINTA, alinhamento: 'center', base: 'middle' });
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 15. Nome ajustado -- nunca estoura a coluna ao lado (tempo/pontos), mesmo com nome completo ("Capi Barbosa")
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * Linhas de lista (pódio 4º-6º, classificação, final) desenham "Nome (você)" numa coluna estreita ao lado de
+ * tempo/pontos -- testado só com nomes curtos ("Capi"), a lista nunca bateu com o NOME DE VERDADE do catálogo
+ * ("Capi Barbosa"), que é mais longo e estourava em cima da coluna da direita (achado rodando um campeonato de
+ * verdade, 2026-10-24, não aparecia em nenhum teste com dado sintético curto). Resolve em 2 passos antes de
+ * desistir: 1) tenta sem o sufixo " (você)" (a cor/realce da linha já diz que é o jogador, o texto é redundante);
+ * 2) reduz o tamanho da fonte até caber, nunca abaixo de `tamanhoMinimo`.
+ */
+export function medirNomeAjustado(ctx: Ctx, nome: string, comSufixoVoce: boolean, larguraMax: number, montarFonte: (tamanho: number) => string, tamanhoInicial: number, tamanhoMinimo = 13): { readonly texto: string; readonly tamanho: number } {
+  const candidatos = comSufixoVoce ? [`${nome} (você)`, nome] : [nome];
+  for (const texto of candidatos) {
+    for (let tamanho = tamanhoInicial; tamanho >= tamanhoMinimo; tamanho -= 1) {
+      ctx.font = montarFonte(tamanho);
+      if (ctx.measureText(texto).width <= larguraMax) return { texto, tamanho };
+    }
+  }
+  return { texto: candidatos[candidatos.length - 1] ?? nome, tamanho: tamanhoMinimo };
 }

@@ -24,9 +24,9 @@ import { PERSONAGENS_DE_DADOS } from '../../data/personagens';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { easeOutBack, overshootPadrao, prefereMovimentoReduzido } from '../animacao';
+import { easeOutBack, escalonar, msParaTicks, overshootPadrao, poseEntrada, prefereMovimentoReduzido } from '../animacao';
 import { caminhoArredondado, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
-import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import {
   barraAtributo,
   botao3D,
@@ -34,6 +34,7 @@ import {
   construirFundoFosco,
   desenharLetreiro,
   desenharRetratoDaCapa,
+  dicaTeclado,
   medalhao,
   painelGeada,
   pedestalDeGelo,
@@ -103,6 +104,17 @@ const MINI_X0 = 42;
 
 const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: 32, y: 20, w: 56, h: 56 };
 const BOTAO_CORRER: BotaoRetangular = { id: 'correr', x: 570, y: 334, w: 300, h: 64 };
+
+// Entrada escalonada (§8.1/§11.1 "título (0) → palco e pedestal (120) → painel (240) → cartões ... → CTA (700)"):
+// tempos de início por grupo, em ticks (`msParaTicks`), e duração/passo de cada um (§8.3).
+const T_ENTRADA_TITULO = 0;
+const T_ENTRADA_PALCO = msParaTicks(120);
+const T_ENTRADA_PAINEL = msParaTicks(240);
+const T_ENTRADA_CARTOES = msParaTicks(280);
+const T_ENTRADA_CTA = msParaTicks(700);
+const PASSO_ENTRADA_CARTAO = msParaTicks(70);
+const DUR_ENTRADA_GRUPO = msParaTicks(360);
+const DUR_ENTRADA_CARTAO = msParaTicks(420);
 
 const LINHA_ATRIBUTOS: readonly { readonly atributo: AtributoPersonagem; readonly icone: 'turbo' | 'escudo' | 'bola'; readonly rotulo: string; readonly y: number }[] = [
   { atributo: 'velocidade', icone: 'turbo', rotulo: 'Velocidade', y: 236 },
@@ -245,6 +257,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   let hover: string | null = null;
   let ticks = 0;
   let fundo: CamadaEstatica | null = null;
+  const pressao = criarEstadoPressao();
 
   // Defensivo: se esta tela abrir sem ter passado por abertura/menu (ex. teste direto), garante o fire-and-forget
   // mesmo assim -- cacheado, não duplica o carregamento se já estava em andamento.
@@ -303,6 +316,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
     } else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR)) {
       opcoes.aoVoltar();
     } else if (pontoDentroDoBotao(pt, BOTAO_CORRER)) {
+      pressao.marcar('correr', ticks);
       opcoes.aoEscolher(opcoes.obterPersonagemAtivo());
     }
   };
@@ -506,8 +520,13 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
 
       desenharFlocos(ctx, 22, t, 0.7);
 
+      const poseTitulo = poseEntrada(t, T_ENTRADA_TITULO, DUR_ENTRADA_GRUPO, reduzido, 18);
+      ctx.save();
+      ctx.globalAlpha = poseTitulo.opacidade;
+      ctx.translate(0, poseTitulo.deslocaY);
       if (doc) desenharLetreiro(ctx, doc, 'ESCOLHA SEU PERSONAGEM', LARGURA / 2, 66, 40, 'gelo');
       else desenharTexto(ctx, 'ESCOLHA SEU PERSONAGEM', LARGURA / 2, 66, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 6, alinhamento: 'center' });
+      ctx.restore();
 
       const ativo = opcoes.obterPersonagemAtivo();
       if (ativo !== idAnterior) {
@@ -521,19 +540,50 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
         idAnterior = ativo;
       }
 
+      const posePalco = poseEntrada(t, T_ENTRADA_PALCO, DUR_ENTRADA_GRUPO, reduzido, 28);
+      ctx.save();
+      ctx.globalAlpha = posePalco.opacidade;
+      ctx.translate(0, posePalco.deslocaY);
       desenharPalco(ctx, ativo, t);
-      desenharPainelInfo(ctx, ativo, t);
+      ctx.restore();
 
-      opcoes.catalogo.forEach((id, indice) => desenharCartao(ctx, indice, id, t));
+      const posePainel = poseEntrada(t, T_ENTRADA_PAINEL, DUR_ENTRADA_GRUPO, reduzido, 24);
+      ctx.save();
+      ctx.globalAlpha = posePainel.opacidade;
+      ctx.translate(0, posePainel.deslocaY);
+      desenharPainelInfo(ctx, ativo, t);
+      ctx.restore();
+
+      // Cartões "sendo dados" (§8.5/§11.1): escalonados, de baixo, com uma leve rotação que desaparece ao assentar.
+      opcoes.catalogo.forEach((id, indice) => {
+        const t0 = T_ENTRADA_CARTOES + escalonar(indice, PASSO_ENTRADA_CARTAO);
+        const pose = poseEntrada(t, t0, DUR_ENTRADA_CARTAO, reduzido, 70);
+        const r = cartao(indice);
+        const pivoX = r.x + r.w / 2;
+        const pivoY = r.y + r.h / 2;
+        ctx.save();
+        ctx.globalAlpha = pose.opacidade;
+        ctx.translate(pivoX, pivoY + pose.deslocaY);
+        ctx.rotate((((indice % 2 === 0 ? 1 : -1) * 6 * Math.PI) / 180) * (1 - pose.curva));
+        ctx.translate(-pivoX, -pivoY);
+        desenharCartao(ctx, indice, id, t);
+        ctx.restore();
+      });
 
       botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
-      botao3D(ctx, { ...BOTAO_CORRER, texto: 'CORRER!', tipo: 'primario', destaque: true, aoVivo: hover === 'correr', t });
 
-      desenharTexto(ctx, 'ESC volta ao menu · ←/→ troca', BOTAO_CORRER.x + BOTAO_CORRER.w / 2, BOTAO_CORRER.y + BOTAO_CORRER.h + 18, {
-        fonte: '600 14px Barlow, sans-serif',
-        cor: COR_MUTED,
-        alinhamento: 'center',
-      });
+      const poseCTA = poseEntrada(t, T_ENTRADA_CTA, DUR_ENTRADA_GRUPO, reduzido, 20);
+      ctx.save();
+      ctx.globalAlpha = poseCTA.opacidade;
+      ctx.translate(0, poseCTA.deslocaY);
+      const poseCorrer = pressao.pose('correr', ticks);
+      botao3D(ctx, { ...BOTAO_CORRER, texto: 'CORRER!', tipo: 'primario', destaque: true, aoVivo: hover === 'correr', t, pressionado: poseCorrer.pressionado, escalaExtra: poseCorrer.escalaExtra });
+      ctx.restore();
+
+      // Dica de teclado no padrão comum do guia (§11, "pílulas pequenas de vidro no canto superior direito") --
+      // acabamento, 2026-10-24: o texto solto embaixo do CTA encostava na fita de cartões (só 18px de folga total
+      // entre o botão e a fita); a pílula no canto nunca disputa espaço vertical com o resto do layout.
+      dicaTeclado(ctx, 'ESC volta · ←/→ troca', 928, 34);
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);

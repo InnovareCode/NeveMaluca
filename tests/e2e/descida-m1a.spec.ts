@@ -127,7 +127,10 @@ test.describe('M1a: render + câmera + cenas (cena "jogo")', () => {
 
       let reiniciou = false;
       const cenaResultado = criarCenaResultado({ dados: dadosFinais, canvas, aoReiniciar: () => (reiniciou = true) });
-      cenaResultado.atualizar();
+      // Redesenho premium (§11.2): "tocar em qualquer lugar = de novo" só libera depois de 600ms (36 ticks) --
+      // o toque que acabou de chegar da corrida (ex. o pulo final) não pode reiniciar sem querer. Tica o
+      // suficiente antes do toque pra cair DEPOIS da janela, como um toque real do jogador cairia.
+      for (let i = 0; i < 40; i += 1) cenaResultado.atualizar();
       canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
       return { chegou: true, reiniciou };
     });

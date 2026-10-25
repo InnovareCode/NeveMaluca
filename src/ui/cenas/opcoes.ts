@@ -17,8 +17,9 @@ import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
 import { emTelaCheia, situacaoDaTelaCheia } from '../../platform/tela-cheia';
+import { escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido } from '../animacao';
 import { caminhoArredondado, desenharFlocos, desenharTexto } from '../desenho';
-import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, painelGeada, type TipoBotao3D } from '../kit-premium';
 import type { Cena } from '../tipos';
 import type { ModoControles } from '../../meta/tipos';
@@ -175,12 +176,30 @@ function desenharInterruptor(ctx: Ctx, x: number, y: number, w: number, h: numbe
   ctx.restore();
 }
 
+// Entrada escalonada (§11.7 "painel (0), linhas deslizando +24px da direita (escalonadas a 70ms)").
+const T_ENTRADA_LINHAS = 0;
+const PASSO_ENTRADA_LINHA = msParaTicks(70);
+const DUR_ENTRADA_LINHA = msParaTicks(360);
+
 export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
+  const reduzido = prefereMovimentoReduzido();
   let hover: string | null = null;
   let ticks = 0;
   let fundo: CamadaEstatica | null = null;
+  const pressao = criarEstadoPressao();
+
+  /** Cada linha do painel entra deslizando da DIREITA (`deslocaY` da pose é usado como offset em X aqui -- mesma
+   *  pose, eixo diferente) -- §11.7. */
+  const aplicarEntradaLinha = (ctx: Ctx, indice: number, t: number, fn: () => void): void => {
+    const pose = poseEntrada(t, T_ENTRADA_LINHAS + escalonar(indice, PASSO_ENTRADA_LINHA), DUR_ENTRADA_LINHA, reduzido, 24);
+    ctx.save();
+    ctx.globalAlpha = pose.opacidade;
+    ctx.translate(pose.deslocaY, 0);
+    fn();
+    ctx.restore();
+  };
 
   void precarregarAssetsMenuCapa();
 
@@ -200,10 +219,14 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
   const aoTocar = (e: Event): void => {
     e.preventDefault?.();
     const pt = eventoParaPontoLogico(e as PointerEvent, opcoes.canvas);
-    if (pontoDentroDoBotao(pt, BOTAO_CONTROLES)) opcoes.aoAlternarControles();
-    else if (pontoDentroDoBotao(pt, BOTAO_AUDIO)) opcoes.aoAlternarAudio();
-    else if (pontoDentroDoBotao(pt, BOTAO_TELA_CHEIA)) opcoes.aoTelaCheia();
-    else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR)) opcoes.aoVoltar();
+    if (pontoDentroDoBotao(pt, BOTAO_CONTROLES)) {
+      pressao.marcar('controles', ticks);
+      opcoes.aoAlternarControles();
+    } else if (pontoDentroDoBotao(pt, BOTAO_AUDIO)) opcoes.aoAlternarAudio();
+    else if (pontoDentroDoBotao(pt, BOTAO_TELA_CHEIA)) {
+      pressao.marcar('tela_cheia', ticks);
+      opcoes.aoTelaCheia();
+    } else if (pontoDentroDoBotao(pt, BOTAO_VOLTAR)) opcoes.aoVoltar();
   };
 
   const aoTeclar = (e: Event): void => {
@@ -249,7 +272,74 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
         desenharTexto(ctx, 'OPÇÕES', LARGURA / 2, 56, { fonte: 'italic 800 40px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO, contorno: 6, alinhamento: 'center' });
       }
 
-      // divisórias
+      const rotulo = (texto: string, ajuda: string, y: number): void => {
+        desenharTexto(ctx, texto, ROTULO_X, y - 10, { fonte: 'italic 800 24px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO });
+        desenharTexto(ctx, ajuda, ROTULO_X, y + 14, { fonte: '600 15px Barlow, sans-serif', cor: COR_MUTED });
+      };
+
+      const controlesAtual = opcoes.obterControles();
+      const gestos = controlesAtual === 'gestos';
+      const audioLigado = opcoes.obterAudioLigado();
+      const temApi = typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel';
+      const cheiaAgora = typeof document !== 'undefined' && emTelaCheia(document);
+      const tipoCheia: TipoBotao3D = temApi ? (cheiaAgora ? 'secundario' : 'confirmar') : 'secundario';
+
+      aplicarEntradaLinha(ctx, 0, t, () => {
+        desenharMedalhaoLinha(ctx, LINHA_1_Y, 0);
+        rotulo(ROTULO_CONTROLES, 'Toque/arraste vs botões na tela', LINHA_1_Y);
+        // Seletor segmentado GESTOS | BOTÕES: o segmento ativo é um botão 3D secundário com tampa pequena.
+        ctx.save();
+        ctx.fillStyle = 'rgba(4,10,30,0.55)';
+        caminhoArredondado(ctx, BOTAO_CONTROLES, SEG_H / 2);
+        ctx.fill();
+        ctx.restore();
+        const meioW = SEG_W / 2;
+        const poseControles = pressao.pose('controles', ticks);
+        botao3D(ctx, {
+          x: gestos ? BOTAO_CONTROLES.x : BOTAO_CONTROLES.x + meioW,
+          y: BOTAO_CONTROLES.y,
+          w: meioW,
+          h: SEG_H,
+          texto: gestos ? 'GESTOS' : 'BOTÕES',
+          tipo: 'secundario',
+          aoVivo: hover === 'controles',
+          tamanhoFonte: 17,
+          pressionado: poseControles.pressionado,
+          escalaExtra: poseControles.escalaExtra,
+        });
+        desenharTexto(ctx, gestos ? 'BOTÕES' : 'GESTOS', gestos ? BOTAO_CONTROLES.x + meioW + meioW / 2 : BOTAO_CONTROLES.x + meioW / 2, BOTAO_CONTROLES.y + SEG_H / 2 + 1, {
+          fonte: 'italic 800 17px "Barlow Condensed", Impact, sans-serif',
+          cor: 'rgba(255,255,255,0.55)',
+          alinhamento: 'center',
+          base: 'middle',
+        });
+      });
+
+      aplicarEntradaLinha(ctx, 1, t, () => {
+        desenharMedalhaoLinha(ctx, LINHA_2_Y, 1);
+        rotulo(ROTULO_AUDIO, 'Sons e música juntos', LINHA_2_Y);
+        desenharInterruptor(ctx, BOTAO_AUDIO.x, BOTAO_AUDIO.y, BOTAO_AUDIO.w, BOTAO_AUDIO.h, audioLigado, hover === 'audio');
+      });
+
+      aplicarEntradaLinha(ctx, 2, t, () => {
+        desenharMedalhaoLinha(ctx, LINHA_3_Y, 2);
+        rotulo(
+          ROTULO_TELA_CHEIA,
+          typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel' ? 'Atalho: tecla F' : 'No iPhone: Compartilhar > Adicionar à Tela de Início',
+          LINHA_3_Y,
+        );
+        const poseTelaCheia = pressao.pose('tela_cheia', ticks);
+        botao3D(ctx, {
+          ...BOTAO_TELA_CHEIA,
+          texto: temApi ? (cheiaAgora ? 'SAIR' : 'ENTRAR') : 'COMO ATIVAR',
+          tipo: tipoCheia,
+          aoVivo: hover === 'tela_cheia',
+          pressionado: poseTelaCheia.pressionado,
+          escalaExtra: poseTelaCheia.escalaExtra,
+        });
+      });
+
+      // divisórias (desenhadas por último, por cima do deslize -- são decoração fixa do painel, não de uma linha)
       ctx.save();
       ctx.strokeStyle = 'rgba(159,227,255,0.22)';
       ctx.lineWidth = 1;
@@ -265,63 +355,6 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
         ctx.stroke();
       }
       ctx.restore();
-
-      desenharMedalhaoLinha(ctx, LINHA_1_Y, 0);
-      desenharMedalhaoLinha(ctx, LINHA_2_Y, 1);
-      desenharMedalhaoLinha(ctx, LINHA_3_Y, 2);
-
-      const rotulo = (texto: string, ajuda: string, y: number): void => {
-        desenharTexto(ctx, texto, ROTULO_X, y - 10, { fonte: 'italic 800 24px "Barlow Condensed", Impact, sans-serif', cor: COR_TEXTO });
-        desenharTexto(ctx, ajuda, ROTULO_X, y + 14, { fonte: '600 15px Barlow, sans-serif', cor: COR_MUTED });
-      };
-      rotulo(ROTULO_CONTROLES, 'Toque/arraste vs botões na tela', LINHA_1_Y);
-      rotulo(ROTULO_AUDIO, 'Sons e música juntos', LINHA_2_Y);
-
-      const controlesAtual = opcoes.obterControles();
-      const gestos = controlesAtual === 'gestos';
-      // Seletor segmentado GESTOS | BOTÕES: o segmento ativo é um botão 3D secundário com tampa pequena.
-      ctx.save();
-      ctx.fillStyle = 'rgba(4,10,30,0.55)';
-      caminhoArredondado(ctx, BOTAO_CONTROLES, SEG_H / 2);
-      ctx.fill();
-      ctx.restore();
-      const meioW = SEG_W / 2;
-      botao3D(ctx, {
-        x: gestos ? BOTAO_CONTROLES.x : BOTAO_CONTROLES.x + meioW,
-        y: BOTAO_CONTROLES.y,
-        w: meioW,
-        h: SEG_H,
-        texto: gestos ? 'GESTOS' : 'BOTÕES',
-        tipo: 'secundario',
-        aoVivo: hover === 'controles',
-        tamanhoFonte: 17,
-      });
-      desenharTexto(ctx, gestos ? 'BOTÕES' : 'GESTOS', gestos ? BOTAO_CONTROLES.x + meioW + meioW / 2 : BOTAO_CONTROLES.x + meioW / 2, BOTAO_CONTROLES.y + SEG_H / 2 + 1, {
-        fonte: 'italic 800 17px "Barlow Condensed", Impact, sans-serif',
-        cor: 'rgba(255,255,255,0.55)',
-        alinhamento: 'center',
-        base: 'middle',
-      });
-
-      // linha 2: áudio (interruptor)
-      const audioLigado = opcoes.obterAudioLigado();
-      desenharInterruptor(ctx, BOTAO_AUDIO.x, BOTAO_AUDIO.y, BOTAO_AUDIO.w, BOTAO_AUDIO.h, audioLigado, hover === 'audio');
-
-      // linha 3: tela cheia
-      rotulo(
-        ROTULO_TELA_CHEIA,
-        typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel' ? 'Atalho: tecla F' : 'No iPhone: Compartilhar > Adicionar à Tela de Início',
-        LINHA_3_Y,
-      );
-      const temApi = typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel';
-      const cheiaAgora = typeof document !== 'undefined' && emTelaCheia(document);
-      const tipoCheia: TipoBotao3D = temApi ? (cheiaAgora ? 'secundario' : 'confirmar') : 'secundario';
-      botao3D(ctx, {
-        ...BOTAO_TELA_CHEIA,
-        texto: temApi ? (cheiaAgora ? 'SAIR' : 'ENTRAR') : 'COMO ATIVAR',
-        tipo: tipoCheia,
-        aoVivo: hover === 'tela_cheia',
-      });
 
       botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
 

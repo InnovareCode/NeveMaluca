@@ -106,6 +106,7 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
   const pausa: ControladorPausa = criarControladorPausa({
     canvas: opcoes.canvas,
     janela: opcoes.janela,
+    personagem: idJogador,
     podeReiniciar: () => !jaChegouEtapa,
     aoContinuar: () => undefined,
     aoReiniciar: () => {
@@ -179,8 +180,11 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
             resultado,
             nomesPorId: NOMES_POR_ID,
             idJogador,
+            nomePista: pista.nome,
             canvas: opcoes.canvas,
             janela: opcoes.janela,
+            documento: opcoes.documento,
+            temaFundo: pista.tema,
             aoContinuar: () => trocarComNevasca(montarStandings),
           }),
         );
@@ -201,11 +205,14 @@ export function criarCenaCampeonato(opcoes: OpcoesCenaCampeonato): Cena {
       janela: opcoes.janela,
       documento: opcoes.documento,
       classificacao: classificacao(estado.pistasConcluidas),
+      classificacaoAnterior: classificacao(estado.pistasConcluidas.slice(0, -1)),
       nomesPorId: NOMES_POR_ID,
       idJogador,
       pistaConcluidaNome: nomeDaPista(ultimaConcluida?.pista ?? ''),
       proximaPistaNome: proxima?.nome,
       temaFundo,
+      etapaConcluida: estado.etapa,
+      totalPistas: PISTAS_ORDENADAS.length,
       aoContinuar: () => {
         trocarComNevasca(terminou ? montarFinal : montarOficina);
       },

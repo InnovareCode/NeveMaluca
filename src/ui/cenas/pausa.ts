@@ -18,11 +18,13 @@
  * ouvintes do MESMO nó disparam na ordem de registro, então o de pausa sempre roda primeiro.
  */
 import { ALTURA, LARGURA } from '../../core/constantes';
+import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
+import { easeOutCubic, escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido, progresso } from '../animacao';
 import type { CamadaEstatica } from '../desenho';
-import { eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
+import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular, type EstadoPressao } from '../interacao';
 import { botao3D, construirFundoCongelado, desenharLetreiro, painelGeada, type TipoBotao3D } from '../kit-premium';
 import { desenharTexto } from '../desenho';
 
@@ -59,6 +61,38 @@ export interface EstadoVisualPausa {
   /** Fundo B pronto (a corrida congelada e borrada); sem ele (testes/1º quadro) cai num sólido simples. */
   readonly fundo?: CamadaEstatica | null | undefined;
   readonly documento?: Document | undefined;
+  /** Sprite do personagem do jogador, se já carregado -- §11.8 "o personagem espia pela borda direita do
+   *  painel". `null`/ausente simplesmente não desenha ninguém espiando (nunca trava a pausa por isso). */
+  readonly spritePersonagem?: SpritePersonagem | null | undefined;
+  /** Estado de pressionar/soltar dos botões (§4.3) -- sem ele (testes antigos), botões ficam sempre no repouso. */
+  readonly pressao?: EstadoPressao | undefined;
+}
+
+const ALTURA_PEEK = 110;
+const T_INICIO_PEEK = msParaTicks(200); // 200ms depois do painel (painel já está com escala 1 bem antes disso)
+const DUR_PEEK = msParaTicks(420);
+const DESLOCA_PEEK = 30;
+
+/** Personagem "espiando" pela borda direita do painel (§11.8): desenhado ANTES do painel (por isso metade some
+ *  atrás dele), pose `scared` normalmente ou `wobble` na confirmação de saída. Escala pela altura de `ride0`
+ *  (nunca pela pose atual -- mesma regra de `selecao.ts`/`render/piloto.ts`), nunca mais que 150 lógicos (teto
+ *  do guia §1.7; aqui 110, menor que o personagem-herói de outras telas). */
+function desenharPersonagemEspiando(ctx: Ctx, sprite: SpritePersonagem, pose: 'scared' | 'wobble', bordaDireitaX: number, baseY: number, tAbertura: number): void {
+  const quadro = sprite.obterQuadro(pose) ?? sprite.obterQuadro('ride0');
+  const referencia = sprite.obterQuadro('ride0')?.dados ?? quadro?.dados;
+  if (!quadro || !referencia) return;
+
+  const p = easeOutCubic(progresso(tAbertura, T_INICIO_PEEK, DUR_PEEK));
+  const offsetX = -10 + DESLOCA_PEEK * p; // começa quase todo escondido, desliza 30px pra fora
+
+  const d = quadro.dados;
+  const escala = ALTURA_PEEK / referencia.altura;
+  const [ancoraX, ancoraY] = d.contato ?? d.pivo;
+
+  ctx.save();
+  ctx.translate(bordaDireitaX + offsetX, baseY);
+  ctx.drawImage(quadro.imagem, -ancoraX * escala, -ancoraY * escala, d.largura * escala, d.altura * escala);
+  ctx.restore();
 }
 
 /** Acha qual botão (se algum) está sob o ponto, de acordo com a sub-tela atual (normal ou confirmação de saída). */
@@ -80,9 +114,14 @@ const COR_FUNDO_SIMPLES = '#0c1b30';
 /** Painel de pausa "premium estilo Pixar" (§11.8): Fundo C + Painel Geada + botão 3D + letreiro. Sem `documento`
  *  (testes unitários, ambiente node) cai num sólido simples + texto puro -- o visual real é provado no navegador
  *  por `tests/e2e/pausa.spec.ts` (skill `medir-antes-de-afirmar`). */
+const T_ENTRADA_BOTOES = msParaTicks(100);
+const PASSO_ENTRADA_BOTAO = msParaTicks(50);
+const DUR_ENTRADA_BOTAO = msParaTicks(300);
+
 export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
   const doc = estado.documento;
   const t = estado.t ?? 0;
+  const reduzido = prefereMovimentoReduzido();
 
   if (estado.fundo) estado.fundo.desenhar(ctx);
   else {
@@ -92,6 +131,11 @@ export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
     ctx.fillRect(0, 0, LARGURA, ALTURA);
     ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  // Personagem espiando pela borda do painel (§11.8): desenhado ANTES do painel, pra ficar meio escondido.
+  if (estado.spritePersonagem) {
+    desenharPersonagemEspiando(ctx, estado.spritePersonagem, estado.confirmandoSaida ? 'wobble' : 'scared', PAINEL_X + PAINEL_W, PAINEL_Y + PAINEL_H - 20, t);
   }
 
   if (doc) {
@@ -116,15 +160,36 @@ export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
       cor: COR_MUTED,
       alinhamento: 'center',
     });
-    botao3D(ctx, { ...BOTAO_CONFIRMAR_SAIDA, texto: 'SIM, SAIR', tipo: 'perigo', aoVivo: estado.hover === 'confirmar-saida' });
-    botao3D(ctx, { ...BOTAO_CANCELAR_SAIDA, texto: 'CANCELAR', tipo: 'secundario', aoVivo: estado.hover === 'cancelar-saida' });
+    const poseSim = estado.pressao?.pose('confirmar-saida', t) ?? { pressionado: false, escalaExtra: 1 };
+    const poseCancelar = estado.pressao?.pose('cancelar-saida', t) ?? { pressionado: false, escalaExtra: 1 };
+    botao3D(ctx, { ...BOTAO_CONFIRMAR_SAIDA, texto: 'SIM, SAIR', tipo: 'perigo', aoVivo: estado.hover === 'confirmar-saida', pressionado: poseSim.pressionado, escalaExtra: poseSim.escalaExtra });
+    botao3D(ctx, { ...BOTAO_CANCELAR_SAIDA, texto: 'CANCELAR', tipo: 'secundario', aoVivo: estado.hover === 'cancelar-saida', pressionado: poseCancelar.pressionado, escalaExtra: poseCancelar.escalaExtra });
     return;
   }
 
-  botao3D(ctx, { ...BOTAO_CONTINUAR, texto: 'CONTINUAR', tipo: 'confirmar', destaque: true, aoVivo: estado.hover === 'continuar', t });
+  /** Cada botão do menu principal da pausa entra escalonado (§10.2 "os botões entram escalonados a 50ms") --
+   *  desenha `fn` dentro do alpha/deslocaY da pose de entrada deste índice. */
+  const comEntradaDeBotao = (indice: number, fn: () => void): void => {
+    const pose = poseEntrada(t, T_ENTRADA_BOTOES + escalonar(indice, PASSO_ENTRADA_BOTAO), DUR_ENTRADA_BOTAO, reduzido, 16);
+    ctx.save();
+    ctx.globalAlpha = pose.opacidade;
+    ctx.translate(0, pose.deslocaY);
+    fn();
+    ctx.restore();
+  };
+
+  const poseDoBotao = (id: string): { readonly pressionado: boolean; readonly escalaExtra: number } => estado.pressao?.pose(id, t) ?? { pressionado: false, escalaExtra: 1 };
+
+  comEntradaDeBotao(0, () => {
+    const pose = poseDoBotao('continuar');
+    botao3D(ctx, { ...BOTAO_CONTINUAR, texto: 'CONTINUAR', tipo: 'confirmar', destaque: true, aoVivo: estado.hover === 'continuar', t, pressionado: pose.pressionado, escalaExtra: pose.escalaExtra });
+  });
 
   const tipoReiniciar: TipoBotao3D = !estado.podeReiniciar ? 'desativado' : 'secundario';
-  botao3D(ctx, { ...BOTAO_REINICIAR, texto: 'REINICIAR CORRIDA', tipo: tipoReiniciar, aoVivo: estado.podeReiniciar && estado.hover === 'reiniciar' });
+  comEntradaDeBotao(1, () => {
+    const pose = poseDoBotao('reiniciar');
+    botao3D(ctx, { ...BOTAO_REINICIAR, texto: 'REINICIAR CORRIDA', tipo: tipoReiniciar, aoVivo: estado.podeReiniciar && estado.hover === 'reiniciar', pressionado: pose.pressionado, escalaExtra: pose.escalaExtra });
+  });
   if (!estado.podeReiniciar) {
     desenharTexto(ctx, 'só antes de cruzar a chegada', LARGURA / 2, BOTAO_REINICIAR.y + BOTAO_REINICIAR.h + 14, {
       fonte: '600 14px Barlow, sans-serif',
@@ -133,8 +198,14 @@ export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
     });
   }
 
-  botao3D(ctx, { ...BOTAO_CONFIGURACOES, texto: 'CONFIGURAÇÕES', tipo: 'secundario', aoVivo: estado.hover === 'configuracoes' });
-  botao3D(ctx, { ...BOTAO_VOLTAR_MENU, texto: 'VOLTAR AO MENU', tipo: 'perigo', aoVivo: estado.hover === 'voltar-menu' });
+  comEntradaDeBotao(2, () => {
+    const pose = poseDoBotao('configuracoes');
+    botao3D(ctx, { ...BOTAO_CONFIGURACOES, texto: 'CONFIGURAÇÕES', tipo: 'secundario', aoVivo: estado.hover === 'configuracoes', pressionado: pose.pressionado, escalaExtra: pose.escalaExtra });
+  });
+  comEntradaDeBotao(3, () => {
+    const pose = poseDoBotao('voltar-menu');
+    botao3D(ctx, { ...BOTAO_VOLTAR_MENU, texto: 'VOLTAR AO MENU', tipo: 'perigo', aoVivo: estado.hover === 'voltar-menu', pressionado: pose.pressionado, escalaExtra: pose.escalaExtra });
+  });
 
   desenharTexto(ctx, 'ESC/P continua', LARGURA / 2, PAINEL_Y + 366, {
     fonte: '600 14px Barlow, sans-serif',
@@ -154,6 +225,9 @@ export interface OpcoesControladorPausa {
   readonly aoAbrirConfiguracoes: () => void;
   /** Confirmou "sim, sair" no sub-painel: quem decide o que "sair" significa é o chamador (jogo.ts/campeonato.ts). */
   readonly aoConfirmarSaidaAoMenu: () => void;
+  /** Id do personagem do jogador (§11.8, "o personagem espia pela borda do painel") -- sem ele, a pausa funciona
+   *  igual, só sem ninguém espiando (nunca é motivo pra travar, mesma filosofia de sprite "melhor esforço"). */
+  readonly personagem?: string | undefined;
 }
 
 export interface ControladorPausa {
@@ -180,6 +254,15 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
   // Fundo C (§3.3): captura a corrida congelada UMA vez por pausa aberta -- reconstruir todo quadro seria caro
   // (reduz+amplia a imagem) e desnecessário (a corrida por baixo não se move enquanto pausada).
   let fundo: CamadaEstatica | null = null;
+  const pressao = criarEstadoPressao();
+  let spritePersonagem: SpritePersonagem | null = null;
+  void carregarSpritePersonagem(opcoes.personagem ?? 'capi')
+    .then((s) => {
+      spritePersonagem = s;
+    })
+    .catch(() => {
+      // fallback silencioso -- sem sprite, ninguém espia (ver `EstadoVisualPausa.spritePersonagem`)
+    });
 
   const ativo = (): boolean => pausado && !suspenso;
 
@@ -192,6 +275,7 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
     e.stopImmediatePropagation?.();
     const pt = eventoParaPontoLogico(e, opcoes.canvas);
     const alvo = botaoPausaEm(pt, confirmandoSaida);
+    if (alvo) pressao.marcar(alvo, ticksAbertura);
     if (confirmandoSaida) {
       if (alvo === 'confirmar-saida') {
         pausado = false;
@@ -269,7 +353,7 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
     desenhar(ctx) {
       if (!ativo()) return;
       if (!fundo && doc) fundo = construirFundoCongelado(doc, ctx.canvas, 0.45);
-      desenharPainelPausa(ctx, { confirmandoSaida, podeReiniciar: opcoes.podeReiniciar(), hover, t: ticksAbertura, fundo, documento: doc });
+      desenharPainelPausa(ctx, { confirmandoSaida, podeReiniciar: opcoes.podeReiniciar(), hover, t: ticksAbertura, fundo, documento: doc, spritePersonagem, pressao });
       ticksAbertura += 1;
     },
     destruir() {
