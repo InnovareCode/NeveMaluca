@@ -172,13 +172,32 @@ async function main() {
     console.log(`Determinismo (beto, vulcao-pe-gelado, semente 1, repetido): ${determinístico ? 'OK' : 'DIVERGIU'}.`);
     if (!determinístico) falhas.push({ determinismo: false });
 
-    // --- C3: a camada de jogo faz o mortal compensar (manobreiro Capi, ousadia 2, semente de corrida = a.base) ---
+    // --- C3: a camada de jogo faz o mortal compensar (manobreiro, ousadia 2, semente de corrida = a.base) ---
     // A trajetória do JOGADOR (bot dirigindo) não depende da semente de corrida (só a IA dos rivais depende) — por
-    // isso mede UMA vez por pista, não por semente. Critério é em AGREGADO nas 5 pistas, não piso por pista: o Morro
-    // (pista 1, roteirizada pra ser a mais fácil, plano C-D5) só tem 1 ponto de lançamento na geometria CONGELADA
-    // (medido: `inclinacaoGrausEm` nunca passa de ~0° fora dele, em qualquer limiar) — exigir 3 mortais TAMBÉM nela
-    // seria pedir pra geometria do terreno mudar, proibido neste C3. O agregado (soma/total nas 5) é o critério real.
-    console.log('\nCamada de jogo (C3): manobreiro (Capi, ousadia 2) x cuidadoso, pista a pista (agregado = critério).');
+    // isso mede UMA vez por pista/personagem, não por semente. Critério é em AGREGADO nas 5 pistas, não piso por
+    // pista: o Morro (pista 1, roteirizada pra ser a mais fácil, plano C-D5) só tem 1 ponto de lançamento na
+    // geometria CONGELADA (medido: `inclinacaoGrausEm` nunca passa de ~0° fora dele, em qualquer limiar) — exigir
+    // vários mortais TAMBÉM nela seria pedir pra geometria do terreno mudar, proibido neste C3.
+    //
+    // Calibragem "voo crível" (dono/iPhone, 2026-10-25, `IMPULSO_KICKER_MS` 32->16): com o voo mais curto (alvo
+    // ~1,6-2,2s, antes ~2,5-4s), o encaixe kicker->mortal deixou de ser quase garantido — o `planejarVoo` do bot
+    // estima o tempo de ar por uma fórmula SIMÉTRICA (`estimarTicksNoAr`), que erra um pouco contra o terreno real
+    // (pista desce); num voo de 3-4s esse erro é uma fração pequena do total e o bot sempre tem sobra para
+    // completar a volta, mas num voo de ~2s o MESMO erro absoluto (poucos ticks) já é grande o bastante pra, em
+    // ALGUMAS pistas/personagens, o bot soltar o giro cedo/tarde demais e fechar a só uns graus de completar —
+    // conta ZERO, não "quase" (mesmo efeito de cliff já documentado no comentário de `IMPULSO_KICKER_MS`, agora bem
+    // mais visível com margem menor). MEDIDO: pra Capi especificamente, em 2 das 5 pistas (vila-chocolate,
+    // cume-da-ventania) o manobreiro NUNCA fecha 1 mortal, em NENHUMA semente de corrida (testado 1-10) — não é
+    // falta de sorte, é a geometria exata daqueles kickers batendo mal com a estimativa do bot. Por isso o loop
+    // abaixo passou a somar os 6 PERSONAGENS (não só Capi): a física por personagem (`pulo` 90-110,
+    // `descida/atributos.ts`) muda o `impulsoPuloMs` de cada um o suficiente para empurrar o bot para o lado certo
+    // do cliff em pistas/personagens diferentes na MAIORIA das pistas — é o que prova, de fato, que "ainda dá pra
+    // fazer 1 mortal com o giro atual" (o pedido do dono), sem fingir que o bot da Capi sozinho reproduz isso em
+    // toda pista. Mesmo assim, `cume-da-ventania` continua em 0% mesmo com os 6 personagens nesta semente (ver
+    // números medidos abaixo) — é exatamente por isso que o critério é AGREGADO nas 5 pistas (comentário acima,
+    // já valia desde antes desta calibragem), não um piso por pista: forçar TODA pista a fechar pelo menos 1 nesta
+    // amostra única e determinística pediria mexer na geometria congelada ou tornar o bot não-determinístico.
+    console.log('\nCamada de jogo (C3): manobreiro (6 personagens, ousadia 2) x cuidadoso, pista a pista (agregado = critério).');
     const SEMENTE_CALIBRAGEM = a.base;
     let totalMortais = 0;
     let totalPulosKicker = 0;
@@ -188,44 +207,61 @@ async function main() {
     let totalObstaculosAltos = 0;
     let totalRentes = 0;
     for (const { def, gerada } of pistasOficiais) {
-      const config = m.descida.configDoPersonagem('capi');
       const camada = m.pista.gerarCamadaJogo(gerada, def);
-      const manobreiro = m.descida.criarBotManobreiro(gerada, config, { ousadia: 2 }, camada.obstaculosAltos);
-      const cuidadoso = m.descida.criarBotCuidadoso(gerada, {}, camada.obstaculosAltos);
+      let pistaMortais = 0;
+      let pistaPulosKicker = 0;
+      let pistaPulosComMortal = 0;
+      let pistaTicksManobreiro = 0;
+      let pistaTicksCuidadoso = 0;
+      let pistaRentes = 0;
+      for (const idPersonagem of personagens) {
+        const config = m.descida.configDoPersonagem(idPersonagem);
+        const manobreiro = m.descida.criarBotManobreiro(gerada, config, { ousadia: 2 }, camada.obstaculosAltos);
+        const cuidadoso = m.descida.criarBotCuidadoso(gerada, {}, camada.obstaculosAltos);
 
-      const doManobreiro = medirManobrasDoJogador(m, gerada, def, camada, SEMENTE_CALIBRAGEM, 'capi', manobreiro, a.maxTicks);
-      const doCuidadoso = rodarCorrida(m, gerada, def, SEMENTE_CALIBRAGEM, 'capi', cuidadoso, a.maxTicks);
+        const doManobreiro = medirManobrasDoJogador(m, gerada, def, camada, SEMENTE_CALIBRAGEM, idPersonagem, manobreiro, a.maxTicks);
+        const doCuidadoso = rodarCorrida(m, gerada, def, SEMENTE_CALIBRAGEM, idPersonagem, cuidadoso, a.maxTicks);
 
-      const razaoKicker = doManobreiro.pulosDeKicker > 0 ? doManobreiro.pulosDeKickerComMortal / doManobreiro.pulosDeKicker : 0;
-      const razaoTempo = doManobreiro.ticks / doCuidadoso.ticksJogador;
-      totalMortais += doManobreiro.mortais;
-      totalPulosKicker += doManobreiro.pulosDeKicker;
-      totalPulosKickerComMortal += doManobreiro.pulosDeKickerComMortal;
-      totalTicksManobreiro += doManobreiro.ticks;
-      totalTicksCuidadoso += doCuidadoso.ticksJogador;
+        pistaMortais += doManobreiro.mortais;
+        pistaPulosKicker += doManobreiro.pulosDeKicker;
+        pistaPulosComMortal += doManobreiro.pulosDeKickerComMortal;
+        pistaTicksManobreiro += doManobreiro.ticks;
+        pistaTicksCuidadoso += doCuidadoso.ticksJogador;
+        pistaRentes += doManobreiro.obstaculosRente;
+        if (!doManobreiro.chegou) falhas.push({ criterio: 'manobreiro-nao-chegou', pista: def.id, idPersonagem });
+      }
+      const razaoKicker = pistaPulosKicker > 0 ? pistaPulosComMortal / pistaPulosKicker : 0;
+      const razaoTempo = pistaTicksManobreiro / pistaTicksCuidadoso;
+      totalMortais += pistaMortais;
+      totalPulosKicker += pistaPulosKicker;
+      totalPulosKickerComMortal += pistaPulosComMortal;
+      totalTicksManobreiro += pistaTicksManobreiro;
+      totalTicksCuidadoso += pistaTicksCuidadoso;
       totalObstaculosAltos += camada.obstaculosAltos.length;
-      totalRentes += doManobreiro.obstaculosRente;
+      totalRentes += pistaRentes;
 
       console.log(
-        `  ${def.id}: kickers=${camada.kickers.length} galhos=${camada.obstaculosAltos.length} mortais=${doManobreiro.mortais} pulosDeKicker=${doManobreiro.pulosDeKicker} comMortal=${doManobreiro.pulosDeKickerComMortal} (${(razaoKicker * 100).toFixed(0)}%) | ticksManobreiro=${doManobreiro.ticks} ticksCuidadoso=${doCuidadoso.ticksJogador} (${((razaoTempo - 1) * 100).toFixed(1)}%) | avisos=${doManobreiro.avisosObstaculo} rente=${doManobreiro.obstaculosRente}`,
+        `  ${def.id}: kickers=${camada.kickers.length} galhos=${camada.obstaculosAltos.length} mortais=${pistaMortais} pulosDeKicker=${pistaPulosKicker} comMortal=${pistaPulosComMortal} (${(razaoKicker * 100).toFixed(0)}%) | ticksManobreiro=${pistaTicksManobreiro} ticksCuidadoso=${pistaTicksCuidadoso} (${((razaoTempo - 1) * 100).toFixed(1)}%) | rente=${pistaRentes}`,
       );
-      if (!doManobreiro.chegou) falhas.push({ criterio: 'manobreiro-nao-chegou', pista: def.id });
     }
     const razaoKickerAgregada = totalPulosKicker > 0 ? totalPulosKickerComMortal / totalPulosKicker : 0;
     const razaoTempoAgregada = totalTicksManobreiro / totalTicksCuidadoso;
     const mortaisPorPistaMedia = totalMortais / pistasOficiais.length;
     console.log(
-      `  Agregado (5 pistas): mortais=${totalMortais} (média ${mortaisPorPistaMedia.toFixed(1)}/pista), encaixe kicker->mortal=${(razaoKickerAgregada * 100).toFixed(0)}%, tempo manobreiro/cuidadoso=${razaoTempoAgregada.toFixed(3)} (${((razaoTempoAgregada - 1) * 100).toFixed(1)}%).`,
+      `  Agregado (5 pistas x 6 personagens): mortais=${totalMortais} (média ${mortaisPorPistaMedia.toFixed(1)}/pista), encaixe kicker->mortal=${(razaoKickerAgregada * 100).toFixed(0)}%, tempo manobreiro/cuidadoso=${razaoTempoAgregada.toFixed(3)} (${((razaoTempoAgregada - 1) * 100).toFixed(1)}%).`,
     );
-    // Piso recalibrado em 2026-10-24 (calibragem "pulo mais forte", dono/iPhone — `src/descida/constantes.ts`:
-    // `impulsoPuloMs` 6->9 muda a FORMA da estratégia do manobreiro: voos mais longos fazem `planejarVoo` mirar
-    // mortais de MAIS voltas (mais pontos cada), não mais mortais pequenos em sequência — medido: média cai de
-    // ~3,2 pra ~2,0/pista, mas o encaixe kicker->mortal continua 100% (nenhuma pista fica sem NENHUM mortal — o
-    // pior caso observado, Morro, tem 1) e o tempo manobreiro/cuidadoso MELHOROU (-19,3%, era -10,3%: manobrar
-    // compensa AINDA mais). O que o C3 original queria provar ("manobrar acontece e vale a pena") continua de
-    // pé — só o número "3" datava da física antiga. Piso novo: 1,5 (deixa folga sobre o pior caso observado, 2,0).
-    if (mortaisPorPistaMedia < 1.5) falhas.push({ criterio: 'mortais-por-pista-agregado', mortaisPorPistaMedia });
-    if (razaoKickerAgregada < 0.3) falhas.push({ criterio: 'kicker-mortal-agregado', razaoKickerAgregada });
+    // Piso recalibrado em 2026-10-25 (calibragem "voo crível", dono/iPhone — ver comentário grande acima do loop).
+    // MEDIDO com `IMPULSO_KICKER_MS=16` (6 personagens x 5 pistas, semente=1): mortais=13 (média 2,6/pista),
+    // encaixe kicker->mortal=13%, tempo manobreiro/cuidadoso=0,785 (-21,5% — manobrar continua MUITO mais rápido,
+    // folga enorme nesse critério, nem perto do piso de 1,02). O que o C3 quer provar ("a manobra ainda vale a
+    // pena, com o giro atual, pelo menos em algum lugar do elenco/pistas") continua de pé no agregado, mesmo com
+    // `cume-da-ventania` sozinha em 0% nesta amostra (comentário grande acima explica por quê isso é esperado e
+    // não um piso por pista). Pisos: bem abaixo do medido (margem grande, já que o número é mais sensível/caótico
+    // com voo curto — ver "ARMADILHA" na memória de `IMPULSO_KICKER_MS`): mortaisPorPistaMedia >= 1 (medido 2,6)
+    // e kicker->mortal >= 0,08 (medido 13%, é o número mais apertado — perto do piso de propósito, documentando
+    // a troca: voo mais crível custou reliability determinística do encaixe).
+    if (mortaisPorPistaMedia < 1) falhas.push({ criterio: 'mortais-por-pista-agregado', mortaisPorPistaMedia });
+    if (razaoKickerAgregada < 0.08) falhas.push({ criterio: 'kicker-mortal-agregado', razaoKickerAgregada });
     if (razaoTempoAgregada > 1.02) falhas.push({ criterio: 'manobrar-nao-compensa-no-tempo', razaoTempoAgregada });
 
     // --- C4: obstáculo alto de fato existe nas 5 pistas e o manobreiro (ousadia 2, mais afoito) consegue um "por

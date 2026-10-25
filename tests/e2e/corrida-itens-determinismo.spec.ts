@@ -35,6 +35,14 @@
  * de lugar (primeiros ~1000 ticks batem igual; diverge dali pra frente — esperado, não regressão). Mesma técnica
  * descartável (Vite SSR/Node) de antes; `pistaHash` do terreno continua INTACTO (camada nunca toca o terreno).
  *
+ * REGERADO DE NOVO em 2026-10-25 (calibragem "voo crível", dono/iPhone — ver `pista/camada-jogo.ts`,
+ * `IMPULSO_KICKER_MS` 32->16, `VERSAO_CAMADA_JOGO` '4'->'5'): o kicker da pista do Morro dá menos impulso, então o
+ * voo da Capi em cima dele muda (tempo no ar, ponto de pouso) — a trilha diverge a partir do ponto em que ela
+ * passa pelo kicker (índices 0-37, tick ~925, batem IGUAL ao golden anterior; diverge dali pra frente, esperado,
+ * não regressão). `pistaHash` continua INTACTO (camada nunca toca o terreno). Mesma técnica descartável (Vite
+ * SSR/Node, `ferramentas/gerar-golden-itens-tmp.mjs`, removido depois de extrair os números) de antes, CONFIRMADO
+ * batendo nos 3 motores (desktop/celular/webkit-se) antes de fixar o novo valor.
+ *
  * Mesmo truque de `core-determinismo.spec.ts`: o código roda como TEXTO no navegador (não como função do teste)
  * pro Playwright não reescrever os `import()`.
  */
@@ -89,29 +97,29 @@ const TRILHA_DOURADA = [
   '7eb6f680f9271e1f', '9217eac34c98a7d0', 'c0d57e07dc294004', '5a6b20e846a2afa3', '255d05f4bf013f7a',
   '3331ed2b0bc71017', '1d4c732fe2ca44b2', 'da277c87c8c1f07b', 'dd47a2921f5fb1b1', 'd554012d48a5080a',
   '4033ee40368f70a1', 'a5c57911b3995bbb', '8c22e24bb89985c1', '74ae40670efd4232', '304928657890d97c',
-  'dee61c70b09ee13d', 'd760a09d6df2f272', 'ec2c51f35a0b41b6', '6dd91621aafc62d9', '0eea987b45747265',
-  'a585a7567d8793b8', '666f524780b39e98', '04c358888bc32786', '6a8deb241bc9ba1f', 'b1fee5a94c118e30',
-  '411c36cff12e7c3b', 'e25df8895ad24b9b', '07927b2936bc855c', 'a1b26ce0be410b0c', '8de23f8781123e1b',
-  '5a1b329b4089ab08', '8a1d11ef899ca241', 'b5328c0d37456cdd', '43cee8dfafa21e89', '43ceecee9b7aae75',
-  '4c2c092e9e35652b', 'a41d791aa7f17a43', '949300353ff2a357', '968d15381bf3c128', '31d12436b90a15e6',
-  'd40c2b40a91f5d5c', 'a73041725c338896', '208645c4112fbc82', 'a4ac559b690de777', '8601dacdd891d013',
-  '6adc7b39b2846cf8', '8f046eae506a5bc1', '23fb81a0e3a848c9', '3428fe3e1f11c10e', 'be8e4d6bb2b83594',
-  'cb93ec625ea185b3', '657ec1780a985b7d', '14b6e19367e57a8a', '4bdbab6b4756e320', '2bdcd6e51fa91a74',
-  'c85ba08e3af4df1c', 'ce1a0a0f0e65eb70', 'a0c6b46c3b988aae', 'b941bf9469ac56c0', '758b81427a321650',
-  'a5c00fccceb685a9', '336e58790e7f3bc0', '876ef953f59e2d44', '669e655b5e784bb9', '46ed51de41b0a3e1',
-  'c8b9a1a438094eeb', '62472530b1ffa3c9', 'e48c192d92924257',
+  'dee61c70b09ee13d', 'd760a09d6df2f272', 'ec2c51f35a0b41b6', 'f2e23729d75fece9', 'e8a235486e75f472',
+  'b8f314f7d64aab17', 'c10a1c0f4aa44ab5', 'dd4f73ce09f4d6ec', 'ef80e147f3967149', 'a76ef19690b8b53b',
+  '98ee19d350fe132c', 'b71eb14608a655d3', 'f2a1c0a546b35c97', '8988657d7a4b503e', 'eb1c1879e263cedb',
+  '12c7953b65f2e687', '9a1f7441e2b14bed', '5c70cea2433ed2bc', 'd1541793653d82b3', '279edb53f56a5eb3',
+  '12dec66bd62526bc', '89cd1e4ba7bc1006', '74b7987ffe187504', '0acdaa3f040c2eb9', 'e0d6e77092cb0bdf',
+  'a6153ef2f138c6b5', '15f18dbdb784b513', '43bb0479c64c8937', 'f6062272f22cefe9', 'ed81d9f81aa0ab57',
+  'd60b12651def5211', '3cb5bbd5ea4e693b', '4cb9710127709abf', '960aaf2856326a2c', '946d570be4399a53',
+  '7f78551c98253a91', '842040cba59465b9', 'e854704bbf23c2f8', 'f81367399fb36d16', 'ac8cf01e728c7076',
+  'f2e0bd35332e0835', 'fb54f9817f5a886f', 'fba29d5b8b8931c5', 'f8b617ae17c0da51', '80c9db4d34fbe9ac',
+  '81550cd2bb3af184', '874e947eae0aa42f', 'fa4ef29a46bc85c2', '496ac267b6ef4403', '5965d521f45b0866',
+  'c2431b83bb18e588', '65426da2ef900d6c', 'a3d515faf5428dee',
 ];
 
 const RESULTADO_DOURADO = {
   pista: 'morro-do-pinhao',
-  ordem: ['beto', 'bia', 'cidinha', 'queque', 'bandeira', 'capi'],
-  ticks: { capi: 2174, bandeira: 1864, cidinha: 1846, beto: 1825, queque: 1860, bia: 1837 },
+  ordem: ['bia', 'beto', 'bandeira', 'cidinha', 'queque', 'capi'],
+  ticks: { capi: 2159, bandeira: 1864, cidinha: 1870, beto: 1848, queque: 1952, bia: 1840 },
   resumoJogador: {
-    pontos: 3080, ticks: 2174, tombos: 0, maiorVoltasNumSalto: 0, maiorTicksNoAr: 214, maiorGrindTicks: 0,
-    pousosPerfeitos: 0, maiorMult: 2, maiorComboManobras: 1, bonecos: 2, concluiu: true,
+    pontos: 2970, ticks: 2159, tombos: 0, maiorVoltasNumSalto: 0, maiorTicksNoAr: 126, maiorGrindTicks: 0,
+    pousosPerfeitos: 0, maiorMult: 2, maiorComboManobras: 2, bonecos: 3, concluiu: true,
   },
-  flocosGanhos: 15,
-  itens: { acertosDados: 0, acertosSofridos: 5 },
+  flocosGanhos: 19,
+  itens: { acertosDados: 1, acertosSofridos: 5 },
 };
 
 test('corrida + itens: mesma semente/comandos do jogador (bot cuidadoso, usarItem sempre true) bate EXATO com o Node em qualquer motor JS (hashEstado tick a tick, ResultadoCorrida e hash da pista)', async ({ page }) => {
@@ -121,14 +129,14 @@ test('corrida + itens: mesma semente/comandos do jogador (bot cuidadoso, usarIte
   const r = (await page.evaluate(PROGRAMA)) as Record<string, unknown>;
   expect(erros).toEqual([]);
   expect(r['pistaHash']).toBe('1c4d551601d3a6ae');
-  expect(r['totalTicks']).toBe(2175);
+  expect(r['totalTicks']).toBe(2160);
   // Comparação ponto a ponto (não só `toEqual` da lista inteira) pra apontar o ÍNDICE exato (tick = índice*25,
   // exceto o último) onde este motor divergiu do Node, se divergir.
   const trilha = r['trilha'] as string[];
   for (let idx = 0; idx < TRILHA_DOURADA.length; idx++) {
     expect(trilha[idx], `hashEstado diverge no índice ${idx} (tick ~${idx * 25}, semente=2026, pista=morro-do-pinhao)`).toBe(TRILHA_DOURADA[idx]);
   }
-  expect(r['hashNaChegada']).toBe('e48c192d92924257');
+  expect(r['hashNaChegada']).toBe('a3d515faf5428dee');
   expect(r['resultado']).toEqual(RESULTADO_DOURADO);
-  expect(r['hashAposFinalizar']).toBe('e48c192d92924257');
+  expect(r['hashAposFinalizar']).toBe('a3d515faf5428dee');
 });

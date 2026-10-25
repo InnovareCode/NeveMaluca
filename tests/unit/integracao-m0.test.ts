@@ -16,6 +16,7 @@ import {
   PISTAS_INICIAIS,
   PISTAS_PROVISORIAS,
   REGRAS_SAVE,
+  VERSAO_CAMADA_DOS_RECORDES,
   VERSAO_FISICA_DOS_RECORDES,
   VERSAO_PROVISORIA_DA_PISTA,
   exigirRegrasSaveValidas,
@@ -23,6 +24,7 @@ import {
   type RegrasDoCatalogo,
 } from '../../src/data';
 import { VERSAO_MOTOR } from '../../src/descida/constantes';
+import { VERSAO_CAMADA_JOGO } from '../../src/pista/camada-jogo';
 import { ArmazenamentoResiliente, carregarSave, salvarSave, sanearSave, type RegrasSave } from '../../src/meta';
 import { desbloquearAudio } from '../../src/platform/audio-desbloqueio';
 import * as Plataforma from '../../src/platform/constantes';
@@ -149,11 +151,14 @@ describe('data/regras-save (catálogo provisório de ids)', () => {
 
   it('é atribuível ao RegrasSave do meta/ (a forma estrutural não se afastou do contrato do Cronos)', () => {
     const comoMeta: RegrasSave = REGRAS_SAVE;
-    expect(comoMeta.versaoPista?.['morro-do-pinhao']).toBe(`${VERSAO_PROVISORIA_DA_PISTA}.${VERSAO_FISICA_DOS_RECORDES}`);
+    expect(comoMeta.versaoPista?.['morro-do-pinhao']).toBe(
+      `${VERSAO_PROVISORIA_DA_PISTA}.${VERSAO_FISICA_DOS_RECORDES}.${VERSAO_CAMADA_DOS_RECORDES}`,
+    );
   });
 
   it('a versão dos recordes acompanha a física: recorde de outro VERSAO_MOTOR não compete (vai para recordesAntigos)', () => {
     expect(VERSAO_FISICA_DOS_RECORDES).toBe(`f${VERSAO_MOTOR}`);
+    expect(VERSAO_CAMADA_DOS_RECORDES).toBe(`c${VERSAO_CAMADA_JOGO}`);
     const recordeAntigo = { pontos: 999_999, ticks: 1, personagem: 'capi', versaoPista: VERSAO_PROVISORIA_DA_PISTA, quando: '2026-10-23T00:00:00.000Z' };
     const save = sanearSave({ versao: 1, recordes: { 'morro-do-pinhao': [recordeAntigo] } }, REGRAS_SAVE);
     expect(save.recordes['morro-do-pinhao'] ?? []).toEqual([]);

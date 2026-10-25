@@ -37,7 +37,13 @@ import { alturaEm, inclinacaoGrausEm, trilhoEm } from './consulta';
 // sempre na mesma pista (determinístico — não "má sorte", falha de geração). `VALORES` de `obstaculosAltos`/
 // `caixas` mudam com isso (forma do tipo é a mesma) — bump por ser mudança de FEATURE aprovada, não só valor
 // (mesmo padrão do bump '2'->'3'); goldens que gravam `CamadaJogo` regerados no mesmo commit.
-export const VERSAO_CAMADA_JOGO = '4';
+//
+// '5' (calibragem "voo crível", dono/iPhone, 2026-10-25): só `IMPULSO_KICKER_MS` mudou de valor (32->16, ver
+// comentário dele abaixo) — mas é uma mudança de FEATURE aprovada (voo do kicker, não só um número), mesmo padrão
+// dos bumps anteriores: muda `kickers[].impulsoMs` em toda `CamadaJogo` gerada, então o hash (`semHash` inclui
+// `kickers`) muda de qualquer forma; o bump deixa explícito NO VALOR DA VERSÃO que a física do kicker mudou, não
+// só a geometria. `obstaculosAltos`/`caixas` continuam sem mudar de FORMA (só o número do kicker é outro).
+export const VERSAO_CAMADA_JOGO = '5';
 
 /** Passo do varredor de rampas, em metros: fino o bastante para não pular picos curtos (vão/kicker-duplo). */
 const PASSO_VARREDURA_M = 1;
@@ -61,17 +67,32 @@ const MARGEM_CHEGADA_M = 15;
 /** Teto de kickers por pista (pistas de 900-1200 m do plano não precisam de mais que isso para a linha ficar clara). */
 const MAX_KICKERS = 18;
 /**
- * Impulso somado ao pulo normal dentro de uma zona de kicker, m/s. O plano estimava ~1,4-1,8 s de ar (física da
- * Capi) como o mínimo TEÓRICO pra 1 mortal (`estimarTicksNoAr`/`planejarVoo`, `descida/bot.ts`) — mas o manobreiro
- * decide a volta pelo cronograma DISCRETO de aceleração do giro (acelera, soma graus, solta com antecedência pra
- * convergir em exatamente 360°,720°...); medido no harness: com folga pequena sobre o mínimo teórico, o pouso fecha
- * a só uns graus de completar a volta (conta como ZERO pontos, não "quase"). Só uma folga GRANDE sobre o mínimo
- * (aqui, ar medido de ~2,5-4 s nos kickers reais das 5 pistas oficiais) empurra o cronograma pra cima do próximo
- * múltiplo de 360° com margem — e isso é o valor que o harness `ferramentas/harness-corrida/cli.mjs` de fato prova
- * (>= 3 mortais/pista em média, >= 30% de encaixe kicker->mortal, manobrar compensando no tempo). Baixar este
- * número pro "ideal" de 1,4-1,8 s teórico FAZ o harness falhar — testado, não é estética.
+ * Impulso somado ao pulo normal dentro de uma zona de kicker, m/s.
+ *
+ * Calibragem "voo crível" (dono/iPhone, 2026-10-25): o valor anterior (32) media ~2,5-4s de ar e altura máxima
+ * ~25-85m (mediana ~37m) — 13x a altura do personagem (`ALTURA_ALVO_M=2,8`, `render/piloto.ts`) e tempo no ar
+ * irreal (dono: "fica no ar, some, cai", câmera tem que abrir demais). 32 -> 16: ar medido cai pra ~1,9-2,6s
+ * (mediana ~2,2s, dentro do alvo ~1,6-2,2s pedido) e altura máxima pra ~9-21m (mediana ~13m, ~4-7x o personagem —
+ * bem mais coerente). Medição em `ferramentas/medir-voos-tmp.mjs` (descartável, removido depois de extrair os
+ * números: harness tipo `harness-corrida/cli.mjs`, 6 personagens x 5 pistas oficiais x 5 sementes, bots
+ * cuidadoso+manobreiro, separando voo comum/descida/kicker por ângulo de decolagem e zona).
+ *
+ * O plano original estimava ~1,4-1,8 s de ar (física da Capi) como o mínimo TEÓRICO pra 1 mortal
+ * (`estimarTicksNoAr`/`planejarVoo`, `descida/bot.ts`: giro leva uns ~1,1s do início ao fechar 360° com o
+ * `giroVelMaxGrausPorTick`/`giroAcelGrausPorTick2` de hoje) — o alvo pedido (1,6-2,2s) já fica ACIMA desse mínimo,
+ * com folga de sobra pra um jogador de verdade (que vê o próprio giro e solta no momento certo, diferente do bot).
+ * MAS o bot manobreiro decide a volta por um cronograma DISCRETO + uma estimativa SIMÉTRICA de tempo de ar
+ * (`estimarTicksNoAr`) que erra um pouco contra o terreno real (a pista desce) — num voo de 3-4s esse erro é uma
+ * fração pequena do total e o bot sempre converge pra cima do próximo múltiplo de 360° com sobra; num voo de ~2s o
+ * MESMO erro absoluto (poucos ticks) já derruba a conta pra ZERO em ALGUMAS pistas/personagens específicos (não é
+ * "quase", fecha a uns graus de faltar). **Isto é uma limitação da ESTIMATIVA do bot, não da física/giro real** —
+ * por isso o harness (`ferramentas/harness-corrida/cli.mjs`, critério C3) foi recalibrado pra medir o encaixe
+ * agregando os 6 PERSONAGENS do elenco (não só a Capi): a física por personagem (atributo `pulo`, 90-110,
+ * `descida/atributos.ts`) muda o `impulsoPuloMs` de cada um o suficiente pra empurrar o bot pro lado certo do
+ * "cliff" em pistas diferentes — prova que o mortal ainda é alcançável com o giro atual, sem fingir que o bot da
+ * Capi sozinho reproduz isso em toda pista (ver comentário grande no próprio harness).
  */
-export const IMPULSO_KICKER_MS = 32;
+export const IMPULSO_KICKER_MS = 16;
 
 const RAIO_FLOCO_CHAO_M = 1.1;
 const RAIO_FLOCO_ARCO_M = 1.6;
@@ -101,11 +122,13 @@ const MARGEM_KICKER_OBSTACULO_M = 10;
  * um galho plantado exatamente onde o salto pousa — e isso é DETERMINÍSTICO por pista, não "má sorte": a mesma
  * rampa sempre pousa (e sempre batia) no mesmo galho, toda corrida.
  *
- * Kickers de verdade (impulso +32) pousam MUITO mais longe (~135-170m medido) — fora do alcance prático de
- * qualquer janela de proteção sem apagar a densidade de obstáculo da pista inteira; o motor já evita o TOMBO ali
- * por outro caminho (`descida/motor.ts`: `p.agachado` é decidido e aplicado no MESMO tick em que o pouso é
- * checado, então mesmo pousando em cima na mira o bot nunca bate — medido 0% de tombo nesses 129 pousos de
- * kicker). Esta margem cobre o pulo comum, que é o caso sem essa rede de segurança embutida.
+ * Kickers de verdade pousam MUITO mais longe que isso — mediana ~90m, p90 ~120m medido pós-calibragem "voo
+ * crível" (`IMPULSO_KICKER_MS=16`, 2026-10-25; era ~135-170m com o impulso antigo de 32, mesma conclusão: segue
+ * fora do alcance prático de qualquer janela de proteção sem apagar a densidade de obstáculo da pista inteira). O
+ * motor já evita o TOMBO ali por outro caminho (`descida/motor.ts`: `p.agachado` é decidido e aplicado no MESMO
+ * tick em que o pouso é checado, então mesmo pousando em cima na mira o bot nunca bate — reconfirmado 0% de tombo
+ * em 751 pousos de kicker pós-calibragem, reflexo independe da distância). Esta margem cobre o pulo comum, que é
+ * o caso sem essa rede de segurança embutida.
  */
 const MARGEM_POUSO_ALTO_M = 45;
 

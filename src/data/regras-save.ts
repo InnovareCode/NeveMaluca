@@ -57,8 +57,13 @@ export const VERSAO_PROVISORIA_DA_PISTA = 'provisoria';
  * TEM que ser `f` + `VERSAO_MOTOR` (`descida/constantes.ts`; `data/` não importa `descida/`) — teste em `integracao-m0`.
  */
 export const VERSAO_FISICA_DOS_RECORDES = 'f3';
+/**
+ * Camada de jogo (kickers, galhos, caixas) que gravou o recorde: um kicker com outro impulso muda o tempo da descida
+ * tanto quanto a física. TEM que ser `c` + `VERSAO_CAMADA_JOGO` (`pista/camada-jogo.ts`) — teste em `integracao-m0`.
+ */
+export const VERSAO_CAMADA_DOS_RECORDES = 'c5';
 export const VERSAO_DAS_PISTAS: Readonly<Record<string, string>> = Object.fromEntries(
-  PISTAS_PROVISORIAS.map((p) => [p, `${VERSAO_PROVISORIA_DA_PISTA}.${VERSAO_FISICA_DOS_RECORDES}`]),
+  PISTAS_PROVISORIAS.map((p) => [p, `${VERSAO_PROVISORIA_DA_PISTA}.${VERSAO_FISICA_DOS_RECORDES}.${VERSAO_CAMADA_DOS_RECORDES}`]),
 );
 
 export const REGRAS_SAVE: RegrasDoCatalogo = {
