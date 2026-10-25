@@ -14,14 +14,24 @@
  *    tela (nunca deixa o piloto sair do quadro num transitório), não é mais o mecanismo principal.
  *  - Zoom de `ZOOM_PARADO` (1,0) até `ZOOM_VELOCIDADE_MAX` (~0,8) conforme a velocidade se aproxima de
  *    `VELOCIDADE_MAX_REF_MS` — ponto de partida para afinar no aparelho com a Vega e o dono (plano: "a medir").
- *  - Câmera de SALTO (pedido do dono, iPhone, 2026-10-24: "no salto alto a câmera fica só no personagem caindo e
- *    ele não vê onde vai cair"): no ar, `preverPouso()` simula a trajetória balística (vx constante + gravidade
- *    cosmética que espelha `ConfigDescida.gravidadeMs2`, SEMPRE 22 -- `descida/atributos.ts`: "regra do mundo,
- *    nunca varia por personagem") até cruzar `alturaDoTerreno` (mesma função do `render/terreno.ts` real -- nunca
- *    uma pista imaginária). Com o ponto de pouso previsto, o olhar-e-zoom da câmera são empurrados SUAVEMENTE
- *    (`fatorSalto`, o mesmo tipo de easing em rampa que já existia no zoom de velocidade -- nunca um salto abrupto
- *    de alvo) até enquadrar piloto + pouso; ao tocar o chão, `fatorSalto` relaxa de volta sozinho. O ponto previsto
- *    sai por `previsaoPouso()` para `render/piloto.ts` desenhar o marcador discreto; a câmera NUNCA desenha nada.
+ *  - Vertical de PULO COMUM: zona morta (`ZONA_MORTA_Y_M`) -- `alvoYBase` só se move quando o piloto sai da faixa,
+ *    e só o suficiente pra voltar pra borda dela (nunca persegue o `y` exato). Achado do dono (iPhone,
+ *    2026-10-25, build com `ALTURA_ALVO_M=2,8`): "quando pula parece que vai pra baixo" -- a 1ª versão da câmera
+ *    de salto (abaixo) engatava em QUALQUER 'ar', inclusive pulo comum, e começava a olhar pro pouso (abaixo) já
+ *    na decolagem, brigando com a subida real do piloto. A zona morta sozinha já resolve o pulo do dia a dia: a
+ *    altura de ápice de um pulo comum em chão plano (~1,8 m, `descida/constantes.ts`: hangtime ~0,82 s) cabe
+ *    inteira dentro da faixa -- a câmera literalmente não se mexe, o piloto sobe e desce na tela sozinho (arco
+ *    visível, pedido do dono), sem "câmera quase parada" virar wishful thinking.
+ *  - Câmera de SALTO GRANDE (pedido do dono, iPhone, 2026-10-24: "no salto alto a câmera fica só no personagem
+ *    caindo e ele não vê onde vai cair") só entra em jogo quando os DOIS valem: (1) já passou do ÁPICE
+ *    (`piloto.vy <= 0`: NUNCA durante a subida, por construção -- resolve o achado do dono acima pela raiz, não só
+ *    a zona morta) e (2) a queda prevista até o pouso (`preverPouso()`, trajetória balística com gravidade
+ *    cosmética que espelha `ConfigDescida.gravidadeMs2`, SEMPRE 22 -- "regra do mundo, nunca varia por
+ *    personagem") é de verdade grande (`QUEDA_MIN_SALTO_GRANDE_M`) -- kicker OU queda comprida por terreno, tanto
+ *    faz a causa. A classificação ("é salto grande?") é feita UMA VEZ no ápice, não recalculada toda hora. Com o
+ *    pouso previsto, o olhar-e-zoom são empurrados SUAVEMENTE (`fatorSalto`, mesma rampa do zoom de velocidade)
+ *    até enquadrar piloto + pouso; ao tocar o chão, `fatorSalto` relaxa de volta sozinho. O ponto previsto sai por
+ *    `previsaoPouso()` para `render/piloto.ts` desenhar o marcador discreto; a câmera NUNCA desenha nada.
  *  - Tremida curta no pouso pesado/torto e no tombo, com `rngVisual` (NUNCA `Math.random`: regra de todas as
  *    camadas) e decaimento linear em `DURACAO_TREMIDA_TICKS`.
  *  - "Soco" de câmera (feedback do dono, 2026-10-24: "zoom-punch/leve tremor no pouso forte e ao ser atingido"):
@@ -65,11 +75,29 @@ const GRAVIDADE_PREVISAO_MS2 = 22;
 /** Passo e horizonte da simulação de pouso (acima do hangtime real de qualquer salto -- ver `descida/constantes.ts`). */
 const PASSO_PREVISAO_S = 0.05;
 const HORIZONTE_PREVISAO_PASSOS = 90;
+/** Faixa (metros, pra cada lado) em que o `y` do piloto pode variar sem a câmera reagir verticalmente -- maior
+ *  que a altura de ápice de um pulo comum em chão plano (~1,8 m), então o pulo do dia a dia cabe inteiro dentro
+ *  e a câmera literalmente não se mexe nele (ver comentário do topo do arquivo). */
+const ZONA_MORTA_Y_M = 2.2;
+/** Queda prevista (m, do ápice até o pouso) a partir da qual um salto conta como "grande" -- bem acima do que um
+ *  pulo comum em chão plano produz (~1,8 m de ápice -> queda parecida), bem abaixo do que um kicker produz
+ *  (dezenas de metros, medido no navegador). Decidido 1x por voo, no ápice -- nunca durante a subida. */
+const QUEDA_MIN_SALTO_GRANDE_M = 4;
 /** Fração da tela (largura/altura) reservada para caber piloto + pouso previsto, com folga nas bordas. */
 const MARGEM_ENQUADRAMENTO_SALTO = 0.72;
-/** Zoom-out MÁXIMO do enquadramento de salto -- saltos muito altos/longos não deixam o personagem minúsculo; o
- *  pedido do dono é "ver onde vai cair", não "encolher ao extremo" (convive com `ZOOM_VELOCIDADE_MAX`). */
-const ZOOM_SALTO_MIN = 0.55;
+/** Zoom-out MÁXIMO do enquadramento de salto -- regra dura do dono (iPhone, 2026-10-25): o piloto nunca fica
+ *  menor que ~60% do tamanho de "cruzeiro" (`ZOOM_PARADO=1,0`, a referência, não o zoom de velocidade que já é
+ *  menor em si). Medido no navegador (skill medir-antes-de-afirmar, kicker real): em `0,55` o piloto ficava
+ *  visivelmente minúsculo num quadro perto do ápice -- subiu pra `0,6` (exatamente a razão pedida). */
+const ZOOM_SALTO_MIN = 0.6;
+/** Regra dura do dono (iPhone, 2026-10-25): o piloto NUNCA fica a menos de ~15% da altura da tela de qualquer
+ *  borda (nem colado em cima, nem embaixo) -- rede de segurança final sobre o `alvoY` E sobre o `y` já integrado
+ *  pela mola (ver as duas travas abaixo), igual espírito de `FRACAO_MAX_OLHAR_FRENTE` em X. `0,17`, não `0,15`
+ *  cravado: mesmo travando os dois (alvo E resultado), sobra uma folga de arredondamento/escala-defasada de
+ *  ~1-2 pontos percentuais -- medido no navegador, `0,15` exato deixava a margem de baixo fechar em "14,6%" no
+ *  pouso de um kicker grande (zoom voltando rápido), por isso a folga. Medido: sem NENHUMA trava, no ápice de um
+ *  salto de kicker bem alto o piloto chegava a ~2% da altura da tela (quase cortado em cima). */
+const FRACAO_MARGEM_BORDA_Y = 0.17;
 /** Quanto o alvo da câmera (olhar/zoom) se desloca para o enquadramento de salto por tick, 0..1 (igual espírito do
  *  `* 0.1` do zoom de velocidade): suave o bastante para nunca "enjoar" entrando ou saindo do ar. */
 const FATOR_EASE_SALTO = 0.08;
@@ -149,9 +177,16 @@ export function criarCamera(xInicial: number, yInicial: number): Camera {
   let ticksPunch = 0;
   let intensidadePunch = 0;
   // Câmera de salto: `fatorSalto` é a MESMA ideia de easing do zoom de velocidade (`* 0.1` abaixo), só que decidindo
-  // o quanto o olhar/zoom já migrou em direção ao enquadramento piloto+pouso -- sobe no ar, desce no chão, nunca pula.
+  // o quanto o olhar/zoom já migrou em direção ao enquadramento piloto+pouso -- sobe depois do ápice de um salto
+  // GRANDE, desce no chão, nunca pula (ver comentário do topo do arquivo).
   let fatorSalto = 0;
   let ultimaPrevisao: { readonly x: number; readonly y: number } | null = null;
+  // Zona morta vertical: `alvoYBase` só persegue o `y` do piloto quando ele sai da faixa -- ver `ZONA_MORTA_Y_M`.
+  let alvoYBase = yInicial;
+  // Decididos 1x por voo, no ÁPICE (nunca na subida): `apiceDetectado` evita reavaliar a cada tick, `saltoGrandeAtivo`
+  // é o que de fato liga a câmera de salto grande (`fatorSalto` só mira 1 quando isto é `true`).
+  let apiceDetectado = false;
+  let saltoGrandeAtivo = false;
 
   function golpe(intensidade: number): void {
     const i = Math.max(0, Math.min(1, intensidade));
@@ -174,7 +209,33 @@ export function criarCamera(xInicial: number, yInicial: number): Camera {
       // Também desaparece em `vx === 0`, preservando o mesmo caso de teste.
       const atrasoRegimeM = (2 * piloto.vx) / Math.sqrt(RIGIDEZ_CAMERA);
       let alvoX = piloto.x + olharFrenteM + atrasoRegimeM;
-      let alvoY = piloto.y;
+
+      // Zona morta vertical (pulo comum, chão e ar): só reage quando o piloto sai da faixa, e só o suficiente pra
+      // voltar pra borda dela -- "câmera quase parada" de verdade, não só um adjetivo (ver topo do arquivo).
+      //
+      // `compensacaoY`: SÓ quando a zona morta está ativamente sendo esticada (fora dela) -- mesma ideia do
+      // `atrasoRegimeM` em X (`2*v/ωn`), só que aqui o alvo também ACELERA (gravidade no ar, `piloto.vy` não é
+      // constante como `vx`) -- por isso entra um 2º termo, `aceleracaoAlvo/ωn²`, a compensação EXATA de regime
+      // pra uma mola de 2ª ordem perseguindo um alvo com posição+velocidade+aceleração conhecidas (`r + 2r'/ωn +
+      // r''/ωn²` cancela o erro de regime pra qualquer `r(t)` suave, não só ramp -- aqui é a mesma dedução de
+      // `atrasoRegimeM`, com o termo de 2ª ordem a mais porque `r''=aceleração≠0`). Achado medindo no navegador
+      // (skill medir-antes-de-afirmar, salto de kicker real): só o termo de velocidade (sem o de aceleração) já
+      // resolvia a maior parte, mas sobrava uma ondulação -- o (pilotoY - camY) ainda overshoot-ava e corrigia de
+      // volta visivelmente ENQUANTO o piloto subia de verdade, porque a "rampa" que a câmera persegue não é reta
+      // (desacelera por causa da gravidade) e só cancelar a velocidade não cancela essa curvatura. Sem isto
+      // (achado original), o (pilotoY - camY) chegava ao pico e caía **56 ticks antes do ápice físico de verdade**
+      // (`piloto.vy<=0`) -- o personagem na tela parecia "virar e descer" enquanto ainda subia. Exatamente o
+      // "parece que vai pra baixo" que o dono reportou. Dentro da zona morta (`compensacaoY=0`) nada muda: o
+      // pulo comum continua com a câmera perfeitamente parada.
+      let compensacaoY = 0;
+      const diffY = piloto.y - alvoYBase;
+      if (diffY > ZONA_MORTA_Y_M || diffY < -ZONA_MORTA_Y_M) {
+        alvoYBase = diffY > 0 ? piloto.y - ZONA_MORTA_Y_M : piloto.y + ZONA_MORTA_Y_M;
+        const aceleracaoAlvo = piloto.modo === 'ar' ? -GRAVIDADE_PREVISAO_MS2 : 0;
+        compensacaoY = (2 * piloto.vy) / Math.sqrt(RIGIDEZ_CAMERA) + aceleracaoAlvo / RIGIDEZ_CAMERA;
+      }
+      let alvoY = alvoYBase + compensacaoY;
+
       let zoomAlvo = ZOOM_PARADO + (ZOOM_VELOCIDADE_MAX - ZOOM_PARADO) * t;
 
       // `zoom` aqui é o valor do tick anterior (muda pouco por tick, câmera já é suavizada) -- usado só pra
@@ -182,12 +243,25 @@ export function criarCamera(xInicial: number, yInicial: number): Camera {
       const escalaAtual = PX_POR_METRO * zoom;
       const offsetMaxPx = LARGURA * FRACAO_MAX_OLHAR_FRENTE;
 
-      // Previsão de pouso: só recalcula/empurra o enquadramento no ar (ou enquanto o easing ainda está voltando do
-      // ar, pra sair suave). `fatorSalto` evolui sempre (rampa própria), independente de a previsão ter resolvido.
-      const noAr = piloto.modo === 'ar';
-      fatorSalto += ((noAr ? 1 : 0) - fatorSalto) * FATOR_EASE_SALTO;
+      // Classifica "salto grande" 1x por voo, só no ÁPICE (`vy` cruza de + pra <=0) -- NUNCA durante a subida, por
+      // construção: é isso que garante que a câmera jamais antecipa o pouso enquanto o piloto ainda está subindo
+      // (achado do dono, ver topo do arquivo). Fora do ar, reseta pro próximo voo.
+      if (piloto.modo === 'ar') {
+        if (!apiceDetectado && piloto.vy <= 0) {
+          apiceDetectado = true;
+          const pousoNoApice = preverPouso(piloto, pista);
+          saltoGrandeAtivo = pousoNoApice !== null && piloto.y - pousoNoApice.y >= QUEDA_MIN_SALTO_GRANDE_M;
+        }
+      } else {
+        apiceDetectado = false;
+        saltoGrandeAtivo = false;
+      }
+
+      // `fatorSalto` só mira 1 quando o voo JÁ foi classificado como grande (pós-ápice) -- continua evoluindo em
+      // rampa suave mesmo depois do pouso, só pra sair do enquadramento de volta ao normal sem solavanco.
+      fatorSalto += ((saltoGrandeAtivo ? 1 : 0) - fatorSalto) * FATOR_EASE_SALTO;
       ultimaPrevisao = null;
-      if (noAr || fatorSalto > 0.001) {
+      if (saltoGrandeAtivo || fatorSalto > 0.001) {
         const pouso = preverPouso(piloto, pista);
         if (pouso) {
           ultimaPrevisao = pouso;
@@ -207,6 +281,19 @@ export function criarCamera(xInicial: number, yInicial: number): Camera {
         }
       }
 
+      // Rede de segurança final (regra dura do dono, iPhone, 2026-10-25): o piloto nunca fica a menos de
+      // `FRACAO_MARGEM_BORDA_Y` da altura da tela de qualquer borda, nem em cima nem embaixo -- trava o ALVO já
+      // calculado (zona morta + salto), mesmo espírito de `FRACAO_MAX_OLHAR_FRENTE` em X. Resolve `y` em função de
+      // `yTela` (`render/mundo.ts: mundoParaTela`) e limita `(piloto.y - alvoY)` ao intervalo que mantém
+      // `yTela` dentro de `[margemPx, ALTURA-margemPx]`. Medido no navegador: sem isto, perto do ápice de um
+      // salto de kicker grande o piloto chegava a ~2% da altura da tela (quase cortado em cima).
+      const margemBordaPx = ALTURA * FRACAO_MARGEM_BORDA_Y;
+      const anchorPx = ANCORA_HORIZONTE_FRAC * ALTURA;
+      const diffYMaxPx = anchorPx - margemBordaPx; // piloto perto da borda de CIMA (yTela pequeno)
+      const diffYMinPx = anchorPx - (ALTURA - margemBordaPx); // piloto perto da borda de BAIXO (yTela grande)
+      const diffYPx = Math.max(diffYMinPx, Math.min(diffYMaxPx, (piloto.y - alvoY) * escalaAtual));
+      alvoY = piloto.y - diffYPx / escalaAtual;
+
       const acelX = RIGIDEZ_CAMERA * (alvoX - x) - AMORTECIMENTO_CAMERA * vx;
       const acelY = RIGIDEZ_CAMERA * (alvoY - y) - AMORTECIMENTO_CAMERA * vy;
       vx += acelX * PASSO_S;
@@ -214,6 +301,15 @@ export function criarCamera(xInicial: number, yInicial: number): Camera {
       x += vx * PASSO_S;
       y += vy * PASSO_S;
       zoom += (zoomAlvo - zoom) * 0.1;
+
+      // Trava o `y` DEPOIS de integrar a mola E com o `zoom` já atualizado (`escalaFinal`, não `escalaAtual` que
+      // é do tick anterior): perto do POUSO de um salto grande o zoom volta rápido do mínimo pro normal, e usar
+      // a escala desatualizada deixava passar um pouco da margem mesmo já travando (medido: 12,5% em vez de
+      // 15%). A mola ainda pode malhar e cruzar a margem por um instante mesmo com o ALVO dentro dela -- regra
+      // dura do dono: nunca cruza, trava de novo aqui depois da integração.
+      const escalaFinal = PX_POR_METRO * zoom;
+      const diffYFinalPx = Math.max(diffYMinPx, Math.min(diffYMaxPx, (piloto.y - y) * escalaFinal));
+      y = piloto.y - diffYFinalPx / escalaFinal;
 
       for (const ev of eventos) {
         if (ev.tipo === 'pouso' && ev.qualidade !== 'perfeito') {
