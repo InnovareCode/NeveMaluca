@@ -294,8 +294,8 @@ function construirPainelOffscreen(doc: Document, w: number, h: number, raio: num
   ctx.fillStyle = 'rgba(3, 8, 24, 0.40)';
   caminhoArredondado(ctx, { x, y: y + 10, w, h }, raio);
   ctx.fill();
-  ctx.fillStyle = 'rgba(3, 8, 24, 0.18)';
-  caminhoArredondado(ctx, { x, y: y + 18, w, h }, raio + 6);
+  ctx.fillStyle = 'rgba(3, 8, 24, 0.14)';
+  caminhoArredondado(ctx, { x, y: y + 14, w, h }, raio + 6);
   ctx.fill();
 
   // 2. Chapa opaca: o corpo do painel NUNCA deixa o fundo da cena atravessar -- o guia é explícito ("o vidro é
@@ -797,9 +797,16 @@ const GRADIENTES_ATRIBUTO: Readonly<Record<AtributoPersonagem, readonly [string,
   forca: ['#FF9BB8', '#FF5C8A'],
 };
 
+/** Fração mínima visível do preenchimento (§4.4 -- feedback do dono, playtest iPhone: o Tio Beto tem Equilíbrio
+ *  no PISO da ficha (90, `fracaoBase = 0`) e a barra lia como "vazia/bugada", não como "valor baixo de verdade".
+ *  Todo atributo deste jogo é 90-125 (nunca "ausente"), então um traço legível no início do trilho sempre faz
+ *  sentido -- `0` nunca é "sem dado", é só a ponta de baixo da escala. */
+const FRACAO_MINIMA_VISIVEL_BARRA = 0.045;
+
 /** Barra de atributo (§4.4): trilho de vidro + preenchimento em gradiente por atributo + segmento de bônus
  *  (listrado, diagonal) quando `bonusFracao > 0`. `fracaoBase`/`bonusFracao` já vêm em [0,1] (quem chama decide
- *  a escala/faixa -- esta função só desenha). */
+ *  a escala/faixa -- esta função só desenha). `fracaoBase` nunca desenha um preenchimento menor que
+ *  `FRACAO_MINIMA_VISIVEL_BARRA` (um valor baixo de verdade continua lendo como "tem uma barra ali", não bugado). */
 export function barraAtributo(ctx: Ctx, x: number, y: number, w: number, h: number, atributo: AtributoPersonagem, fracaoBase: number, bonusFracao = 0): void {
   const raio = h / 2;
   ctx.save();
@@ -814,7 +821,7 @@ export function barraAtributo(ctx: Ctx, x: number, y: number, w: number, h: numb
   grad.addColorStop(0, c0);
   grad.addColorStop(1, c1);
   ctx.fillStyle = grad;
-  const baseW = w * Math.max(0, Math.min(1, fracaoBase));
+  const baseW = w * Math.max(FRACAO_MINIMA_VISIVEL_BARRA, Math.min(1, fracaoBase));
   ctx.fillRect(x, y, baseW, h);
 
   if (bonusFracao > 0) {
@@ -867,17 +874,22 @@ export function monteDeNeve(ctx: Ctx, cx: number, cy: number, rx: number, ry: nu
 }
 
 /** Pedestal de gelo (§4.4): elipse superior em face Neve + faixa lateral em gradiente + brilho frontal. `topoCy`
- *  é o centro da elipse de CIMA (o personagem fica de pé bem acima dela). */
+ *  é o centro da elipse de CIMA. O personagem fica de pé na BORDA DA FRENTE dessa elipse (`topoCy + ry`), não no
+ *  centro -- feedback do dono (playtest iPhone, 2026-10-24/25): com os pés no centro, o disco "corta o corpo"
+ *  (a metade de baixo da elipse desenha por cima das canelas). `ui/cenas/selecao.ts` já ancora os pés lá; esta
+ *  função só precisa parecer um CILINDRO com volume de verdade (faixa lateral mais alta + aro de luz na borda da
+ *  frente), não um disco chapado. */
 export function pedestalDeGelo(ctx: Ctx, cx: number, topoCy: number, rx: number, ry: number, alturaFaixa: number): void {
   ctx.save();
-  ctx.fillStyle = 'rgba(4, 12, 26, 0.3)';
+  ctx.fillStyle = 'rgba(4, 12, 26, 0.32)';
   ctx.beginPath();
-  ctx.ellipse(cx, topoCy + alturaFaixa + ry * 0.4, rx * 0.9, ry * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, topoCy + alturaFaixa + ry * 0.5, rx * 0.92, ry * 0.55, 0, 0, Math.PI * 2);
   ctx.fill();
 
   const faixa = ctx.createLinearGradient(0, topoCy, 0, topoCy + alturaFaixa);
-  faixa.addColorStop(0, '#5FB4E8');
-  faixa.addColorStop(1, '#1659B8');
+  faixa.addColorStop(0, '#6FC0EE');
+  faixa.addColorStop(0.5, '#2E7FCB');
+  faixa.addColorStop(1, '#123E7E');
   ctx.fillStyle = faixa;
   ctx.beginPath();
   ctx.moveTo(cx - rx, topoCy);
@@ -889,6 +901,25 @@ export function pedestalDeGelo(ctx: Ctx, cx: number, topoCy: number, rx: number,
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = COR_TINTA;
   ctx.stroke();
+
+  // Linhas verticais sutis na faixa (facetas de gelo) -- quebram a superfície lisa, reforçam "é um volume".
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx - rx, topoCy);
+  ctx.lineTo(cx - rx, topoCy + alturaFaixa);
+  ctx.ellipse(cx, topoCy + alturaFaixa, rx, ry, 0, Math.PI, 0, true);
+  ctx.lineTo(cx + rx, topoCy);
+  ctx.closePath();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 2;
+  for (const f of [-0.55, -0.15, 0.3, 0.68]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + rx * f, topoCy);
+    ctx.lineTo(cx + rx * f * 0.94, topoCy + alturaFaixa);
+    ctx.stroke();
+  }
+  ctx.restore();
 
   const topo = ctx.createLinearGradient(0, topoCy - ry, 0, topoCy + ry);
   topo.addColorStop(0, '#FFFFFF');
@@ -902,10 +933,19 @@ export function pedestalDeGelo(ctx: Ctx, cx: number, topoCy: number, rx: number,
   ctx.strokeStyle = COR_TINTA;
   ctx.stroke();
 
+  // Brilho geral no alto (luz vindo de cima-esquerda, §7.1).
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.beginPath();
-  ctx.ellipse(cx, topoCy + ry * 0.2, rx * 0.5, ry * 0.4, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx - rx * 0.12, topoCy - ry * 0.25, rx * 0.46, ry * 0.36, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // Aro de luz na BORDA DA FRENTE (onde os pés do personagem pousam) -- o detalhe que vende "ele está EM CIMA
+  // disto", não atrás/dentro.
+  ctx.beginPath();
+  ctx.ellipse(cx, topoCy, rx * 0.98, ry * 0.98, 0, 0.12, Math.PI - 0.12);
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.stroke();
 
   ctx.restore();
 }

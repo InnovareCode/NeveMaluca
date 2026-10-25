@@ -17,7 +17,7 @@ import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
 import { emTelaCheia, situacaoDaTelaCheia } from '../../platform/tela-cheia';
-import { escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido } from '../animacao';
+import { dispositivoTemToque, escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido } from '../animacao';
 import { caminhoArredondado, desenharFlocos, desenharTexto } from '../desenho';
 import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, painelGeada, type TipoBotao3D } from '../kit-premium';
@@ -185,6 +185,7 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
   const reduzido = prefereMovimentoReduzido();
+  const temToque = dispositivoTemToque();
   let hover: string | null = null;
   let ticks = 0;
   let fundo: CamadaEstatica | null = null;
@@ -323,11 +324,15 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
 
       aplicarEntradaLinha(ctx, 2, t, () => {
         desenharMedalhaoLinha(ctx, LINHA_3_Y, 2);
-        rotulo(
-          ROTULO_TELA_CHEIA,
-          typeof window !== 'undefined' && situacaoDaTelaCheia(window) === 'disponivel' ? 'Atalho: tecla F' : 'No iPhone: Compartilhar > Adicionar à Tela de Início',
-          LINHA_3_Y,
-        );
+        const ajudaTelaCheia =
+          !temApi && temToque
+            ? 'Compartilhar > Tela de Início'
+            : !temApi
+              ? 'Sem suporte neste navegador'
+              : temToque
+                ? 'Toque para alternar'
+                : 'Atalho: tecla F';
+        rotulo(ROTULO_TELA_CHEIA, ajudaTelaCheia, LINHA_3_Y);
         const poseTelaCheia = pressao.pose('tela_cheia', ticks);
         botao3D(ctx, {
           ...BOTAO_TELA_CHEIA,
@@ -358,11 +363,14 @@ export function criarCenaOpcoes(opcoes: OpcoesCenaOpcoes): Cena {
 
       botaoRedondoVoltar(ctx, BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h / 2, BOTAO_VOLTAR.w / 2, hover === 'voltar');
 
-      desenharTexto(ctx, 'ESC volta', BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h + 16, {
-        fonte: '600 14px Barlow, sans-serif',
-        cor: COR_MUTED,
-        alinhamento: 'center',
-      });
+      // Dica de teclado só em aparelho sem toque (§11, guia): no celular/tablet não existe "ESC" físico.
+      if (!temToque) {
+        desenharTexto(ctx, 'ESC volta', BOTAO_VOLTAR.x + BOTAO_VOLTAR.w / 2, BOTAO_VOLTAR.y + BOTAO_VOLTAR.h + 16, {
+          fonte: '600 14px Barlow, sans-serif',
+          cor: COR_MUTED,
+          alinhamento: 'center',
+        });
+      }
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);

@@ -32,6 +32,25 @@ export function resolverUrlAsset(caminhoRelativo: string): string {
   return `${semBarraDupla}${caminhoSemBarra}`;
 }
 
+/** Carrega UMA imagem, com 1 nova tentativa se a 1ª falhar (rede instável de celular -- um `img.onerror` isolado
+ *  não deve ser definitivo). `undefined` se as duas tentativas falharem (quem chama decide o que fazer). */
+async function carregarImagemComRetry(url: string): Promise<HTMLImageElement | undefined> {
+  for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+    try {
+      const img = new Image();
+      img.src = url;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error(`Erro ao carregar sprite ${url}`));
+      });
+      return img;
+    } catch {
+      // 2ª (e última) tentativa cai pro loop de novo; se essa também falhar, devolve undefined abaixo.
+    }
+  }
+  return undefined;
+}
+
 export function carregarSpritePersonagem(id: string = 'capi'): Promise<SpritePersonagem> {
   const existente = cachePersonagens.get(id);
   if (existente) return existente;
@@ -46,23 +65,27 @@ export function carregarSpritePersonagem(id: string = 'capi'): Promise<SpritePer
 
     const quadros = new Map<string, QuadroCarregado>();
 
+    // Cada pose é independente: uma imagem que falha (rede instável, 1 arquivo fora do ar) NUNCA derruba o
+    // personagem inteiro -- antes um único `Promise.all` fazia qualquer falha rejeitar TUDO, e a promessa
+    // rejeitada ficava cacheada pra sempre (sem retry), apagando o personagem da seleção pro resto da sessão
+    // (`obterQuadro` só devolve `null`, a tela cai no esqueleto translúcido). Ver memória
+    // `carregar-sprite-resiliente-falha-isolada-nao-derruba-personagem`.
     await Promise.all(
       Object.entries(manifesto).map(async ([nome, dados]) => {
-        const img = new Image();
         const urlImg = resolverUrlAsset(`assets/personagens/${id}/recortes/${dados.arquivo}`);
-        img.src = urlImg;
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error(`Erro ao carregar sprite ${urlImg}`));
-        });
-        quadros.set(nome, { imagem: img, dados });
+        const imagem = await carregarImagemComRetry(urlImg);
+        if (imagem) quadros.set(nome, { imagem, dados });
       })
     );
+
+    if (quadros.size === 0) {
+      throw new Error(`Nenhum quadro de sprite carregou para "${id}" (manifesto com ${Object.keys(manifesto).length} poses)`);
+    }
 
     return {
       id,
       obterQuadro(pose: string): QuadroCarregado | null {
-        return quadros.get(pose) ?? quadros.get('ride0') ?? null;
+        return quadros.get(pose) ?? quadros.get('ride0') ?? quadros.values().next().value ?? null;
       },
     };
   })();

@@ -21,7 +21,7 @@ import { precarregarAssetsDoTema, rasterProntoParaTema, temaDeRenderDoTema } fro
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido } from '../animacao';
+import { dispositivoTemToque, escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido } from '../animacao';
 import { caminhoArredondado, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
 import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import { botao3D, botaoRedondoVoltar, construirFundoFosco, desenharLetreiro, dicaTeclado, iconeFloco, painelGeada } from '../kit-premium';
@@ -87,6 +87,7 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
   const reduzido = prefereMovimentoReduzido();
+  const temToque = dispositivoTemToque();
   let hover: string | null = null;
   let ticks = 0;
   const pressao = criarEstadoPressao();
@@ -361,8 +362,9 @@ export function criarCenaSelecaoPista(opcoes: OpcoesCenaSelecaoPista): Cena {
       const posePronto = pressao.pose('pronto', ticks);
       botao3D(ctx, { ...BOTAO_PRONTO, texto: 'PRONTO', tipo: 'primario', destaque: true, aoVivo: hover === 'pronto', t, pressionado: posePronto.pressionado, escalaExtra: posePronto.escalaExtra });
 
-      // Dica de teclado no padrão comum do guia (§11): pílula de vidro no canto superior direito, não texto solto.
-      dicaTeclado(ctx, 'ESC volta ao menu', 928, 34);
+      // Dica de teclado no padrão comum do guia (§11): pílula de vidro no canto superior direito, não texto
+      // solto -- e só em aparelho sem toque (não existe "ESC" no celular).
+      if (!temToque) dicaTeclado(ctx, 'ESC volta ao menu', 928, 34);
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);

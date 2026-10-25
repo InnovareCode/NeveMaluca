@@ -114,6 +114,25 @@ export function overshootPadrao(reduzido: boolean, s = 1.7): number {
   return reduzido ? 0 : s;
 }
 
+// --- Dispositivo com toque (§11 "Dicas de teclado... só no desktop... no toque, somem") ----------------------
+
+export interface AlvoDispositivoToque {
+  readonly navigator?: { readonly maxTouchPoints?: number } | undefined;
+  readonly ontouchstart?: unknown;
+}
+
+/** `true` quando o aparelho tem toque (celular, tablet, notebook touchscreen) -- usado pra ESCONDER dicas de
+ *  teclado (ESC/setas), que não fazem sentido sem teclado físico. Mesmo critério de `platform/tela-cheia.ts:
+ *  temToque` (não exportado de lá -- duplicar aqui é mais barato que mudar a API de outro módulo por uma linha).
+ *  Seguro fora do navegador (testes/SSR): sem `navigator`, devolve `false` (nunca lança). */
+export function dispositivoTemToque(alvo: AlvoDispositivoToque | undefined = typeof window !== 'undefined' ? window : undefined): boolean {
+  try {
+    return (alvo?.navigator?.maxTouchPoints ?? 0) > 0 || Boolean(alvo && 'ontouchstart' in alvo);
+  } catch {
+    return false;
+  }
+}
+
 // --- Entrada escalonada com overshoot (§8.1 "Entrada escalonada"/§8.3), um helper único para toda a UI --------
 
 export interface PoseEntrada {

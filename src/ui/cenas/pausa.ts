@@ -22,7 +22,7 @@ import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/in
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { easeOutCubic, escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido, progresso } from '../animacao';
+import { dispositivoTemToque, easeOutCubic, escalonar, msParaTicks, poseEntrada, prefereMovimentoReduzido, progresso } from '../animacao';
 import type { CamadaEstatica } from '../desenho';
 import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular, type EstadoPressao } from '../interacao';
 import { botao3D, construirFundoCongelado, desenharLetreiro, painelGeada, type TipoBotao3D } from '../kit-premium';
@@ -66,6 +66,8 @@ export interface EstadoVisualPausa {
   readonly spritePersonagem?: SpritePersonagem | null | undefined;
   /** Estado de pressionar/soltar dos botões (§4.3) -- sem ele (testes antigos), botões ficam sempre no repouso. */
   readonly pressao?: EstadoPressao | undefined;
+  /** Esconde "ESC/P continua" em aparelho com toque (§11, guia: dica de teclado só faz sentido com teclado). */
+  readonly temToque?: boolean | undefined;
 }
 
 const ALTURA_PEEK = 110;
@@ -207,11 +209,13 @@ export function desenharPainelPausa(ctx: Ctx, estado: EstadoVisualPausa): void {
     botao3D(ctx, { ...BOTAO_VOLTAR_MENU, texto: 'VOLTAR AO MENU', tipo: 'perigo', aoVivo: estado.hover === 'voltar-menu', pressionado: pose.pressionado, escalaExtra: pose.escalaExtra });
   });
 
-  desenharTexto(ctx, 'ESC/P continua', LARGURA / 2, PAINEL_Y + 366, {
-    fonte: '600 14px Barlow, sans-serif',
-    cor: COR_MUTED,
-    alinhamento: 'center',
-  });
+  if (!estado.temToque) {
+    desenharTexto(ctx, 'ESC/P continua', LARGURA / 2, PAINEL_Y + 366, {
+      fonte: '600 14px Barlow, sans-serif',
+      cor: COR_MUTED,
+      alinhamento: 'center',
+    });
+  }
 }
 
 export interface OpcoesControladorPausa {
@@ -255,6 +259,7 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
   // (reduz+amplia a imagem) e desnecessário (a corrida por baixo não se move enquanto pausada).
   let fundo: CamadaEstatica | null = null;
   const pressao = criarEstadoPressao();
+  const temToque = dispositivoTemToque();
   let spritePersonagem: SpritePersonagem | null = null;
   void carregarSpritePersonagem(opcoes.personagem ?? 'capi')
     .then((s) => {
@@ -353,7 +358,7 @@ export function criarControladorPausa(opcoes: OpcoesControladorPausa): Controlad
     desenhar(ctx) {
       if (!ativo()) return;
       if (!fundo && doc) fundo = construirFundoCongelado(doc, ctx.canvas, 0.45);
-      desenharPainelPausa(ctx, { confirmandoSaida, podeReiniciar: opcoes.podeReiniciar(), hover, t: ticksAbertura, fundo, documento: doc, spritePersonagem, pressao });
+      desenharPainelPausa(ctx, { confirmandoSaida, podeReiniciar: opcoes.podeReiniciar(), hover, t: ticksAbertura, fundo, documento: doc, spritePersonagem, pressao, temToque });
       ticksAbertura += 1;
     },
     destruir() {

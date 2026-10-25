@@ -3,7 +3,7 @@
  * de TREINO/CAMPEONATO -- `[[fluxo-inicio-selecao-personagem-antes-de-correr]]`).
  *
  * Redesenho "premium estilo Pixar" (`docs/direcao-ui-premium.md` §11.1, Fase 2): fundo A (capa fosca) com aurora
- * viva e flocos, palco com pedestal de gelo + personagem em `star` (altura 150, teto do guia §1.7) com aro de
+ * viva e flocos, palco com pedestal de gelo + personagem em `celeb` (altura 150, teto do guia §1.7) com aro de
  * luz, painel Geada com nome/manobra/bordão (balão de fala) e as 3 barras de atributo (ícones de item
  * reaproveitados como ícones de atributo: `turbo`=Velocidade, `escudo`=Equilíbrio, `bola`=Força -- decisão do
  * dono, 2026-10-24, evita gastar os 2 créditos de geração de imagem que restam), fileira de 6 cartões com
@@ -19,12 +19,13 @@ import type { Evolucao } from '../../core/contratos';
 import { seno } from '../../core/trig';
 import { carregarSpritePersonagem, type SpritePersonagem } from '../../assets/index';
 import { assetsItensProntos, precarregarAssetsItens } from '../../assets/itens';
+import { imagemPalcoHDPronta, precarregarImagemPalcoHD } from '../../assets/palco-hd';
 import { NIVEL_MAXIMO_EVOLUCAO, PASSO_ATRIBUTO_POR_NIVEL } from '../../data/evolucao';
 import { PERSONAGENS_DE_DADOS } from '../../data/personagens';
 import type { AlvoTeclado } from '../../input/teclado';
 import type { AlvoToque } from '../../input/toque';
 import type { Ctx } from '../../platform/canvas';
-import { easeOutBack, escalonar, msParaTicks, overshootPadrao, poseEntrada, prefereMovimentoReduzido } from '../animacao';
+import { dispositivoTemToque, easeOutBack, escalonar, msParaTicks, overshootPadrao, poseEntrada, prefereMovimentoReduzido } from '../animacao';
 import { caminhoArredondado, desenharFlocos, desenharTexto, type CamadaEstatica } from '../desenho';
 import { criarEstadoPressao, eventoParaPontoLogico, pontoDentroDoBotao, type BotaoRetangular } from '../interacao';
 import {
@@ -88,10 +89,15 @@ const PAINEL_H = 234;
 
 const PALCO_CX = 212;
 const PALCO_ALTURA = 150; // teto do guia §1.7: nenhum sprite fora da corrida passa de 150 lógicos
-const PALCO_PES_Y = 358; // pés do personagem = topo do pedestal
-const PEDESTAL_RX = 100;
-const PEDESTAL_RY = 14;
-const PEDESTAL_FAIXA_H = 10;
+// Pés do personagem = BORDA DA FRENTE do pedestal (não o centro da elipse -- feedback do dono, playtest iPhone:
+// com os pés no centro, o disco "cortava o corpo"). `PEDESTAL_TOPO_CY` é o centro da elipse de cima;
+// `PALCO_PES_Y = PEDESTAL_TOPO_CY + PEDESTAL_RY` é a borda de baixo dela, onde a perspectiva "top-down" coloca
+// quem está de pé em cima (ver `kit-premium.ts: pedestalDeGelo`).
+const PEDESTAL_RX = 108;
+const PEDESTAL_RY = 20;
+const PEDESTAL_FAIXA_H = 20;
+const PALCO_PES_Y = 358;
+const PEDESTAL_TOPO_CY = PALCO_PES_Y - PEDESTAL_RY;
 const PALCO_HALO_R = 150;
 
 // Folga de verdade acima da fita de cartões (ver memória `selecao-palco-clipping-pela-fita-de-miniaturas`): o
@@ -103,7 +109,10 @@ const MINI_GAP = 12;
 const MINI_X0 = 42;
 
 const BOTAO_VOLTAR: BotaoRetangular = { id: 'voltar', x: 32, y: 20, w: 56, h: 56 };
-const BOTAO_CORRER: BotaoRetangular = { id: 'correr', x: 570, y: 334, w: 300, h: 64 };
+// y 344 (não 334): o painel acima termina em 318 e sua sombra suave alcança +14 (ver kit-premium.ts) -- precisa
+// de folga de verdade pra tampa de neve do botão (§4.2) não "encostar" no painel (feedback do dono, playtest
+// iPhone). Altura 60 (não 64) pra sobrar 12px antes da fita de cartões em y416.
+const BOTAO_CORRER: BotaoRetangular = { id: 'correr', x: 570, y: 344, w: 300, h: 60 };
 
 // Entrada escalonada (§8.1/§11.1 "título (0) → palco e pedestal (120) → painel (240) → cartões ... → CTA (700)"):
 // tempos de início por grupo, em ticks (`msParaTicks`), e duração/passo de cada um (§8.3).
@@ -117,9 +126,11 @@ const DUR_ENTRADA_GRUPO = msParaTicks(360);
 const DUR_ENTRADA_CARTAO = msParaTicks(420);
 
 const LINHA_ATRIBUTOS: readonly { readonly atributo: AtributoPersonagem; readonly icone: 'turbo' | 'escudo' | 'bola'; readonly rotulo: string; readonly y: number }[] = [
-  { atributo: 'velocidade', icone: 'turbo', rotulo: 'Velocidade', y: 236 },
-  { atributo: 'equilibrio', icone: 'escudo', rotulo: 'Equilíbrio', y: 266 },
-  { atributo: 'forca', icone: 'bola', rotulo: 'Força', y: 296 },
+  // 246/274/302 (eram 236/266/296): o balão do bordão (178..~219) encobria o medalhão de Velocidade no iPhone do
+  // dono. Medalhão raio 14 -> 1ª linha começa em 232 e a última termina em 316, dentro do painel (até 318).
+  { atributo: 'velocidade', icone: 'turbo', rotulo: 'Velocidade', y: 246 },
+  { atributo: 'equilibrio', icone: 'escudo', rotulo: 'Equilíbrio', y: 274 },
+  { atributo: 'forca', icone: 'bola', rotulo: 'Força', y: 302 },
 ];
 const FAIXA_ATRIBUTO = 35; // 90..125 (base 90-110 de ficha + até +15 de bônus no nível 5)
 const BARRA_X = 600;
@@ -171,21 +182,31 @@ function desenharEsqueletoPersonagem(ctx: Ctx, cx: number, baseY: number, altura
   ctx.restore();
 }
 
-/** Balão de fala (bordão): quebra em até 2 linhas e reduz a fonte até caber -- alguns bordões do catálogo passam
- *  do teto de 22 caracteres de uma linha só (regra de callout), então a UI absorve com quebra em vez de cortar
- *  texto do personagem (decisão de apresentação, não altera o dado). */
-function desenharBalaoDeFala(ctx: Ctx, texto: string, caixa: { x: number; y: number; w: number; h: number }): void {
-  const palavras = texto.split(' ');
-  let tamanho = 20;
-  let linhas: string[] = [texto];
+const PAD_X_BALAO = 20;
+const PAD_Y_BALAO = 10;
 
-  for (; tamanho >= 13; tamanho -= 1) {
+/** Balão de fala (bordão): a CAIXA se ajusta ao texto (largura real + altura de 1 ou 2 linhas), nunca o
+ *  contrário -- antes a caixa era fixa (256x32) e um bordão mais longo (ex. Tio Beto: "Frio? Isso aí é
+ *  ar-condicionado!") desenhava o texto PRA FORA do balão branco (feedback do dono, playtest iPhone: "balão
+ *  cortado"). Tenta 1 linha reduzindo a fonte até `tamanhoMinimo`; só quebra em 2 linhas se nem assim couber
+ *  dentro de `larguraMax` -- com `larguraMax` generoso (painel inteiro, não um terço dele), os 6 bordões do
+ *  catálogo cabem numa linha só. `x,y` = topo-esquerda onde o balão COMEÇA (alinhado à esquerda, não centralizado
+ *  -- a largura real varia por bordão). Devolve a altura de verdade usada, pra quem chama nunca sobrepor o que
+ *  vem depois. */
+function desenharBalaoDeFala(ctx: Ctx, texto: string, x: number, y: number, larguraMax: number): number {
+  const palavras = texto.split(' ');
+  let tamanho = 19;
+  let linhas: string[] = [texto];
+  const larguraUtil = larguraMax - PAD_X_BALAO * 2;
+
+  for (; tamanho >= 15; tamanho -= 1) {
     ctx.font = `400 ${tamanho}px Bangers, sans-serif`;
-    if (ctx.measureText(texto).width <= caixa.w - 24) {
+    if (ctx.measureText(texto).width <= larguraUtil) {
       linhas = [texto];
       break;
     }
-    // tenta quebrar em 2 linhas pela palavra mais próxima da metade
+    // tenta quebrar em 2 linhas pela palavra mais próxima da metade (só chega aqui se nem o menor tamanho de
+    // 1 linha coube -- com `larguraMax` do painel inteiro, nenhum bordão do catálogo cai neste caminho hoje).
     let melhorCorte = -1;
     let melhorDist = Infinity;
     let acumulado = 0;
@@ -200,12 +221,19 @@ function desenharBalaoDeFala(ctx: Ctx, texto: string, caixa: { x: number; y: num
     if (melhorCorte > 0) {
       const l1 = palavras.slice(0, melhorCorte).join(' ');
       const l2 = palavras.slice(melhorCorte).join(' ');
-      if (ctx.measureText(l1).width <= caixa.w - 24 && ctx.measureText(l2).width <= caixa.w - 24) {
+      if (ctx.measureText(l1).width <= larguraUtil && ctx.measureText(l2).width <= larguraUtil) {
         linhas = [l1, l2];
         break;
       }
     }
   }
+
+  ctx.font = `400 ${tamanho}px Bangers, sans-serif`;
+  const larguraTexto = Math.max(...linhas.map((l) => ctx.measureText(l).width));
+  const w = Math.min(larguraMax, larguraTexto + PAD_X_BALAO * 2);
+  const alturaLinha = tamanho * 1.1;
+  const h = alturaLinha * linhas.length + PAD_Y_BALAO * 2;
+  const caixa = { x, y, w, h };
 
   ctx.save();
   caminhoArredondado(ctx, caixa, 14);
@@ -215,22 +243,24 @@ function desenharBalaoDeFala(ctx: Ctx, texto: string, caixa: { x: number; y: num
   ctx.strokeStyle = '#0B1630';
   ctx.stroke();
 
-  // rabicho apontando para o palco (à esquerda)
+  // rabicho na lateral esquerda, apontando para o palco — antes descia por baixo do balão e cobria a 1ª linha de
+  // atributos (playtest iPhone do dono).
+  const meio = caixa.y + caixa.h / 2;
   ctx.beginPath();
-  ctx.moveTo(caixa.x + 18, caixa.y + caixa.h - 2);
-  ctx.lineTo(caixa.x - 10, caixa.y + caixa.h + 14);
-  ctx.lineTo(caixa.x + 34, caixa.y + caixa.h - 2);
+  ctx.moveTo(caixa.x + 2, meio - 8);
+  ctx.lineTo(caixa.x - 14, meio + 3);
+  ctx.lineTo(caixa.x + 2, meio + 8);
   ctx.closePath();
   ctx.fillStyle = '#ffffff';
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(caixa.x + 18, caixa.y + caixa.h - 3);
-  ctx.lineTo(caixa.x - 10, caixa.y + caixa.h + 14);
+  ctx.moveTo(caixa.x + 1, meio - 9);
+  ctx.lineTo(caixa.x - 14, meio + 3);
+  ctx.lineTo(caixa.x + 1, meio + 9);
   ctx.strokeStyle = '#0B1630';
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  ctx.font = `400 ${tamanho}px Bangers, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#0B1630';
@@ -239,10 +269,12 @@ function desenharBalaoDeFala(ctx: Ctx, texto: string, caixa: { x: number; y: num
   if (linhas.length === 1) {
     ctx.fillText(linhas[0] ?? '', cx, cy);
   } else {
-    ctx.fillText(linhas[0] ?? '', cx, cy - tamanho * 0.55);
-    ctx.fillText(linhas[1] ?? '', cx, cy + tamanho * 0.55);
+    ctx.fillText(linhas[0] ?? '', cx, cy - alturaLinha * 0.5);
+    ctx.fillText(linhas[1] ?? '', cx, cy + alturaLinha * 0.5);
   }
   ctx.restore();
+
+  return h;
 }
 
 /** Fundo = `capa.webp` borrada (§3.1, UMA vez, offscreen) + véu + vinheta -- nunca refeita por quadro. */
@@ -254,6 +286,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   const janela = opcoes.janela ?? (typeof window !== 'undefined' ? window : undefined);
   const doc = opcoes.documento ?? (typeof document !== 'undefined' ? document : undefined);
   const reduzido = prefereMovimentoReduzido();
+  const temToque = dispositivoTemToque();
   let hover: string | null = null;
   let ticks = 0;
   let fundo: CamadaEstatica | null = null;
@@ -268,6 +301,13 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
   // roda como microtask antes do 1º quadro desta cena (zero placeholder na prática).
   const sprites = new Map<string, SpritePersonagem>();
   for (const id of opcoes.catalogo) {
+    // Arte HD do palco (`assets/palco-hd.ts`): a MESMA pose/enquadramento do recorte de produção, só que a
+    // ~2,85x a resolução (feedback do dono: "personagem grande e nítido" -- os recortes de produção têm só
+    // ~175-210px, perto do teto de ampliação do guia; a HD evita o borrão). Pré-carrega as 6 de uma vez (são
+    // só 2 poses por personagem, ~400KB cada par) pra trocar de personagem na seleção nunca mostrar a versão
+    // mole primeiro.
+    precarregarImagemPalcoHD(id, 'celeb');
+    precarregarImagemPalcoHD(id, 'ride0');
     void carregarSpritePersonagem(id)
       .then((s) => {
         sprites.set(id, s);
@@ -350,8 +390,12 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
     const sprite = sprites.get(id);
     // Pose de destaque (manobra) se existir, senão a "de pé" -- mas a ESCALA sempre pela altura de `ride0` (igual
     // a `render/piloto.ts: ALTURA_ALVO_M`), nunca pela altura da pose atual (memória `escala-sprite-por-pose...`).
-    const quadro = sprite ? (sprite.obterQuadro('star') ?? sprite.obterQuadro('ride0')) : null;
-    const referencia = sprite?.obterQuadro('ride0')?.dados ?? quadro?.dados;
+    // `celeb` (comemorando, em pé), não `star`: nos 6 personagens `star` é pose `tipo:'ar'`, sem ponto de contato
+    // de verdade com o chão (ver `assets/palco-hd.ts`) -- ancorar nela faz o personagem flutuar longe do
+    // pedestal (feedback do dono, playtest iPhone: "o personagem não fica EM CIMA do palco").
+    const poseEscolhida: 'celeb' | 'ride0' = sprite?.obterQuadro('celeb') ? 'celeb' : 'ride0';
+    const quadro = sprite ? (sprite.obterQuadro(poseEscolhida) ?? sprite.obterQuadro('ride0')) : null;
+    const referenciaProd = sprite?.obterQuadro('ride0')?.dados ?? quadro?.dados;
     const pulso = reduzido ? 1 : 1 + 0.015 * seno((t * 2.2) % 360);
 
     ctx.save();
@@ -362,14 +406,38 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
     ctx.fillRect(PALCO_CX - PALCO_HALO_R, PALCO_PES_Y - PALCO_ALTURA * 0.4 - PALCO_HALO_R, PALCO_HALO_R * 2, PALCO_HALO_R * 2);
     ctx.restore();
 
-    pedestalDeGelo(ctx, PALCO_CX, PALCO_PES_Y, PEDESTAL_RX, PEDESTAL_RY, PEDESTAL_FAIXA_H);
+    pedestalDeGelo(ctx, PALCO_CX, PEDESTAL_TOPO_CY, PEDESTAL_RX, PEDESTAL_RY, PEDESTAL_FAIXA_H);
+
+    // Sombra de contato dos pés (§7.1): separada da sombra ambiente do pedestal -- um traço elíptico escuro bem
+    // junto da base, que "gruda" o personagem na superfície (sem ela ele lê como colado por cima, flutuando).
+    ctx.save();
+    ctx.fillStyle = 'rgba(4, 12, 26, 0.38)';
+    ctx.beginPath();
+    ctx.ellipse(PALCO_CX, PALCO_PES_Y + 3, PALCO_ALTURA * 0.22, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Arte HD (§7, feedback do dono "nítido"): mesma pose/enquadramento do recorte de produção, ~2,85x a
+    // resolução -- a âncora (ponto de contato) é a MESMA FRAÇÃO do recorte de produção (`contato/tamanho`),
+    // porque o enquadramento é idêntico entre as duas versões (só muda a escala). Ver `assets/palco-hd.ts`.
+    const hd = imagemPalcoHDPronta(id, poseEscolhida);
+    const hdRef = imagemPalcoHDPronta(id, 'ride0');
+    const dProd = quadro?.dados;
 
     ctx.save();
     ctx.translate(PALCO_CX, PALCO_PES_Y);
     ctx.scale(pulso, pulso);
-    if (quadro && referencia) {
+    if (hd && hdRef && dProd) {
+      const [ax, ay] = dProd.contato ?? dProd.pivo;
+      const fracX = ax / dProd.largura;
+      const fracY = ay / dProd.altura;
+      const escala = PALCO_ALTURA / hdRef.altura;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(hd.imagem, -fracX * hd.largura * escala, -fracY * hd.altura * escala, hd.largura * escala, hd.altura * escala);
+    } else if (quadro && referenciaProd) {
       const d = quadro.dados;
-      const escala = PALCO_ALTURA / referencia.altura;
+      const escala = PALCO_ALTURA / referenciaProd.altura;
       const [ancoraX, ancoraY] = d.contato ?? d.pivo;
       ctx.drawImage(quadro.imagem, -ancoraX * escala, -ancoraY * escala, d.largura * escala, d.altura * escala);
     } else {
@@ -413,7 +481,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
       desenharTexto(ctx, `Manobra: ${assinatura}`, PAINEL_X + 32, 166, { fonte: 'italic 600 18px Barlow, sans-serif', cor: COR_SOL });
     }
     if (bordao) {
-      desenharBalaoDeFala(ctx, bordao, { x: PAINEL_X + 32, y: 182, w: 256, h: 32 });
+      desenharBalaoDeFala(ctx, bordao, PAINEL_X + 32, 178, PAINEL_W - 64);
     }
 
     // Progresso [0,1] da transição de barras (300ms, easeOutBack): 0 = ainda no valor antigo, 1 = já no novo.
@@ -438,12 +506,15 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
       barraAtributo(ctx, BARRA_X, linha.y - BARRA_H / 2, BARRA_W, BARRA_H, linha.atributo, fracaoBase, fracaoBonus);
     }
 
-    // Legenda do bônus de evolução.
-    ctx.save();
-    ctx.fillStyle = COR_SOL;
-    ctx.fillRect(PAINEL_X + PAINEL_W - 98, PAINEL_Y + PAINEL_H - 22, 14, 10);
-    ctx.restore();
-    desenharTexto(ctx, 'evolução', PAINEL_X + PAINEL_W - 80, PAINEL_Y + PAINEL_H - 14, { fonte: '600 14px Barlow, sans-serif', cor: COR_MUTED });
+    // Legenda do bônus de evolução: só quando HÁ bônus, logo abaixo do selo de nível (antes ficava sempre no canto
+    // de baixo, por cima da ponta da barra de Força).
+    if (nivel > 0) {
+      ctx.save();
+      ctx.fillStyle = COR_SOL;
+      ctx.fillRect(PAINEL_X + PAINEL_W - 98, PAINEL_Y + 38, 14, 10);
+      ctx.restore();
+      desenharTexto(ctx, 'evolução', PAINEL_X + PAINEL_W - 80, PAINEL_Y + 47, { fonte: '600 14px Barlow, sans-serif', cor: COR_MUTED });
+    }
   }
 
   function desenharCartao(ctx: Ctx, indice: number, id: string, t: number): void {
@@ -583,7 +654,7 @@ export function criarCenaSelecao(opcoes: OpcoesCenaSelecao): Cena {
       // Dica de teclado no padrão comum do guia (§11, "pílulas pequenas de vidro no canto superior direito") --
       // acabamento, 2026-10-24: o texto solto embaixo do CTA encostava na fita de cartões (só 18px de folga total
       // entre o botão e a fita); a pílula no canto nunca disputa espaço vertical com o resto do layout.
-      dicaTeclado(ctx, 'ESC volta · ←/→ troca', 928, 34);
+      if (!temToque) dicaTeclado(ctx, 'ESC volta · ←/→ troca', 928, 34);
     },
     destruir() {
       opcoes.canvas.removeEventListener('pointerdown', aoTocar);
