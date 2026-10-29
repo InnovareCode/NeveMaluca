@@ -32,7 +32,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -- --base=/NeveMaluca/
-      - uses: actions/upload-pages-artifact@v3 # TODO: pinar por SHA (como no ci.yml)
+      - uses: actions/upload-pages-artifact@v5 # TODO: pinar por SHA (como no ci.yml)
         with:
           path: dist
 
