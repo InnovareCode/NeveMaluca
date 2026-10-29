@@ -45,4 +45,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4 # TODO: pinar por SHA
+        uses: actions/deploy-pages@v5 # TODO: pinar por SHA
